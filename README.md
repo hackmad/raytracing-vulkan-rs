@@ -1,4 +1,4 @@
-# Raytracing Series with Vulkan
+# Raytracing with Vulkan
 
 ## References:
 1. [vulkano raytracing example](https://github.com/vulkano-rs/vulkano/tree/0.35.X/examples/ray-tracing-auto)
