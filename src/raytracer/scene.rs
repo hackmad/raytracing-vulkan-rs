@@ -1,5 +1,8 @@
-use glam::{Mat4, Vec3};
-use std::{f32::consts::FRAC_PI_2, iter, mem::size_of, sync::Arc};
+use std::{
+    iter,
+    mem::size_of,
+    sync::{Arc, RwLock},
+};
 use vulkano::{
     acceleration_structure::{
         AccelerationStructure, AccelerationStructureBuildGeometryInfo,
@@ -42,6 +45,7 @@ use vulkano::{
 };
 
 use super::{
+    Camera,
     geometry::VertexData,
     model::Model,
     shaders::{ShaderModules, closest_hit, ray_gen},
@@ -62,6 +66,8 @@ pub struct Scene {
     // as we reference it in the top-level acceleration structure.
     _blas: Arc<AccelerationStructure>,
     _tlas: Arc<AccelerationStructure>,
+
+    camera: Arc<RwLock<dyn Camera>>,
 }
 
 impl Scene {
@@ -71,6 +77,7 @@ impl Scene {
         memory_allocator: Arc<dyn MemoryAllocator>,
         descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
         model: &Model,
+        camera: Arc<RwLock<dyn Camera>>,
     ) -> Self {
         let pipeline_layout = create_pipeline_layout(device.clone());
         let pipeline = create_raytracing_pipeline(device.clone(), pipeline_layout.clone());
@@ -176,7 +183,13 @@ impl Scene {
             command_buffer_allocator,
             _blas: blas,
             _tlas: tlas,
+            camera,
         }
+    }
+
+    pub fn update_window_size(&mut self, window_size: [f32; 2]) {
+        let mut camera = self.camera.write().unwrap();
+        camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
     }
 
     pub fn render(
@@ -186,14 +199,7 @@ impl Scene {
     ) -> Box<dyn GpuFuture> {
         let dimensions = image_view.image().extent();
 
-        let aspect = dimensions[0] as f32 / dimensions[1] as f32;
-
-        let proj = Mat4::perspective_rh(FRAC_PI_2, aspect, 0.01, 100.0);
-        let view = Mat4::look_at_rh(
-            Vec3::new(5.5, 3.5, -4.5),
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(0.0, -1.0, 0.0),
-        );
+        let camera = self.camera.read().unwrap();
 
         let uniform_buffer = Buffer::from_data(
             self.memory_allocator.clone(),
@@ -207,9 +213,10 @@ impl Scene {
                 ..Default::default()
             },
             ray_gen::Camera {
-                viewProj: (proj * view).to_cols_array_2d(),
-                viewInverse: view.inverse().to_cols_array_2d(),
-                projInverse: proj.inverse().to_cols_array_2d(),
+                viewProj: (camera.get_projection_matrix() * camera.get_view_matrix())
+                    .to_cols_array_2d(),
+                viewInverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
+                projInverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
             },
         )
         .unwrap();

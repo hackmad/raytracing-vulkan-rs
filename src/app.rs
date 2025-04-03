@@ -1,6 +1,7 @@
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use egui_winit_vulkano::{Gui, GuiConfig};
+use glam::Vec3;
 use vulkano::{
     Version,
     descriptor_set::allocator::StandardDescriptorSetAllocator,
@@ -21,7 +22,7 @@ use winit::{
 
 use crate::{
     gui::GuiState,
-    raytracer::{Model, Scene},
+    raytracer::{Camera, Model, PerspectiveCamera, Scene},
 };
 
 const INITIAL_WIDTH: u32 = 1024;
@@ -101,6 +102,10 @@ impl App {
             .update_scene_image(gui, scene_image.clone());
 
         self.scene_image = Some(scene_image);
+
+        if let Some(scene) = self.scene.as_mut() {
+            scene.update_window_size(window_size);
+        }
     }
 }
 
@@ -137,13 +142,22 @@ impl ApplicationHandler for App {
         let queue = renderer.graphics_queue();
 
         // Create storage image for rendering and display.
-        let scene_image = create_scene_image(
-            self.context.memory_allocator().clone(),
-            renderer.window_size(),
-        );
+        let window_size = renderer.window_size();
+        let scene_image = create_scene_image(self.context.memory_allocator().clone(), window_size);
 
         // Load models.
         let models = Model::load_obj("assets/obj/box.obj").unwrap();
+
+        // Create camera.
+        let camera: Arc<RwLock<dyn Camera>> = Arc::new(RwLock::new(PerspectiveCamera::new(
+            Vec3::new(4.5, 3.0, -3.5),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, -1.0, 0.0),
+            0.01,
+            100.0,
+            window_size[0] as u32,
+            window_size[1] as u32,
+        )));
 
         // Create the raytracing pipeline
         self.scene = Some(Scene::new(
@@ -152,6 +166,7 @@ impl ApplicationHandler for App {
             self.context.memory_allocator().clone(),
             descriptor_set_allocator,
             &models[0], // TODO handle multiple models.
+            camera,
         ));
 
         // Create gui
