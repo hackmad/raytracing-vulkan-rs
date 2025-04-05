@@ -20,8 +20,8 @@ layout(set = 3, binding = 0, scalar) buffer Data {
 
 Vertex unpackInstanceVertex(const int intanceId) {
     MeshData meshData = data.values[intanceId];
-    Indices indices = Indices(meshData.indexBufferAddress);
     Vertices vertices = Vertices(meshData.vertexBufferAddress);
+    Indices indices = Indices(meshData.indexBufferAddress);
 
     uvec3 triangleIndices = indices.values[gl_PrimitiveID];
     Vertex v0 = vertices.values[triangleIndices.x];
@@ -54,6 +54,6 @@ Vertex unpackInstanceVertex(const int intanceId) {
 
 void main() {
     const Vertex vertex = unpackInstanceVertex(gl_InstanceCustomIndexEXT);
-    rayPayload = vertex.normal;
+    rayPayload = map(vertex.normal, -1.0, 1.0, 0.0, 1.0);
 }
 

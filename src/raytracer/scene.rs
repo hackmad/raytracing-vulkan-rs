@@ -64,7 +64,7 @@ pub struct Scene {
 
     // The bottom-level acceleration structure is required to be kept alive
     // as we reference it in the top-level acceleration structure.
-    _blas: Arc<AccelerationStructure>,
+    _blas_vec: Vec<Arc<AccelerationStructure>>,
     _tlas: Arc<AccelerationStructure>,
 
     camera: Arc<RwLock<dyn Camera>>,
@@ -76,19 +76,35 @@ impl Scene {
         queue: Arc<Queue>,
         memory_allocator: Arc<dyn MemoryAllocator>,
         descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
-        model: &Model,
+        models: &[Model],
         camera: Arc<RwLock<dyn Camera>>,
     ) -> Self {
         let pipeline_layout = create_pipeline_layout(device.clone());
         let pipeline = create_raytracing_pipeline(device.clone(), pipeline_layout.clone());
 
-        let vertex_buffer = model
-            .create_vertex_buffer(memory_allocator.clone())
-            .unwrap();
-        let vertex_buffer_device_address = vertex_buffer.device_address().unwrap();
+        let vertex_buffers: Vec<_> = models
+            .iter()
+            .map(|model| {
+                model
+                    .create_vertex_buffer(memory_allocator.clone())
+                    .unwrap()
+            })
+            .collect();
 
-        let index_buffer = model.create_index_buffer(memory_allocator.clone()).unwrap();
-        let index_buffer_device_address = index_buffer.device_address().unwrap();
+        let index_buffers: Vec<_> = models
+            .iter()
+            .map(|model| model.create_index_buffer(memory_allocator.clone()).unwrap())
+            .collect();
+
+        let vertex_buffer_device_addresses: Vec<u64> = vertex_buffers
+            .iter()
+            .map(|buf| buf.device_address().unwrap().into())
+            .collect();
+
+        let index_buffer_device_addresses: Vec<u64> = index_buffers
+            .iter()
+            .map(|buf| buf.device_address().unwrap().into())
+            .collect();
 
         // Create an allocator for command-buffer data
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
@@ -104,21 +120,33 @@ impl Scene {
         // acceleration structure contains the geometry data. The top-level acceleration structure
         // contains the instances of the bottom-level acceleration structures. In our shader, we
         // will trace rays against the top-level acceleration structure.
-        let blas = build_acceleration_structure_triangles(
-            vertex_buffer,
-            index_buffer,
-            memory_allocator.clone(),
-            command_buffer_allocator.clone(),
-            device.clone(),
-            queue.clone(),
-        );
+        let blas_vec: Vec<_> = vertex_buffers
+            .into_iter()
+            .zip(index_buffers)
+            .map(|(vertex_buffer, index_buffer)| {
+                build_acceleration_structure_triangles(
+                    vertex_buffer,
+                    index_buffer,
+                    memory_allocator.clone(),
+                    command_buffer_allocator.clone(),
+                    device.clone(),
+                    queue.clone(),
+                )
+            })
+            .collect();
 
+        let blas_instances = blas_vec
+            .iter()
+            .map(|blas| AccelerationStructureInstance {
+                acceleration_structure_reference: blas.device_address().into(),
+                ..Default::default()
+            })
+            .collect();
+
+        // Build the top-level acceleration structure.
         let tlas = unsafe {
             build_top_level_acceleration_structure(
-                vec![AccelerationStructureInstance {
-                    acceleration_structure_reference: blas.device_address().into(),
-                    ..Default::default()
-                }],
+                blas_instances,
                 memory_allocator.clone(),
                 command_buffer_allocator.clone(),
                 device.clone(),
@@ -137,6 +165,14 @@ impl Scene {
         .unwrap();
 
         // Mesh data references for vertex and index buffer.
+        let mesh_data_refs = vertex_buffer_device_addresses
+            .into_iter()
+            .zip(index_buffer_device_addresses)
+            .map(|(vba, iba)| closest_hit::MeshData {
+                vertexBufferAddress: vba,
+                indexBufferAddress: iba,
+            });
+
         let mesh_data = Buffer::from_iter(
             memory_allocator.clone(),
             BufferCreateInfo {
@@ -150,10 +186,7 @@ impl Scene {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            [closest_hit::MeshData {
-                vertexBufferAddress: vertex_buffer_device_address.into(),
-                indexBufferAddress: index_buffer_device_address.into(),
-            }],
+            mesh_data_refs,
         )
         .unwrap();
 
@@ -181,7 +214,7 @@ impl Scene {
             pipeline,
             memory_allocator,
             command_buffer_allocator,
-            _blas: blas,
+            _blas_vec: blas_vec,
             _tlas: tlas,
             camera,
         }

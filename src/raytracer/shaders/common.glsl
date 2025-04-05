@@ -11,3 +11,15 @@ struct Vertex {
     vec2 texCoord;
 };
 
+float map(float value, float fromMin, float fromMax, float toMin, float toMax) {
+  return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
+}
+vec2 map(vec2 value, float fromMin, float fromMax, float toMin, float toMax) {
+  return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
+}
+vec3 map(vec3 value, float fromMin, float fromMax, float toMin, float toMax) {
+  return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
+}
+vec4 map(vec4 value, float fromMin, float fromMax, float toMin, float toMax) {
+  return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
+}

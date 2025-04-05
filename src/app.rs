@@ -146,11 +146,11 @@ impl ApplicationHandler for App {
         let scene_image = create_scene_image(self.context.memory_allocator().clone(), window_size);
 
         // Load models.
-        let models = Model::load_obj("assets/obj/box.obj").unwrap();
+        let models = Model::load_obj("assets/obj/sphere-on-plane.obj").unwrap();
 
         // Create camera.
         let camera: Arc<RwLock<dyn Camera>> = Arc::new(RwLock::new(PerspectiveCamera::new(
-            Vec3::new(4.5, 3.0, -3.5),
+            Vec3::new(0.0, 1.0, -10.0),
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(0.0, -1.0, 0.0),
             0.01,
@@ -165,7 +165,7 @@ impl ApplicationHandler for App {
             queue.clone(),
             self.context.memory_allocator().clone(),
             descriptor_set_allocator,
-            &models[0], // TODO handle multiple models.
+            &models,
             camera,
         ));
 
