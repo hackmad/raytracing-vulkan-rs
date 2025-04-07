@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex};
 
-#[derive(BufferContents, Vertex, Clone)]
+#[derive(BufferContents, Clone, Debug, Vertex)]
 #[repr(C)]
 pub struct VertexData {
     #[format(R32G32B32_SFLOAT)]

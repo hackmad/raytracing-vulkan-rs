@@ -2,10 +2,11 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_EXT_buffer_reference : enable
 #extension GL_EXT_scalar_block_layout: enable
+#extension GL_EXT_nonuniform_qualifier : enable
 
 #include "common.glsl"
 
-layout(location = 0) rayPayloadInEXT vec3 rayPayload;
+layout(location = 0) rayPayloadInEXT vec4 rayPayload;
 hitAttributeEXT vec2 hitAttribs;
 
 layout(buffer_reference, scalar) buffer Vertices {
@@ -17,6 +18,9 @@ layout(buffer_reference, scalar) buffer Indices {
 layout(set = 3, binding = 0, scalar) buffer Data {
     MeshData values[];
 } data;
+
+layout(set = 4, binding = 0) uniform sampler texture_sampler;
+layout(set = 4, binding = 1) uniform texture2D textures[];
 
 Vertex unpackInstanceVertex(const int intanceId) {
     MeshData meshData = data.values[intanceId];
@@ -54,6 +58,8 @@ Vertex unpackInstanceVertex(const int intanceId) {
 
 void main() {
     const Vertex vertex = unpackInstanceVertex(gl_InstanceCustomIndexEXT);
-    rayPayload = map(vertex.normal, -1.0, 1.0, 0.0, 1.0);
+    //rayPayload = vec4(map(vertex.normal, -1.0, 1.0, 0.0, 1.0), 1.0);
+
+    rayPayload = texture(nonuniformEXT(sampler2D(textures[0], texture_sampler)), vertex.texCoord);
 }
 

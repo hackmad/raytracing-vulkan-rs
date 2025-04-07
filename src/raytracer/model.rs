@@ -1,26 +1,80 @@
-use anyhow::{Result, anyhow};
-use std::{fs::File, io::BufReader, sync::Arc};
+use anyhow::{Context, Result, anyhow};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
 };
 
-use super::geometry::VertexData;
+use super::{MaterialPropertyDataEnum, geometry::VertexData};
+
+#[derive(Debug)]
+pub struct ModelMaterial {
+    pub diffuse: MaterialPropertyDataEnum,
+}
 
 pub struct Model {
-    pub vertices: Vec<VertexData>,
-    pub indices: Vec<u32>,
+    vertices: Vec<VertexData>,
+    indices: Vec<u32>,
+    pub material: Option<ModelMaterial>,
 }
 
 impl Model {
-    pub fn load_obj(path: &str) -> Result<Vec<Self>> {
-        let mut reader = BufReader::new(File::open(path)?);
+    pub fn cube() -> Self {
+        #[rustfmt::skip]
+        let vertices = vec![
+        ];
 
-        let (models, _materials) =
-            tobj::load_obj_buf(&mut reader, &tobj::GPU_LOAD_OPTIONS, |_| {
-                Ok(Default::default())
-            })?;
+        #[rustfmt::skip]
+        let indices = vec![
+        ];
+
+        let material = Some(ModelMaterial {
+            diffuse: MaterialPropertyDataEnum::Texture {
+                path: "assets/obj/test-grid.png".to_string(),
+            },
+        });
+
+        Self {
+            vertices,
+            indices,
+            material,
+        }
+    }
+
+    pub fn triangle() -> Self {
+        #[rustfmt::skip]
+        let vertices = vec![
+            VertexData { position: [-1.0,  1.0,  0.0], normal: [ 0.0,  0.0,  1.0], tex_coord: [0.0, 1.0] },
+            VertexData { position: [ 1.0,  1.0,  0.0], normal: [ 0.0,  0.0,  1.0], tex_coord: [1.0, 1.0] },
+            VertexData { position: [ 0.0, -1.0,  0.0], normal: [ 0.0,  0.0,  1.0], tex_coord: [0.5, 0.0] },
+        ];
+
+        #[rustfmt::skip]
+        let indices = vec![0, 1, 2];
+
+        let material = Some(ModelMaterial {
+            diffuse: MaterialPropertyDataEnum::Texture {
+                path: "assets/obj/test-grid.png".to_string(),
+            },
+        });
+
+        Self {
+            vertices,
+            indices,
+            material,
+        }
+    }
+
+    pub fn load_obj(path: &str) -> Result<Vec<Self>> {
+        let (models, materials) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?;
+
+        let materials = &materials?;
+
+        let parent_path = PathBuf::from(path)
+            .parent()
+            .context(format!("Invalid path {path}"))?
+            .to_path_buf();
 
         let models: Vec<Self> = models
             .iter()
@@ -47,15 +101,32 @@ impl Model {
                         ],
                         tex_coord: [
                             mesh.texcoords[tex_coord_offset],
-                            1.0 - mesh.texcoords[tex_coord_offset + 1],
+                            mesh.texcoords[tex_coord_offset + 1],
                         ],
                     };
 
+                    let vertex_index = vertices.len() as u32;
                     vertices.push(vertex);
-                    indices.push(indices.len() as u32);
+                    indices.push(vertex_index);
                 }
+                println!("Vertices: {}", vertices.len());
+                println!("Indices:  {}", indices.len());
 
-                Self { vertices, indices }
+                let material = mesh.material_id.map(|mat_id| {
+                    let mat = &materials[mat_id];
+                    let diffuse = get_material_property(
+                        &mat.diffuse,
+                        &mat.diffuse_texture,
+                        parent_path.clone(),
+                    );
+                    ModelMaterial { diffuse }
+                });
+
+                Self {
+                    vertices,
+                    indices,
+                    material,
+                }
             })
             .collect();
 
@@ -104,5 +175,46 @@ impl Model {
             self.indices.clone(),
         )
         .map_err(|e| anyhow!("{e:?}"))
+    }
+
+    pub fn get_texture_paths(&self) -> HashSet<String> {
+        let mut paths = HashSet::new();
+
+        if let Some(mat) = &self.material {
+            if let MaterialPropertyDataEnum::Texture { path } = &mat.diffuse {
+                paths.insert(path.clone());
+            }
+        }
+
+        paths
+    }
+}
+
+fn get_material_property(
+    color: &Option<[f32; 3]>,
+    texture: &Option<String>,
+    mut parent_path: PathBuf,
+) -> MaterialPropertyDataEnum {
+    match color {
+        Some(c) => MaterialPropertyDataEnum::RGB { color: c.clone() },
+
+        None => texture
+            .clone()
+            .map_or(MaterialPropertyDataEnum::None, |path| {
+                if PathBuf::from(&path).is_absolute() {
+                    MaterialPropertyDataEnum::Texture { path }
+                } else {
+                    parent_path.push(&path);
+
+                    if let Some(path) = parent_path.to_str() {
+                        MaterialPropertyDataEnum::Texture {
+                            path: path.to_string(),
+                        }
+                    } else {
+                        println!("Invalid texture path {path}.");
+                        MaterialPropertyDataEnum::None
+                    }
+                }
+            }),
     }
 }

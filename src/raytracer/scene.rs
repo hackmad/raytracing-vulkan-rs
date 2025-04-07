@@ -1,9 +1,13 @@
+use anyhow::Result;
+use image::{GenericImageView, ImageReader};
 use std::{
+    collections::HashMap,
     iter,
     mem::size_of,
     sync::{Arc, RwLock},
 };
 use vulkano::{
+    DeviceSize,
     acceleration_structure::{
         AccelerationStructure, AccelerationStructureBuildGeometryInfo,
         AccelerationStructureBuildRangeInfo, AccelerationStructureBuildType,
@@ -14,7 +18,8 @@ use vulkano::{
     },
     buffer::{Buffer, BufferCreateInfo, BufferUsage, IndexBuffer, Subbuffer},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBufferAbstract,
+        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
+        PrimaryAutoCommandBuffer, PrimaryCommandBufferAbstract,
         allocator::{
             CommandBufferAllocator, StandardCommandBufferAllocator,
             StandardCommandBufferAllocatorCreateInfo,
@@ -24,13 +29,17 @@ use vulkano::{
         DescriptorSet, WriteDescriptorSet,
         allocator::StandardDescriptorSetAllocator,
         layout::{
-            DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo,
-            DescriptorType,
+            DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
+            DescriptorSetLayoutCreateInfo, DescriptorType,
         },
     },
     device::{Device, Queue},
     format::Format,
-    image::view::ImageView,
+    image::{
+        Image, ImageCreateInfo, ImageType, ImageUsage,
+        sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
+        view::ImageView,
+    },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
     pipeline::{
         PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
@@ -45,7 +54,7 @@ use vulkano::{
 };
 
 use super::{
-    Camera,
+    Camera, MaterialPropertyData, MaterialPropertyDataEnum,
     geometry::VertexData,
     model::Model,
     shaders::{ShaderModules, closest_hit, ray_gen},
@@ -56,6 +65,7 @@ pub struct Scene {
     descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
     tlas_descriptor_set: Arc<DescriptorSet>,
     mesh_data_descriptor_set: Arc<DescriptorSet>,
+    textures_descriptor_set: Arc<DescriptorSet>,
     pipeline_layout: Arc<PipelineLayout>,
     shader_binding_table: ShaderBindingTable,
     pipeline: Arc<RayTracingPipeline>,
@@ -79,8 +89,33 @@ impl Scene {
         models: &[Model],
         camera: Arc<RwLock<dyn Camera>>,
     ) -> Self {
-        let pipeline_layout = create_pipeline_layout(device.clone());
-        let pipeline = create_raytracing_pipeline(device.clone(), pipeline_layout.clone());
+        // Load shader modules
+        let (stages, groups) = load_shader_modules(device.clone());
+
+        // Create an allocator for command-buffer data
+        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+            queue.device().clone(),
+            StandardCommandBufferAllocatorCreateInfo {
+                secondary_buffer_count: 32,
+                ..Default::default()
+            },
+        ));
+
+        // Load Textures.
+        let (textures, texture_indices) = load_textures(
+            models,
+            memory_allocator.clone(),
+            command_buffer_allocator.clone(),
+            queue.clone(),
+        )
+        .unwrap();
+
+        let pipeline_layout = create_pipeline_layout(device.clone(), textures.len() as u32);
+
+        let pipeline =
+            create_raytracing_pipeline(device.clone(), pipeline_layout.clone(), &stages, &groups);
+
+        let layouts = pipeline_layout.set_layouts();
 
         let vertex_buffers: Vec<_> = models
             .iter()
@@ -105,15 +140,6 @@ impl Scene {
             .iter()
             .map(|buf| buf.device_address().unwrap().into())
             .collect();
-
-        // Create an allocator for command-buffer data
-        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
-            queue.device().clone(),
-            StandardCommandBufferAllocatorCreateInfo {
-                secondary_buffer_count: 32,
-                ..Default::default()
-            },
-        ));
 
         // Build the bottom-level acceleration structure and then the top-level acceleration
         // structure. Acceleration structures are used to accelerate ray tracing. The bottom-level
@@ -194,11 +220,46 @@ impl Scene {
         // during render.
         let mesh_data_descriptor_set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
-            pipeline_layout.set_layouts()[3].clone(),
+            layouts[3].clone(),
             [WriteDescriptorSet::buffer(0, mesh_data.clone())],
             [],
         )
         .unwrap();
+
+        // Textures + Sampler
+        let sampler = Sampler::new(
+            device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::Repeat; 3],
+                //mipmap_mode: SamplerMipmapMode::Nearest,
+                //mip_lod_bias: 0.0,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let textures_descriptor_set = DescriptorSet::new_variable(
+            descriptor_set_allocator.clone(),
+            layouts[4].clone(),
+            textures.len() as u32,
+            [
+                WriteDescriptorSet::sampler(0, sampler.clone()),
+                WriteDescriptorSet::image_view_array(1, 0, textures),
+            ],
+            [],
+        )
+        .unwrap();
+
+        // Materials
+        /*
+        for model in models.iter() {
+            if let Some(material) = &model.material {
+                let _diffuse = get_material_data(&material.diffuse, &texture_indices);
+            }
+        }
+        */
 
         // Create the shader binding table.
         let shader_binding_table =
@@ -209,6 +270,7 @@ impl Scene {
             descriptor_set_allocator,
             tlas_descriptor_set,
             mesh_data_descriptor_set,
+            textures_descriptor_set,
             pipeline_layout,
             shader_binding_table,
             pipeline,
@@ -254,9 +316,11 @@ impl Scene {
         )
         .unwrap();
 
+        let layouts = self.pipeline_layout.set_layouts();
+
         let uniform_buffer_descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
-            self.pipeline_layout.set_layouts()[1].clone(),
+            layouts[1].clone(),
             [WriteDescriptorSet::buffer(0, uniform_buffer.clone())],
             [],
         )
@@ -264,7 +328,7 @@ impl Scene {
 
         let storage_image_descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
-            self.pipeline_layout.set_layouts()[2].clone(),
+            layouts[2].clone(),
             [WriteDescriptorSet::image_view(0, image_view.clone())],
             [],
         )
@@ -287,6 +351,7 @@ impl Scene {
                     uniform_buffer_descriptor_set,
                     storage_image_descriptor_set,
                     self.mesh_data_descriptor_set.clone(),
+                    self.textures_descriptor_set.clone(),
                 ],
             )
             .unwrap()
@@ -417,7 +482,7 @@ fn build_acceleration_structure_triangles(
     device: Arc<Device>,
     queue: Arc<Queue>,
 ) -> Arc<AccelerationStructure> {
-    let primitive_count = (vertex_buffer.len() / 3) as u32;
+    let primitive_count = (index_buffer.len() / 3) as u32;
 
     let as_geometry_triangles_data = AccelerationStructureGeometryTrianglesData {
         max_vertex: vertex_buffer.len() as _,
@@ -482,16 +547,18 @@ unsafe fn build_top_level_acceleration_structure(
     )
 }
 
-/// Create a raytracing pipeline.
-fn create_raytracing_pipeline(
+/// Load shader modules
+fn load_shader_modules(
     device: Arc<Device>,
-    pipeline_layout: Arc<PipelineLayout>,
-) -> Arc<RayTracingPipeline> {
+) -> (
+    Vec<PipelineShaderStageCreateInfo>,
+    Vec<RayTracingShaderGroupCreateInfo>,
+) {
     // Load the shader modules.
     let shader_modules = ShaderModules::load(device.clone());
 
     // Make a list of the shader stages that the pipeline will have.
-    let stages = [
+    let stages = vec![
         PipelineShaderStageCreateInfo::new(shader_modules.ray_gen),
         PipelineShaderStageCreateInfo::new(shader_modules.ray_miss),
         PipelineShaderStageCreateInfo::new(shader_modules.closest_hit),
@@ -499,7 +566,7 @@ fn create_raytracing_pipeline(
 
     // Define the shader groups that will eventually turn into the shader binding table.
     // The numbers are the indices of the stages in the `stages` array.
-    let groups = [
+    let groups = vec![
         RayTracingShaderGroupCreateInfo::General { general_shader: 0 },
         RayTracingShaderGroupCreateInfo::General { general_shader: 1 },
         RayTracingShaderGroupCreateInfo::TrianglesHit {
@@ -508,12 +575,22 @@ fn create_raytracing_pipeline(
         },
     ];
 
+    (stages, groups)
+}
+
+/// Create a raytracing pipeline.
+fn create_raytracing_pipeline(
+    device: Arc<Device>,
+    pipeline_layout: Arc<PipelineLayout>,
+    stages: &[PipelineShaderStageCreateInfo],
+    groups: &[RayTracingShaderGroupCreateInfo],
+) -> Arc<RayTracingPipeline> {
     RayTracingPipeline::new(
         device.clone(),
         None,
         RayTracingPipelineCreateInfo {
-            stages: stages.into_iter().collect(),
-            groups: groups.into_iter().collect(),
+            stages: stages.into(),
+            groups: groups.into(),
             max_pipeline_ray_recursion_depth: 1,
             ..RayTracingPipelineCreateInfo::layout(pipeline_layout.clone())
         },
@@ -523,7 +600,7 @@ fn create_raytracing_pipeline(
 
 /// Create the pipeline layout. This will contain the descriptor sets matching the layouts in
 /// ray_gen.glsl shader.
-fn create_pipeline_layout(device: Arc<Device>) -> Arc<PipelineLayout> {
+fn create_pipeline_layout(device: Arc<Device>, texture_count: u32) -> Arc<PipelineLayout> {
     PipelineLayout::new(
         device.clone(),
         PipelineLayoutCreateInfo {
@@ -604,9 +681,143 @@ fn create_pipeline_layout(device: Arc<Device>) -> Arc<PipelineLayout> {
                     },
                 )
                 .unwrap(),
+                // Sampler + Textures.
+                DescriptorSetLayout::new(
+                    device.clone(),
+                    DescriptorSetLayoutCreateInfo {
+                        bindings: [
+                            (
+                                0,
+                                DescriptorSetLayoutBinding {
+                                    stages: ShaderStages::CLOSEST_HIT,
+                                    ..DescriptorSetLayoutBinding::descriptor_type(
+                                        DescriptorType::Sampler,
+                                    )
+                                },
+                            ),
+                            (
+                                1,
+                                DescriptorSetLayoutBinding {
+                                    stages: ShaderStages::CLOSEST_HIT,
+                                    binding_flags:
+                                        DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT,
+                                    descriptor_count: texture_count,
+                                    ..DescriptorSetLayoutBinding::descriptor_type(
+                                        DescriptorType::SampledImage,
+                                    )
+                                },
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap(),
             ],
             ..Default::default()
         },
     )
     .unwrap()
+}
+
+/// Loads the image texture into an new image view.
+/// Assumes image has alpha.
+fn load_texture(
+    path: &str,
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+) -> Result<Arc<ImageView>> {
+    println!("Loading texture {path}...");
+
+    let img = ImageReader::open(path)?.with_guessed_format()?.decode()?;
+    let (width, height) = img.dimensions();
+
+    println!("Loaded texture {path}: {width} x {height}");
+
+    let image = Image::new(
+        memory_allocator.clone(),
+        ImageCreateInfo {
+            image_type: ImageType::Dim2d,
+            format: Format::R8G8B8A8_SRGB, // Needs to match image format from device.
+            extent: [width, height, 1],
+            array_layers: 1,
+            usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
+            ..Default::default()
+        },
+        AllocationCreateInfo::default(),
+    )?;
+
+    let buffer: Subbuffer<[u8]> = Buffer::new_slice(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::TRANSFER_SRC,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        (width * height * 4) as DeviceSize, // RGBA = 4
+    )?;
+
+    {
+        let mut writer = buffer.write()?;
+        writer.copy_from_slice(img.as_bytes());
+    }
+
+    builder.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image.clone()))?;
+
+    let image_view = ImageView::new_default(image)?;
+
+    Ok(image_view)
+}
+
+/// GLSL int => i32
+fn load_textures(
+    models: &[Model],
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+    queue: Arc<Queue>,
+) -> Result<(Vec<Arc<ImageView>>, HashMap<String, i32>)> {
+    let mut textures = vec![];
+    let mut texture_indices: HashMap<String, i32> = HashMap::new();
+
+    let mut builder = AutoCommandBufferBuilder::primary(
+        command_buffer_allocator.clone(),
+        queue.queue_family_index(),
+        CommandBufferUsage::OneTimeSubmit,
+    )?;
+
+    for model in models.iter() {
+        for path in model.get_texture_paths() {
+            if !texture_indices.contains_key(&path) {
+                let texture = load_texture(&path, memory_allocator.clone(), &mut builder)?;
+
+                textures.push(texture);
+                texture_indices.insert(path.clone(), textures.len() as i32);
+            }
+        }
+    }
+
+    let _ = builder.build()?.execute(queue.clone())?;
+
+    Ok((textures, texture_indices))
+}
+
+fn get_material_data(
+    prop_type: &MaterialPropertyDataEnum,
+    texture_indices: &HashMap<String, i32>,
+) -> MaterialPropertyData {
+    match prop_type {
+        MaterialPropertyDataEnum::None => MaterialPropertyData::default(),
+        MaterialPropertyDataEnum::RGB { color } => MaterialPropertyData::new_color(color),
+        MaterialPropertyDataEnum::Texture { path } => {
+            let texture_index = texture_indices
+                .get(path)
+                .expect(format!("Texture {path} not found").as_ref());
+            MaterialPropertyData::new_texture(*texture_index)
+        }
+    }
 }

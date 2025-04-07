@@ -1,9 +1,11 @@
 mod camera;
 mod geometry;
+mod material;
 mod model;
 mod scene;
 mod shaders;
 
 pub use camera::*;
+pub use material::*;
 pub use model::*;
 pub use scene::*;

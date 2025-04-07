@@ -66,6 +66,7 @@ impl App {
             device_features: DeviceFeatures {
                 acceleration_structure: true,
                 buffer_device_address: true,
+                descriptor_binding_variable_descriptor_count: true,
                 ray_tracing_pipeline: true,
                 runtime_descriptor_array: true,
                 scalar_block_layout: true,
@@ -80,7 +81,7 @@ impl App {
         // Vulkano windows
         let windows = VulkanoWindows::default();
 
-        // Scene view
+        // The app
         Self {
             context,
             windows,
@@ -146,11 +147,12 @@ impl ApplicationHandler for App {
         let scene_image = create_scene_image(self.context.memory_allocator().clone(), window_size);
 
         // Load models.
-        let models = Model::load_obj("assets/obj/sphere-on-plane.obj").unwrap();
+        let models = Model::load_obj("assets/obj/box.obj").unwrap();
+        //let models = vec![Model::triangle()];
 
         // Create camera.
         let camera: Arc<RwLock<dyn Camera>> = Arc::new(RwLock::new(PerspectiveCamera::new(
-            Vec3::new(0.0, 1.0, -10.0),
+            Vec3::new(3.5, 5.0, 1.5),
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(0.0, -1.0, 0.0),
             0.01,
@@ -223,7 +225,7 @@ impl ApplicationHandler for App {
                 });
 
                 // Acquire swapchain future
-                match renderer.acquire(Some(std::time::Duration::from_millis(10)), |_| {}) {
+                match renderer.acquire(None, |_| {}) {
                     Ok(future) => {
                         // Render scene
                         let after_scene_render = scene.render(future, scene_image.clone());
@@ -238,7 +240,10 @@ impl ApplicationHandler for App {
                     Err(vulkano::VulkanError::OutOfDate) => {
                         renderer.resize();
                     }
-                    Err(e) => panic!("Failed to acquire swapchain future: {}", e),
+                    Err(e) => {
+                        println!("Failed to acquire swapchain future: {}", e);
+                        event_loop.exit();
+                    }
                 };
             }
             _ => (),

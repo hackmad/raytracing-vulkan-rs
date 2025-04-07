@@ -1867,8 +1867,10 @@ name = "raytracing-vulkan-rs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "egui_winit_vulkano",
  "glam",
+ "image",
  "tobj",
  "vulkano",
  "vulkano-shaders",
