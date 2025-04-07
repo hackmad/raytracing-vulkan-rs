@@ -15,16 +15,16 @@ pub struct Model {
 
 impl Model {
     pub fn load_obj(path: &str) -> Result<Vec<Self>> {
-        let mut reader = BufReader::new(File::open(path)?);
+        let (models, materials) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?;
 
-        let (models, _materials) =
-            tobj::load_obj_buf(&mut reader, &tobj::GPU_LOAD_OPTIONS, |_| {
-                Ok(Default::default())
-            })?;
+        for (i, material) in materials.iter().enumerate() {
+            println!("{i} {:?}", material);
+        }
 
         let models: Vec<Self> = models
             .iter()
-            .map(|model| {
+            .enumerate()
+            .map(|(_i, model)| {
                 let mut vertices = vec![];
                 let mut indices = vec![];
 
