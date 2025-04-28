@@ -1,12 +1,17 @@
-use anyhow::{Context, Result, anyhow};
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
-
-use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
-    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
-};
-
 use super::{MaterialPropertyDataEnum, geometry::VertexData};
+use anyhow::{Context, Result};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
+use vulkano::{
+    DeviceSize,
+    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
+    command_buffer::{
+        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryCommandBufferAbstract,
+        allocator::CommandBufferAllocator,
+    },
+    device::Queue,
+    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    sync::GpuFuture,
+};
 
 #[derive(Debug)]
 pub struct ModelMaterial {
@@ -20,28 +25,6 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn cube() -> Self {
-        #[rustfmt::skip]
-        let vertices = vec![
-        ];
-
-        #[rustfmt::skip]
-        let indices = vec![
-        ];
-
-        let material = Some(ModelMaterial {
-            diffuse: MaterialPropertyDataEnum::Texture {
-                path: "assets/obj/test-grid.png".to_string(),
-            },
-        });
-
-        Self {
-            vertices,
-            indices,
-            material,
-        }
-    }
-
     pub fn triangle() -> Self {
         #[rustfmt::skip]
         let vertices = vec![
@@ -109,8 +92,6 @@ impl Model {
                     vertices.push(vertex);
                     indices.push(vertex_index);
                 }
-                println!("Vertices: {}", vertices.len());
-                println!("Indices:  {}", indices.len());
 
                 let material = mesh.material_id.map(|mat_id| {
                     let mat = &materials[mat_id];
@@ -136,45 +117,35 @@ impl Model {
     pub fn create_vertex_buffer(
         &self,
         memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
     ) -> Result<Subbuffer<[VertexData]>> {
-        Buffer::from_iter(
-            memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER
-                    | BufferUsage::SHADER_DEVICE_ADDRESS
-                    | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::VERTEX_BUFFER
+                | BufferUsage::SHADER_DEVICE_ADDRESS
+                | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
             self.vertices.clone(),
         )
-        .map_err(|e| anyhow!("{e:?}"))
     }
 
     pub fn create_index_buffer(
         &self,
         memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
     ) -> Result<Subbuffer<[u32]>> {
-        Buffer::from_iter(
-            memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::INDEX_BUFFER
-                    | BufferUsage::SHADER_DEVICE_ADDRESS
-                    | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::INDEX_BUFFER
+                | BufferUsage::SHADER_DEVICE_ADDRESS
+                | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
             self.indices.clone(),
         )
-        .map_err(|e| anyhow!("{e:?}"))
     }
 
     pub fn get_texture_paths(&self) -> HashSet<String> {
@@ -217,4 +188,67 @@ fn get_material_property(
                 }
             }),
     }
+}
+
+fn create_device_local_buffer<T, I>(
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+    queue: Arc<Queue>,
+    usage: BufferUsage,
+    data: I,
+) -> Result<Subbuffer<[T]>>
+where
+    T: BufferContents,
+    I: IntoIterator<Item = T>,
+    I::IntoIter: ExactSizeIterator,
+{
+    let iter = data.into_iter();
+    let size = iter.len() as DeviceSize;
+
+    let temporary_accessible_buffer = Buffer::from_iter(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::TRANSFER_SRC,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        iter,
+    )?;
+
+    let device_local_buffer = Buffer::new_slice::<T>(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: usage | BufferUsage::TRANSFER_DST,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+            ..Default::default()
+        },
+        size,
+    )?;
+
+    // Create a one-time command to copy between the buffers.
+    let mut builder = AutoCommandBufferBuilder::primary(
+        command_buffer_allocator.clone(),
+        queue.queue_family_index(),
+        CommandBufferUsage::OneTimeSubmit,
+    )?;
+
+    builder.copy_buffer(CopyBufferInfo::buffers(
+        temporary_accessible_buffer,
+        device_local_buffer.clone(),
+    ))?;
+
+    builder
+        .build()?
+        .execute(queue.clone())?
+        .then_signal_fence_and_flush()?
+        .wait(None /* timeout */)?;
+
+    Ok(device_local_buffer)
 }

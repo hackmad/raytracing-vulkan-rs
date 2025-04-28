@@ -1,6 +1,6 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
-#extension GL_EXT_buffer_reference : enable
+#extension GL_EXT_buffer_reference2 : enable
 #extension GL_EXT_scalar_block_layout: enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
@@ -9,13 +9,13 @@
 layout(location = 0) rayPayloadInEXT vec4 rayPayload;
 hitAttributeEXT vec2 hitAttribs;
 
-layout(buffer_reference, scalar) buffer Vertices {
+layout(buffer_reference, scalar) readonly buffer Vertices {
     Vertex values[];
 };
-layout(buffer_reference, scalar) buffer Indices {
+layout(buffer_reference, scalar) readonly buffer Indices {
     uvec3 values[];
 };
-layout(set = 3, binding = 0, scalar) buffer Data {
+layout(set = 3, binding = 0, scalar) readonly buffer Data {
     MeshData values[];
 } data;
 
@@ -23,16 +23,18 @@ layout(set = 4, binding = 0) uniform sampler texture_sampler;
 layout(set = 4, binding = 1) uniform texture2D textures[];
 
 Vertex unpackInstanceVertex(const int intanceId) {
+    vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
+
     MeshData meshData = data.values[intanceId];
+
     Vertices vertices = Vertices(meshData.vertexBufferAddress);
     Indices indices = Indices(meshData.indexBufferAddress);
 
     uvec3 triangleIndices = indices.values[gl_PrimitiveID];
+
     Vertex v0 = vertices.values[triangleIndices.x];
     Vertex v1 = vertices.values[triangleIndices.y];
     Vertex v2 = vertices.values[triangleIndices.z];
-
-    vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
 
     const vec3 position =
         v0.position * barycentricCoords.x +
@@ -52,14 +54,11 @@ Vertex unpackInstanceVertex(const int intanceId) {
 
     const vec3 worldSpacePosition = vec3(gl_ObjectToWorldEXT * vec4(position, 1.0));
     const vec3 worldSpaceNormal = normalize(vec3(normal * gl_WorldToObjectEXT));
-
     return Vertex(worldSpacePosition, worldSpaceNormal, texCoord);
 }
 
 void main() {
-    const Vertex vertex = unpackInstanceVertex(gl_InstanceCustomIndexEXT);
-    //rayPayload = vec4(map(vertex.normal, -1.0, 1.0, 0.0, 1.0), 1.0);
-
+    Vertex vertex = unpackInstanceVertex(gl_InstanceCustomIndexEXT);
     rayPayload = texture(nonuniformEXT(sampler2D(textures[0], texture_sampler)), vertex.texCoord);
 }
 

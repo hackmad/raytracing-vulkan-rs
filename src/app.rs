@@ -4,11 +4,18 @@ use egui_winit_vulkano::{Gui, GuiConfig};
 use glam::Vec3;
 use vulkano::{
     Version,
-    descriptor_set::allocator::StandardDescriptorSetAllocator,
+    command_buffer::allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
+    descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator},
     device::{DeviceExtensions, DeviceFeatures},
     format::Format,
     image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
-    instance::{InstanceCreateInfo, InstanceExtensions},
+    instance::{
+        InstanceCreateInfo, InstanceExtensions,
+        debug::{
+            DebugUtilsMessageSeverity, DebugUtilsMessageType, DebugUtilsMessengerCallback,
+            DebugUtilsMessengerCreateInfo,
+        },
+    },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator},
     swapchain::Surface,
 };
@@ -35,20 +42,78 @@ pub struct App {
     scene: Option<Scene>,
     gui: Option<Gui>,
     gui_state: Option<GuiState>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+    descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
 }
 
 impl App {
-    pub fn new(event_loop: &impl HasDisplayHandle) -> Self {
+    pub fn new(event_loop: &impl HasDisplayHandle, enable_debug_logging: bool) -> Self {
+        // Use extension supporting the winit event loop.
         let required_extensions = Surface::required_extensions(event_loop)
             .expect("Failed to get required extensions to create a surface");
 
+        // Setup debug callback.
+        let debug_callback = if enable_debug_logging {
+            unsafe {
+                Some(DebugUtilsMessengerCallback::new(
+                    |message_severity, message_type, callback_data| {
+                        let severity = if message_severity
+                            .intersects(DebugUtilsMessageSeverity::ERROR)
+                        {
+                            "error"
+                        } else if message_severity.intersects(DebugUtilsMessageSeverity::WARNING) {
+                            "warning"
+                        } else if message_severity.intersects(DebugUtilsMessageSeverity::INFO) {
+                            "information"
+                        } else if message_severity.intersects(DebugUtilsMessageSeverity::VERBOSE) {
+                            "verbose"
+                        } else {
+                            panic!("no-impl");
+                        };
+
+                        let ty = if message_type.intersects(DebugUtilsMessageType::GENERAL) {
+                            "general"
+                        } else if message_type.intersects(DebugUtilsMessageType::VALIDATION) {
+                            "validation"
+                        } else if message_type.intersects(DebugUtilsMessageType::PERFORMANCE) {
+                            "performance"
+                        } else {
+                            panic!("no-impl");
+                        };
+
+                        println!(
+                            "{} {} {}: {}",
+                            callback_data.message_id_name.unwrap_or("unknown"),
+                            ty,
+                            severity,
+                            callback_data.message
+                        );
+                    },
+                ))
+            }
+        } else {
+            None
+        };
+
         // Vulkano context
         let context = VulkanoContext::new(VulkanoConfig {
+            debug_create_info: debug_callback.map(|callback| DebugUtilsMessengerCreateInfo {
+                message_severity: DebugUtilsMessageSeverity::ERROR
+                    | DebugUtilsMessageSeverity::WARNING
+                    | DebugUtilsMessageSeverity::INFO
+                    | DebugUtilsMessageSeverity::VERBOSE,
+                message_type: DebugUtilsMessageType::GENERAL
+                    | DebugUtilsMessageType::VALIDATION
+                    | DebugUtilsMessageType::PERFORMANCE,
+                ..DebugUtilsMessengerCreateInfo::user_callback(callback)
+            }),
             instance_create_info: InstanceCreateInfo {
                 #[cfg(target_vendor = "apple")]
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
                 application_version: Version::V1_3,
                 enabled_extensions: InstanceExtensions {
+                    ext_debug_utils: true,
+                    ext_debug_report: true,
                     ext_swapchain_colorspace: true,
                     ..required_extensions
                 },
@@ -81,6 +146,17 @@ impl App {
         // Vulkano windows
         let windows = VulkanoWindows::default();
 
+        // Command buffer allocator.
+        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
+            context.device().clone(),
+            Default::default(),
+        ));
+
+        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
+            context.device().clone(),
+            Default::default(),
+        ));
+
         // The app
         Self {
             context,
@@ -89,6 +165,8 @@ impl App {
             scene: None,
             gui: None,
             gui_state: None,
+            command_buffer_allocator,
+            descriptor_set_allocator,
         }
     }
 
@@ -130,11 +208,6 @@ impl ApplicationHandler for App {
 
         let device = self.context.device();
 
-        let descriptor_set_allocator = Arc::new(StandardDescriptorSetAllocator::new(
-            device.clone(),
-            Default::default(),
-        ));
-
         let renderer = self
             .windows
             .get_primary_renderer_mut()
@@ -147,12 +220,12 @@ impl ApplicationHandler for App {
         let scene_image = create_scene_image(self.context.memory_allocator().clone(), window_size);
 
         // Load models.
+        //let models = Model::load_obj("assets/obj/plane.obj").unwrap();
         let models = Model::load_obj("assets/obj/box.obj").unwrap();
-        //let models = vec![Model::triangle()];
 
         // Create camera.
         let camera: Arc<RwLock<dyn Camera>> = Arc::new(RwLock::new(PerspectiveCamera::new(
-            Vec3::new(3.5, 5.0, 1.5),
+            Vec3::new(4.5, 3.0, -3.5),
             Vec3::new(0.0, 0.0, 0.0),
             Vec3::new(0.0, -1.0, 0.0),
             0.01,
@@ -166,7 +239,8 @@ impl ApplicationHandler for App {
             device.clone(),
             queue.clone(),
             self.context.memory_allocator().clone(),
-            descriptor_set_allocator,
+            self.descriptor_set_allocator.clone(),
+            self.command_buffer_allocator.clone(),
             &models,
             camera,
         ));
