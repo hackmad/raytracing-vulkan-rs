@@ -105,11 +105,16 @@ impl Scene {
 
         let layouts = pipeline_layout.set_layouts();
 
+        // Build the bottom-level acceleration structure and then the top-level acceleration
+        // structure. Acceleration structures are used to accelerate ray tracing. The bottom-level
+        // acceleration structure contains the geometry data. The top-level acceleration structure
+        // contains the instances of the bottom-level acceleration structures. In our shader, we
+        // will trace rays against the top-level acceleration structure.
         let vertex_buffers: Vec<_> = models
             .iter()
             .map(|model| {
                 model
-                    .create_vertex_buffer(
+                    .create_blas_vertex_buffer(
                         memory_allocator.clone(),
                         command_buffer_allocator.clone(),
                         queue.clone(),
@@ -122,7 +127,7 @@ impl Scene {
             .iter()
             .map(|model| {
                 model
-                    .create_index_buffer(
+                    .create_blas_index_buffer(
                         memory_allocator.clone(),
                         command_buffer_allocator.clone(),
                         queue.clone(),
@@ -131,21 +136,6 @@ impl Scene {
             })
             .collect();
 
-        let vertex_buffer_device_addresses: Vec<u64> = vertex_buffers
-            .iter()
-            .map(|buf| buf.device_address().unwrap().into())
-            .collect();
-
-        let index_buffer_device_addresses: Vec<u64> = index_buffers
-            .iter()
-            .map(|buf| buf.device_address().unwrap().into())
-            .collect();
-
-        // Build the bottom-level acceleration structure and then the top-level acceleration
-        // structure. Acceleration structures are used to accelerate ray tracing. The bottom-level
-        // acceleration structure contains the geometry data. The top-level acceleration structure
-        // contains the instances of the bottom-level acceleration structures. In our shader, we
-        // will trace rays against the top-level acceleration structure.
         let blas_vec: Vec<_> = vertex_buffers
             .into_iter()
             .zip(index_buffers)
@@ -190,19 +180,52 @@ impl Scene {
         )
         .unwrap();
 
-        // Mesh data references for vertex and index buffer.
-        let mesh_data_refs = vertex_buffer_device_addresses
+        // Create storage for mesh data references.
+        let mesh_vertices_storage_buffers: Vec<_> = models
+            .iter()
+            .map(|model| {
+                model
+                    .create_vertices_storage_buffer(
+                        memory_allocator.clone(),
+                        command_buffer_allocator.clone(),
+                        queue.clone(),
+                    )
+                    .unwrap()
+            })
+            .collect();
+
+        let mesh_indices_storage_buffers: Vec<_> = models
+            .iter()
+            .map(|model| {
+                model
+                    .create_indices_storage_buffer(
+                        memory_allocator.clone(),
+                        command_buffer_allocator.clone(),
+                        queue.clone(),
+                    )
+                    .unwrap()
+            })
+            .collect();
+
+        let mesh_vertices_buffer_device_addresses: Vec<u64> = mesh_vertices_storage_buffers
+            .iter()
+            .map(|buf| buf.device_address().unwrap().into())
+            .collect();
+
+        let mesh_indices_buffer_device_addresses: Vec<u64> = mesh_indices_storage_buffers
+            .iter()
+            .map(|buf| buf.device_address().unwrap().into())
+            .collect();
+
+        let meshes = mesh_vertices_buffer_device_addresses
             .into_iter()
-            .zip(index_buffer_device_addresses)
-            .map(|(vba, iba)| closest_hit::MeshData {
-                vertexBufferAddress: vba,
-                indexBufferAddress: iba,
-            });
+            .zip(mesh_indices_buffer_device_addresses)
+            .map(|(vertices, indices)| closest_hit::Mesh { vertices, indices });
 
         let mesh_data = Buffer::from_iter(
             memory_allocator.clone(),
             BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+                usage: BufferUsage::STORAGE_BUFFER,
                 ..Default::default()
             },
             AllocationCreateInfo {
@@ -210,7 +233,7 @@ impl Scene {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            mesh_data_refs,
+            meshes,
         )
         .unwrap();
 
@@ -791,13 +814,12 @@ fn load_texture(
     Ok(image_view)
 }
 
-/// GLSL int => i32
 fn load_textures(
     models: &[Model],
     memory_allocator: Arc<dyn MemoryAllocator>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     queue: Arc<Queue>,
-) -> Result<(Vec<Arc<ImageView>>, HashMap<String, i32>)> {
+) -> Result<(Vec<Arc<ImageView>>, HashMap<String, i32>)> /* GLSL int => i32*/ {
     let mut textures = vec![];
     let mut texture_indices: HashMap<String, i32> = HashMap::new();
 

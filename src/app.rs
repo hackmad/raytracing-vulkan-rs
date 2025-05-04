@@ -52,61 +52,9 @@ impl App {
         let required_extensions = Surface::required_extensions(event_loop)
             .expect("Failed to get required extensions to create a surface");
 
-        // Setup debug callback.
-        let debug_callback = if enable_debug_logging {
-            unsafe {
-                Some(DebugUtilsMessengerCallback::new(
-                    |message_severity, message_type, callback_data| {
-                        let severity = if message_severity
-                            .intersects(DebugUtilsMessageSeverity::ERROR)
-                        {
-                            "error"
-                        } else if message_severity.intersects(DebugUtilsMessageSeverity::WARNING) {
-                            "warning"
-                        } else if message_severity.intersects(DebugUtilsMessageSeverity::INFO) {
-                            "information"
-                        } else if message_severity.intersects(DebugUtilsMessageSeverity::VERBOSE) {
-                            "verbose"
-                        } else {
-                            panic!("no-impl");
-                        };
-
-                        let ty = if message_type.intersects(DebugUtilsMessageType::GENERAL) {
-                            "general"
-                        } else if message_type.intersects(DebugUtilsMessageType::VALIDATION) {
-                            "validation"
-                        } else if message_type.intersects(DebugUtilsMessageType::PERFORMANCE) {
-                            "performance"
-                        } else {
-                            panic!("no-impl");
-                        };
-
-                        println!(
-                            "{} {} {}: {}",
-                            callback_data.message_id_name.unwrap_or("unknown"),
-                            ty,
-                            severity,
-                            callback_data.message
-                        );
-                    },
-                ))
-            }
-        } else {
-            None
-        };
-
         // Vulkano context
         let context = VulkanoContext::new(VulkanoConfig {
-            debug_create_info: debug_callback.map(|callback| DebugUtilsMessengerCreateInfo {
-                message_severity: DebugUtilsMessageSeverity::ERROR
-                    | DebugUtilsMessageSeverity::WARNING
-                    | DebugUtilsMessageSeverity::INFO
-                    | DebugUtilsMessageSeverity::VERBOSE,
-                message_type: DebugUtilsMessageType::GENERAL
-                    | DebugUtilsMessageType::VALIDATION
-                    | DebugUtilsMessageType::PERFORMANCE,
-                ..DebugUtilsMessengerCreateInfo::user_callback(callback)
-            }),
+            debug_create_info: setup_debug_callback(enable_debug_logging),
             instance_create_info: InstanceCreateInfo {
                 #[cfg(target_vendor = "apple")]
                 flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
@@ -220,8 +168,12 @@ impl ApplicationHandler for App {
         let scene_image = create_scene_image(self.context.memory_allocator().clone(), window_size);
 
         // Load models.
-        //let models = Model::load_obj("assets/obj/plane.obj").unwrap();
-        let models = Model::load_obj("assets/obj/box.obj").unwrap();
+        //let models = Model::load_obj("assets/obj/triangle.obj").unwrap();
+        //let models = Model::load_obj("assets/obj/quad.obj").unwrap();
+        //let models = Model::load_obj("assets/obj/box.obj").unwrap();
+        //let models = Model::load_obj("assets/obj/sphere-flat.obj").unwrap();
+        //let models = Model::load_obj("assets/obj/sphere-smooth.obj").unwrap();
+        let models = Model::load_obj("assets/obj/sphere-on-plane.obj").unwrap();
 
         // Create camera.
         let camera: Arc<RwLock<dyn Camera>> = Arc::new(RwLock::new(PerspectiveCamera::new(
@@ -361,4 +313,57 @@ fn create_scene_image(
         .unwrap(),
     )
     .unwrap()
+}
+
+fn setup_debug_callback(enable_debug_logging: bool) -> Option<DebugUtilsMessengerCreateInfo> {
+    let debug_callback = if enable_debug_logging {
+        unsafe {
+            Some(DebugUtilsMessengerCallback::new(
+                |message_severity, message_type, callback_data| {
+                    let severity = if message_severity.intersects(DebugUtilsMessageSeverity::ERROR)
+                    {
+                        "error"
+                    } else if message_severity.intersects(DebugUtilsMessageSeverity::WARNING) {
+                        "warning"
+                    } else if message_severity.intersects(DebugUtilsMessageSeverity::INFO) {
+                        "information"
+                    } else if message_severity.intersects(DebugUtilsMessageSeverity::VERBOSE) {
+                        "verbose"
+                    } else {
+                        panic!("no-impl");
+                    };
+
+                    let ty = if message_type.intersects(DebugUtilsMessageType::GENERAL) {
+                        "general"
+                    } else if message_type.intersects(DebugUtilsMessageType::VALIDATION) {
+                        "validation"
+                    } else if message_type.intersects(DebugUtilsMessageType::PERFORMANCE) {
+                        "performance"
+                    } else {
+                        panic!("no-impl");
+                    };
+
+                    println!(
+                        "{} {} {}: {}",
+                        callback_data.message_id_name.unwrap_or("unknown"),
+                        ty,
+                        severity,
+                        callback_data.message
+                    );
+                },
+            ))
+        }
+    } else {
+        None
+    };
+    debug_callback.map(|callback| DebugUtilsMessengerCreateInfo {
+        message_severity: DebugUtilsMessageSeverity::ERROR
+            | DebugUtilsMessageSeverity::WARNING
+            | DebugUtilsMessageSeverity::INFO
+            | DebugUtilsMessageSeverity::VERBOSE,
+        message_type: DebugUtilsMessageType::GENERAL
+            | DebugUtilsMessageType::VALIDATION
+            | DebugUtilsMessageType::PERFORMANCE,
+        ..DebugUtilsMessengerCreateInfo::user_callback(callback)
+    })
 }

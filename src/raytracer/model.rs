@@ -25,30 +25,6 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn triangle() -> Self {
-        #[rustfmt::skip]
-        let vertices = vec![
-            VertexData { position: [-1.0,  1.0,  0.0], normal: [ 0.0,  0.0,  1.0], tex_coord: [0.0, 1.0] },
-            VertexData { position: [ 1.0,  1.0,  0.0], normal: [ 0.0,  0.0,  1.0], tex_coord: [1.0, 1.0] },
-            VertexData { position: [ 0.0, -1.0,  0.0], normal: [ 0.0,  0.0,  1.0], tex_coord: [0.5, 0.0] },
-        ];
-
-        #[rustfmt::skip]
-        let indices = vec![0, 1, 2];
-
-        let material = Some(ModelMaterial {
-            diffuse: MaterialPropertyDataEnum::Texture {
-                path: "assets/obj/test-grid.png".to_string(),
-            },
-        });
-
-        Self {
-            vertices,
-            indices,
-            material,
-        }
-    }
-
     pub fn load_obj(path: &str) -> Result<Vec<Self>> {
         let (models, materials) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?;
 
@@ -84,14 +60,25 @@ impl Model {
                         ],
                         tex_coord: [
                             mesh.texcoords[tex_coord_offset],
-                            mesh.texcoords[tex_coord_offset + 1],
+                            1.0 - mesh.texcoords[tex_coord_offset + 1],
                         ],
                     };
 
                     let vertex_index = vertices.len() as u32;
+
                     vertices.push(vertex);
                     indices.push(vertex_index);
                 }
+
+                println!(
+                    "Vertex count: {}, Indices count: {}",
+                    vertices.len(),
+                    indices.len()
+                );
+                for (i, v) in vertices.iter().enumerate() {
+                    println!("{i} {v:?}");
+                }
+                println!("{indices:?}");
 
                 let material = mesh.material_id.map(|mat_id| {
                     let mat = &materials[mat_id];
@@ -114,7 +101,8 @@ impl Model {
         Ok(models)
     }
 
-    pub fn create_vertex_buffer(
+    /// Create a vertex buffer for buildng the acceleration structure.
+    pub fn create_blas_vertex_buffer(
         &self,
         memory_allocator: Arc<dyn MemoryAllocator>,
         command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
@@ -131,7 +119,8 @@ impl Model {
         )
     }
 
-    pub fn create_index_buffer(
+    /// Create an index buffer for buildng the acceleration structure.
+    pub fn create_blas_index_buffer(
         &self,
         memory_allocator: Arc<dyn MemoryAllocator>,
         command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
@@ -148,6 +137,39 @@ impl Model {
         )
     }
 
+    /// Create a storage buffer for accessing vertices in shader code.
+    pub fn create_vertices_storage_buffer(
+        &self,
+        memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
+    ) -> Result<Subbuffer<[VertexData]>> {
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+            self.vertices.clone(),
+        )
+    }
+
+    /// Create a storage buffer for accessing indices in shader code.
+    pub fn create_indices_storage_buffer(
+        &self,
+        memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
+    ) -> Result<Subbuffer<[u32]>> {
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+            self.indices.clone(),
+        )
+    }
+
+    /// Return a set of all texture paths.
     pub fn get_texture_paths(&self) -> HashSet<String> {
         let mut paths = HashSet::new();
 
@@ -190,7 +212,9 @@ fn get_material_property(
     }
 }
 
-fn create_device_local_buffer<T, I>(
+/// This will create buffers that can be accessed only by the GPU. One specific use case is to
+/// access them via device addresses in shaders.
+pub fn create_device_local_buffer<T, I>(
     memory_allocator: Arc<dyn MemoryAllocator>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     queue: Arc<Queue>,
@@ -232,7 +256,6 @@ where
         size,
     )?;
 
-    // Create a one-time command to copy between the buffers.
     let mut builder = AutoCommandBufferBuilder::primary(
         command_buffer_allocator.clone(),
         queue.queue_family_index(),
