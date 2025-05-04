@@ -9,19 +9,6 @@
 layout(location = 0) rayPayloadInEXT vec4 rayPayload;
 hitAttributeEXT vec2 hitAttribs;
 
-layout(buffer_reference, scalar) buffer Vertices {
-    Vertex values[];
-};
-
-layout(buffer_reference, scalar) buffer Indices {
-    uint values[];
-};
-
-struct Mesh {
-    Vertices vertices;
-    Indices indices;
-};
-
 layout(set = 3, binding = 0, scalar) buffer MeshData {
     Mesh values[];
 } mesh_data;
@@ -29,10 +16,10 @@ layout(set = 3, binding = 0, scalar) buffer MeshData {
 layout(set = 4, binding = 0) uniform sampler texture_sampler;
 layout(set = 4, binding = 1) uniform texture2D textures[];
 
-Vertex unpackInstanceVertex(const int intanceId, const int primitiveId) {
+Vertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
     vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
 
-    Mesh mesh = mesh_data.values[intanceId];
+    Mesh mesh = mesh_data.values[instanceId];
 
     uint i = primitiveId * 3;
     uint i0 = mesh.indices.values[i];
@@ -65,7 +52,7 @@ Vertex unpackInstanceVertex(const int intanceId, const int primitiveId) {
 }
 
 void main() {
-    Vertex vertex = unpackInstanceVertex(gl_InstanceCustomIndexEXT, gl_PrimitiveID);
+    Vertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
     rayPayload = texture(nonuniformEXT(sampler2D(textures[0], texture_sampler)), vertex.texCoord);
 }
 

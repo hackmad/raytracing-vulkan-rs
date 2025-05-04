@@ -6,6 +6,17 @@ struct Vertex {
     vec2 texCoord;
 };
 
+layout(buffer_reference, scalar) buffer Vertices {
+    Vertex values[];
+};
+layout(buffer_reference, scalar) buffer Indices {
+    uint values[];
+};
+struct Mesh {
+    Vertices vertices;
+    Indices indices;
+};
+
 float map(float value, float fromMin, float fromMax, float toMin, float toMax) {
   return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
 }

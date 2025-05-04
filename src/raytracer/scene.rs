@@ -242,7 +242,7 @@ impl Scene {
         let mesh_data_descriptor_set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
             layouts[MESH_DATA_LAYOUT].clone(),
-            [WriteDescriptorSet::buffer(0, mesh_data.clone())],
+            [WriteDescriptorSet::buffer(0, mesh_data)],
             [],
         )
         .unwrap();
@@ -342,7 +342,7 @@ impl Scene {
         let uniform_buffer_descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
             layouts[UNIFORM_BUFFER_LAYOUT].clone(),
-            [WriteDescriptorSet::buffer(0, uniform_buffer.clone())],
+            [WriteDescriptorSet::buffer(0, uniform_buffer)],
             [],
         )
         .unwrap();
