@@ -1,3 +1,4 @@
+mod acceleration;
 mod camera;
 mod material;
 mod model;
