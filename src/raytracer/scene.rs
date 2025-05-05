@@ -1,21 +1,15 @@
-use anyhow::Result;
-use image::{GenericImageView, ImageReader};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
 use vulkano::{
-    DeviceSize,
-    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
-        PrimaryAutoCommandBuffer, PrimaryCommandBufferAbstract, allocator::CommandBufferAllocator,
+        AutoCommandBufferBuilder, CommandBufferUsage, allocator::CommandBufferAllocator,
     },
     descriptor_set::{DescriptorSet, WriteDescriptorSet, allocator::DescriptorSetAllocator},
     device::{Device, Queue},
-    format::Format,
     image::{
-        Image, ImageCreateInfo, ImageType, ImageUsage,
         sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::ImageView,
     },
@@ -33,6 +27,7 @@ use super::{
     model::Model,
     pipeline::RtPipeline,
     shaders::{ShaderModules, closest_hit, ray_gen},
+    texture::Textures,
 };
 
 pub struct Scene {
@@ -66,7 +61,7 @@ impl Scene {
         let (stages, groups) = load_shader_modules(device.clone());
 
         // Load Textures.
-        let (textures, texture_indices) = load_textures(
+        let textures = Textures::load(
             models,
             memory_allocator.clone(),
             command_buffer_allocator.clone(),
@@ -74,9 +69,14 @@ impl Scene {
         )
         .unwrap();
 
-        let rt_pipeline =
-            RtPipeline::new(device.clone(), &stages, &groups, textures.len() as _).unwrap();
-
+        // Create the raytracing pipeline.
+        let rt_pipeline = RtPipeline::new(
+            device.clone(),
+            &stages,
+            &groups,
+            textures.image_views.len() as _,
+        )
+        .unwrap();
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
 
@@ -189,10 +189,10 @@ impl Scene {
         let textures_descriptor_set = DescriptorSet::new_variable(
             descriptor_set_allocator.clone(),
             layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
-            textures.len() as u32,
+            textures.image_views.len() as _,
             [
                 WriteDescriptorSet::sampler(0, sampler.clone()),
-                WriteDescriptorSet::image_view_array(1, 0, textures),
+                WriteDescriptorSet::image_view_array(1, 0, textures.image_views),
             ],
             [],
         )
@@ -348,90 +348,6 @@ fn load_shader_modules(
     ];
 
     (stages, groups)
-}
-
-/// Loads the image texture into an new image view.
-/// Assumes image has alpha.
-fn load_texture(
-    path: &str,
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
-) -> Result<Arc<ImageView>> {
-    println!("Loading texture {path}...");
-
-    let img = ImageReader::open(path)?.with_guessed_format()?.decode()?;
-    let (width, height) = img.dimensions();
-
-    println!("Loaded texture {path}: {width} x {height}");
-
-    let image = Image::new(
-        memory_allocator.clone(),
-        ImageCreateInfo {
-            image_type: ImageType::Dim2d,
-            format: Format::R8G8B8A8_SRGB, // Needs to match image format from device.
-            extent: [width, height, 1],
-            array_layers: 1,
-            usage: ImageUsage::TRANSFER_DST | ImageUsage::SAMPLED,
-            ..Default::default()
-        },
-        AllocationCreateInfo::default(),
-    )?;
-
-    let buffer: Subbuffer<[u8]> = Buffer::new_slice(
-        memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::TRANSFER_SRC,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_HOST
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        (width * height * 4) as DeviceSize, // RGBA = 4
-    )?;
-
-    {
-        let mut writer = buffer.write()?;
-        writer.copy_from_slice(img.as_bytes());
-    }
-
-    builder.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image.clone()))?;
-
-    let image_view = ImageView::new_default(image)?;
-
-    Ok(image_view)
-}
-
-fn load_textures(
-    models: &[Model],
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    queue: Arc<Queue>,
-) -> Result<(Vec<Arc<ImageView>>, HashMap<String, i32>)> /* GLSL int => i32*/ {
-    let mut textures = vec![];
-    let mut texture_indices: HashMap<String, i32> = HashMap::new();
-
-    let mut builder = AutoCommandBufferBuilder::primary(
-        command_buffer_allocator.clone(),
-        queue.queue_family_index(),
-        CommandBufferUsage::OneTimeSubmit,
-    )?;
-
-    for model in models.iter() {
-        for path in model.get_texture_paths() {
-            if !texture_indices.contains_key(&path) {
-                let texture = load_texture(&path, memory_allocator.clone(), &mut builder)?;
-
-                textures.push(texture);
-                texture_indices.insert(path.clone(), textures.len() as i32);
-            }
-        }
-    }
-
-    let _ = builder.build()?.execute(queue.clone())?;
-
-    Ok((textures, texture_indices))
 }
 
 fn get_material_data(

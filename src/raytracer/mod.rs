@@ -5,6 +5,7 @@ mod model;
 mod pipeline;
 mod scene;
 mod shaders;
+mod texture;
 
 pub use camera::*;
 pub use material::*;
