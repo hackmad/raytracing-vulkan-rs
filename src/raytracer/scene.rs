@@ -6,19 +6,12 @@ use std::{
 };
 use vulkano::{
     DeviceSize,
-    buffer::{Buffer, BufferCreateInfo, BufferUsage, IndexBuffer, Subbuffer},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
         PrimaryAutoCommandBuffer, PrimaryCommandBufferAbstract, allocator::CommandBufferAllocator,
     },
-    descriptor_set::{
-        DescriptorSet, WriteDescriptorSet,
-        allocator::DescriptorSetAllocator,
-        layout::{
-            DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
-            DescriptorSetLayoutCreateInfo, DescriptorType,
-        },
-    },
+    descriptor_set::{DescriptorSet, WriteDescriptorSet, allocator::DescriptorSetAllocator},
     device::{Device, Queue},
     format::Format,
     image::{
@@ -28,14 +21,9 @@ use vulkano::{
     },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
     pipeline::{
-        PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
-        layout::PipelineLayoutCreateInfo,
-        ray_tracing::{
-            RayTracingPipeline, RayTracingPipelineCreateInfo, RayTracingShaderGroupCreateInfo,
-            ShaderBindingTable,
-        },
+        PipelineBindPoint, PipelineShaderStageCreateInfo,
+        ray_tracing::{RayTracingShaderGroupCreateInfo, ShaderBindingTable},
     },
-    shader::ShaderStages,
     sync::GpuFuture,
 };
 
@@ -43,6 +31,7 @@ use super::{
     Camera, MaterialPropertyData, MaterialPropertyDataEnum,
     acceleration::AccelerationStructures,
     model::Model,
+    pipeline::RtPipeline,
     shaders::{ShaderModules, closest_hit, ray_gen},
 };
 
@@ -52,13 +41,13 @@ pub struct Scene {
     tlas_descriptor_set: Arc<DescriptorSet>,
     mesh_data_descriptor_set: Arc<DescriptorSet>,
     textures_descriptor_set: Arc<DescriptorSet>,
-    pipeline_layout: Arc<PipelineLayout>,
     shader_binding_table: ShaderBindingTable,
-    pipeline: Arc<RayTracingPipeline>,
+    rt_pipeline: RtPipeline,
     memory_allocator: Arc<dyn MemoryAllocator>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
 
-    acceleration_structures: AccelerationStructures,
+    /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
+    _acceleration_structures: AccelerationStructures,
 
     camera: Arc<RwLock<dyn Camera>>,
 }
@@ -85,11 +74,10 @@ impl Scene {
         )
         .unwrap();
 
-        let pipeline_layout = create_pipeline_layout(device.clone(), textures.len() as u32);
+        let rt_pipeline =
+            RtPipeline::new(device.clone(), &stages, &groups, textures.len() as _).unwrap();
 
-        let pipeline =
-            create_raytracing_pipeline(device.clone(), pipeline_layout.clone(), &stages, &groups);
-
+        let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
 
         // For now the acceleration structure is non-changing. We can create its descriptor set
@@ -105,7 +93,7 @@ impl Scene {
 
         let tlas_descriptor_set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
-            layouts[TLAS_LAYOUT].clone(),
+            layouts[RtPipeline::TLAS_LAYOUT].clone(),
             [WriteDescriptorSet::acceleration_structure(
                 0,
                 acceleration_structures.tlas.clone(),
@@ -178,7 +166,7 @@ impl Scene {
         // during render.
         let mesh_data_descriptor_set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
-            layouts[MESH_DATA_LAYOUT].clone(),
+            layouts[RtPipeline::MESH_DATA_LAYOUT].clone(),
             [WriteDescriptorSet::buffer(0, mesh_data)],
             [],
         )
@@ -200,7 +188,7 @@ impl Scene {
 
         let textures_descriptor_set = DescriptorSet::new_variable(
             descriptor_set_allocator.clone(),
-            layouts[SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
+            layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
             textures.len() as u32,
             [
                 WriteDescriptorSet::sampler(0, sampler.clone()),
@@ -221,7 +209,7 @@ impl Scene {
 
         // Create the shader binding table.
         let shader_binding_table =
-            ShaderBindingTable::new(memory_allocator.clone(), &pipeline).unwrap();
+            ShaderBindingTable::new(memory_allocator.clone(), &rt_pipeline.get()).unwrap();
 
         Scene {
             queue,
@@ -229,12 +217,11 @@ impl Scene {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
-            pipeline_layout,
             shader_binding_table,
-            pipeline,
+            rt_pipeline,
             memory_allocator,
             command_buffer_allocator,
-            acceleration_structures,
+            _acceleration_structures: acceleration_structures,
             camera,
         }
     }
@@ -273,11 +260,12 @@ impl Scene {
         )
         .unwrap();
 
-        let layouts = self.pipeline_layout.set_layouts();
+        let pipeline_layout = self.rt_pipeline.get_layout();
+        let layouts = pipeline_layout.set_layouts();
 
         let uniform_buffer_descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
-            layouts[UNIFORM_BUFFER_LAYOUT].clone(),
+            layouts[RtPipeline::UNIFORM_BUFFER_LAYOUT].clone(),
             [WriteDescriptorSet::buffer(0, uniform_buffer)],
             [],
         )
@@ -285,7 +273,7 @@ impl Scene {
 
         let render_image_descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
-            layouts[RENDER_IMAGE_LAYOUT].clone(),
+            layouts[RtPipeline::RENDER_IMAGE_LAYOUT].clone(),
             [WriteDescriptorSet::image_view(0, image_view.clone())],
             [],
         )
@@ -301,7 +289,7 @@ impl Scene {
         builder
             .bind_descriptor_sets(
                 PipelineBindPoint::RayTracing,
-                self.pipeline_layout.clone(),
+                self.rt_pipeline.get_layout(),
                 0,
                 vec![
                     self.tlas_descriptor_set.clone(),
@@ -312,7 +300,7 @@ impl Scene {
                 ],
             )
             .unwrap()
-            .bind_pipeline_ray_tracing(self.pipeline.clone())
+            .bind_pipeline_ray_tracing(self.rt_pipeline.get())
             .unwrap();
 
         unsafe {
@@ -360,168 +348,6 @@ fn load_shader_modules(
     ];
 
     (stages, groups)
-}
-
-/// Create a raytracing pipeline.
-fn create_raytracing_pipeline(
-    device: Arc<Device>,
-    pipeline_layout: Arc<PipelineLayout>,
-    stages: &[PipelineShaderStageCreateInfo],
-    groups: &[RayTracingShaderGroupCreateInfo],
-) -> Arc<RayTracingPipeline> {
-    RayTracingPipeline::new(
-        device.clone(),
-        None,
-        RayTracingPipelineCreateInfo {
-            stages: stages.into(),
-            groups: groups.into(),
-            max_pipeline_ray_recursion_depth: 1,
-            ..RayTracingPipelineCreateInfo::layout(pipeline_layout.clone())
-        },
-    )
-    .unwrap()
-}
-
-/// Pipeline layout for top level acceleration structure.
-fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device,
-        DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::RAYGEN,
-                    ..DescriptorSetLayoutBinding::descriptor_type(
-                        DescriptorType::AccelerationStructure,
-                    )
-                },
-            )]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
-
-/// Pipeline layout for uniform buffer containing camera matrices.
-fn create_uniform_buffer_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device,
-        DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::RAYGEN,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer)
-                },
-            )]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
-
-/// Pipeline layout for the render image storage buffer.
-fn create_render_image_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::RAYGEN,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageImage)
-                },
-            )]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
-
-/// Piepline layout for mesh data references storage buffer.
-fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::CLOSEST_HIT,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                },
-            )]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
-
-/// Pipeline layout for sampler and textures.
-fn create_sample_and_textures_layout(
-    device: Arc<Device>,
-    texture_count: u32,
-) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            bindings: [
-                (
-                    0,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::Sampler)
-                    },
-                ),
-                (
-                    1,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        binding_flags: DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT,
-                        descriptor_count: texture_count,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::SampledImage)
-                    },
-                ),
-            ]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
-    )
-    .unwrap()
-}
-
-// These will help referencing the layout indices. Keep in sync with create_pipeline_layout().
-const TLAS_LAYOUT: usize = 0;
-const UNIFORM_BUFFER_LAYOUT: usize = 1;
-const RENDER_IMAGE_LAYOUT: usize = 2;
-const MESH_DATA_LAYOUT: usize = 3;
-const SAMPLERS_AND_TEXTURES_LAYOUT: usize = 4;
-
-/// Create the pipeline layout. This will contain the descriptor sets matching the layouts in
-/// ray_gen.glsl shader.
-fn create_pipeline_layout(device: Arc<Device>, texture_count: u32) -> Arc<PipelineLayout> {
-    PipelineLayout::new(
-        device.clone(),
-        PipelineLayoutCreateInfo {
-            set_layouts: vec![
-                create_tlas_layout(device.clone()),
-                create_uniform_buffer_layout(device.clone()),
-                create_render_image_layout(device.clone()),
-                create_mesh_data_layout(device.clone()),
-                create_sample_and_textures_layout(device.clone(), texture_count),
-            ],
-            ..Default::default()
-        },
-    )
-    .unwrap()
 }
 
 /// Loads the image texture into an new image view.

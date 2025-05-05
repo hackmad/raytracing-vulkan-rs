@@ -30,7 +30,7 @@ pub struct AccelerationStructures {
 
     /// The bottom-level acceleration structure is required to be kept alive even though renderer will not
     /// directly use it. The top-level acceleration structure needs it.
-    blas_vec: Vec<Arc<AccelerationStructure>>,
+    _blas_vec: Vec<Arc<AccelerationStructure>>,
 }
 
 impl AccelerationStructures {
@@ -102,7 +102,10 @@ impl AccelerationStructures {
             )
         }?;
 
-        Ok(Self { blas_vec, tlas })
+        Ok(Self {
+            _blas_vec: blas_vec,
+            tlas,
+        })
     }
 }
 

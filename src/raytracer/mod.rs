@@ -2,6 +2,7 @@ mod acceleration;
 mod camera;
 mod material;
 mod model;
+mod pipeline;
 mod scene;
 mod shaders;
 
