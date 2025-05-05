@@ -51,7 +51,6 @@ use vulkano::{
 
 use super::{
     Camera, MaterialPropertyData, MaterialPropertyDataEnum,
-    geometry::VertexData,
     model::Model,
     shaders::{ShaderModules, closest_hit, ray_gen},
 };
@@ -220,7 +219,10 @@ impl Scene {
         let meshes = mesh_vertices_buffer_device_addresses
             .into_iter()
             .zip(mesh_indices_buffer_device_addresses)
-            .map(|(vertices, indices)| closest_hit::Mesh { vertices, indices });
+            .map(|(vertices_ref, indices_ref)| closest_hit::Mesh {
+                vertices_ref,
+                indices_ref,
+            });
 
         let mesh_data = Buffer::from_iter(
             memory_allocator.clone(),
@@ -496,7 +498,7 @@ fn build_acceleration_structure_common(
 }
 
 fn build_acceleration_structure_triangles(
-    vertex_buffer: Subbuffer<[VertexData]>,
+    vertex_buffer: Subbuffer<[closest_hit::MeshVertex]>,
     index_buffer: Subbuffer<[u32]>,
     memory_allocator: Arc<dyn MemoryAllocator>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
@@ -509,7 +511,7 @@ fn build_acceleration_structure_triangles(
         max_vertex: vertex_buffer.len() as _,
         vertex_data: Some(vertex_buffer.into_bytes()),
         index_data: Some(IndexBuffer::U32(index_buffer)),
-        vertex_stride: size_of::<VertexData>() as _,
+        vertex_stride: size_of::<closest_hit::MeshVertex>() as _,
         ..AccelerationStructureGeometryTrianglesData::new(Format::R32G32B32_SFLOAT)
     };
 

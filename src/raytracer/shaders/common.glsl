@@ -1,22 +1,33 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 
-struct Vertex {
+// NOTE: Use rust naming conventions where struct is used in the rust code.
+
+// Vertex data.
+struct MeshVertex {
     vec3 position;
     vec3 normal;
-    vec2 texCoord;
+    vec2 tex_coord;
 };
 
-layout(buffer_reference, scalar) buffer Vertices {
-    Vertex values[];
+
+// Pointer to a storage buffer containing the mesh vertex data.
+layout(buffer_reference, scalar) buffer MeshVertcesRef {
+    MeshVertex values[];
 };
-layout(buffer_reference, scalar) buffer Indices {
+
+// Pointer to a storage buffer containing the mesh indices.
+layout(buffer_reference, scalar) buffer MeshIndicesRef {
     uint values[];
 };
+
+// Mesh stores the pointers to the storage buffers containing vertex data and indices.
 struct Mesh {
-    Vertices vertices;
-    Indices indices;
+    MeshVertcesRef vertices_ref;
+    MeshIndicesRef indices_ref;
 };
 
+
+// Map a value from [fromMin, fromMax] to [toMin, toMax].
 float map(float value, float fromMin, float fromMax, float toMin, float toMax) {
   return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
 }

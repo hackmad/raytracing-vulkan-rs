@@ -1,4 +1,4 @@
-use super::{MaterialPropertyDataEnum, geometry::VertexData};
+use super::{MaterialPropertyDataEnum, shaders::closest_hit};
 use anyhow::{Context, Result};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use vulkano::{
@@ -19,7 +19,7 @@ pub struct ModelMaterial {
 }
 
 pub struct Model {
-    vertices: Vec<VertexData>,
+    vertices: Vec<closest_hit::MeshVertex>,
     indices: Vec<u32>,
     pub material: Option<ModelMaterial>,
 }
@@ -47,7 +47,7 @@ impl Model {
                     let pos_offset = (3 * index) as usize;
                     let tex_coord_offset = (2 * index) as usize;
 
-                    let vertex = VertexData {
+                    let vertex = closest_hit::MeshVertex {
                         position: [
                             mesh.positions[pos_offset],
                             mesh.positions[pos_offset + 1],
@@ -70,15 +70,21 @@ impl Model {
                     indices.push(vertex_index);
                 }
 
+                /*
                 println!(
                     "Vertex count: {}, Indices count: {}",
                     vertices.len(),
                     indices.len()
                 );
+
                 for (i, v) in vertices.iter().enumerate() {
-                    println!("{i} {v:?}");
+                    println!(
+                        "{i} {{position: {:?}, normal: {:?}, tex_coord: {:?}}}",
+                        v.position, v.normal, v.tex_coord,
+                    );
                 }
                 println!("{indices:?}");
+                */
 
                 let material = mesh.material_id.map(|mat_id| {
                     let mat = &materials[mat_id];
@@ -107,7 +113,7 @@ impl Model {
         memory_allocator: Arc<dyn MemoryAllocator>,
         command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
         queue: Arc<Queue>,
-    ) -> Result<Subbuffer<[VertexData]>> {
+    ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
         create_device_local_buffer(
             memory_allocator,
             command_buffer_allocator,
@@ -143,7 +149,7 @@ impl Model {
         memory_allocator: Arc<dyn MemoryAllocator>,
         command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
         queue: Arc<Queue>,
-    ) -> Result<Subbuffer<[VertexData]>> {
+    ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
         create_device_local_buffer(
             memory_allocator,
             command_buffer_allocator,
