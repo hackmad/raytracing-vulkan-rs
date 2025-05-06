@@ -58,7 +58,7 @@ impl Model {
                             mesh.normals[pos_offset + 1],
                             mesh.normals[pos_offset + 2],
                         ],
-                        tex_coord: [
+                        texCoord: [
                             mesh.texcoords[tex_coord_offset],
                             1.0 - mesh.texcoords[tex_coord_offset + 1],
                         ],
@@ -251,4 +251,70 @@ where
         .wait(None /* timeout */)?;
 
     Ok(device_local_buffer)
+}
+
+/// This will create 2 storage buffers that can be accessed by their device address only by the GPU for the vertices
+/// and indices. These addresses will be packed in another storage buffer representing the mesh data which will be
+/// returned.
+pub fn create_mesh_storage_buffer(
+    models: &[Model],
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+    queue: Arc<Queue>,
+) -> Result<Subbuffer<[closest_hit::Mesh]>> {
+    let vertices_storage_buffers = models
+        .iter()
+        .map(|model| {
+            model.create_vertices_storage_buffer(
+                memory_allocator.clone(),
+                command_buffer_allocator.clone(),
+                queue.clone(),
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let indices_storage_buffers = models
+        .iter()
+        .map(|model| {
+            model.create_indices_storage_buffer(
+                memory_allocator.clone(),
+                command_buffer_allocator.clone(),
+                queue.clone(),
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let vertices_buffer_device_addresses: Vec<u64> = vertices_storage_buffers
+        .iter()
+        .map(|buf| buf.device_address().unwrap().into())
+        .collect();
+
+    let indices_buffer_device_addresses: Vec<u64> = indices_storage_buffers
+        .iter()
+        .map(|buf| buf.device_address().unwrap().into())
+        .collect();
+
+    let meshes = vertices_buffer_device_addresses
+        .into_iter()
+        .zip(indices_buffer_device_addresses)
+        .map(|(vertices_ref, indices_ref)| closest_hit::Mesh {
+            verticesRef: vertices_ref,
+            indicesRef: indices_ref,
+        });
+
+    let data = Buffer::from_iter(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::STORAGE_BUFFER,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        meshes,
+    )?;
+
+    Ok(data)
 }

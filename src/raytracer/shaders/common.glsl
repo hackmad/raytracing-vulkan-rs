@@ -1,12 +1,11 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
-
-// NOTE: Use rust naming conventions where struct is used in the rust code.
+#extension GL_EXT_buffer_reference2 : enable
 
 // Vertex data.
 struct MeshVertex {
     vec3 position;
     vec3 normal;
-    vec2 tex_coord;
+    vec2 texCoord;
 };
 
 
@@ -22,8 +21,8 @@ layout(buffer_reference, scalar) buffer MeshIndicesRef {
 
 // Mesh stores the pointers to the storage buffers containing vertex data and indices.
 struct Mesh {
-    MeshVertcesRef vertices_ref;
-    MeshIndicesRef indices_ref;
+    MeshVertcesRef verticesRef;
+    MeshIndicesRef indicesRef;
 };
 
 

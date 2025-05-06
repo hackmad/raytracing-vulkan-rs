@@ -4,11 +4,13 @@
 layout(location = 0) rayPayloadEXT vec4 rayPayload;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+
 layout(set = 1, binding = 0) uniform Camera {
     mat4 viewProj;    // Camera view * projection
     mat4 viewInverse; // Camera inverse view matrix
     mat4 projInverse; // Camera inverse projection matrix
 } camera;
+
 layout(set = 2, binding = 0, rgba32f) uniform image2D image;
 
 void main() {

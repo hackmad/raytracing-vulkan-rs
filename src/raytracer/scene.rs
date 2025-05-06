@@ -16,11 +16,12 @@ use vulkano::{
 };
 
 use super::{
-    Camera,
+    Camera, MaterialPropertyData,
     acceleration::AccelerationStructures,
+    create_mesh_storage_buffer,
     model::Model,
     pipeline::RtPipeline,
-    shaders::{ShaderModules, closest_hit, ray_gen},
+    shaders::{ShaderModules, ray_gen},
     texture::Textures,
 };
 
@@ -96,68 +97,16 @@ impl Scene {
         )
         .unwrap();
 
-        // Create storage for mesh data references.
-        let mesh_vertices_storage_buffers: Vec<_> = models
-            .iter()
-            .map(|model| {
-                model
-                    .create_vertices_storage_buffer(
-                        memory_allocator.clone(),
-                        command_buffer_allocator.clone(),
-                        queue.clone(),
-                    )
-                    .unwrap()
-            })
-            .collect();
-
-        let mesh_indices_storage_buffers: Vec<_> = models
-            .iter()
-            .map(|model| {
-                model
-                    .create_indices_storage_buffer(
-                        memory_allocator.clone(),
-                        command_buffer_allocator.clone(),
-                        queue.clone(),
-                    )
-                    .unwrap()
-            })
-            .collect();
-
-        let mesh_vertices_buffer_device_addresses: Vec<u64> = mesh_vertices_storage_buffers
-            .iter()
-            .map(|buf| buf.device_address().unwrap().into())
-            .collect();
-
-        let mesh_indices_buffer_device_addresses: Vec<u64> = mesh_indices_storage_buffers
-            .iter()
-            .map(|buf| buf.device_address().unwrap().into())
-            .collect();
-
-        let meshes = mesh_vertices_buffer_device_addresses
-            .into_iter()
-            .zip(mesh_indices_buffer_device_addresses)
-            .map(|(vertices_ref, indices_ref)| closest_hit::Mesh {
-                vertices_ref,
-                indices_ref,
-            });
-
-        let mesh_data = Buffer::from_iter(
+        // Mesh data won't change either. We can create its descriptor set and clone it later
+        // during render.
+        let mesh_data = create_mesh_storage_buffer(
+            models,
             memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            meshes,
+            command_buffer_allocator.clone(),
+            queue.clone(),
         )
         .unwrap();
 
-        // Mesh data won't change either. We can create its descriptor set and clone it later
-        // during render.
         let mesh_data_descriptor_set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
             layouts[RtPipeline::MESH_DATA_LAYOUT].clone(),
@@ -193,13 +142,12 @@ impl Scene {
         .unwrap();
 
         // Materials
-        /*
         for model in models.iter() {
             if let Some(material) = &model.material {
-                let _diffuse = get_material_data(&material.diffuse, &texture_indices);
+                let diffuse =
+                    MaterialPropertyData::from_property_value(&material.diffuse, &textures.indices);
             }
         }
-        */
 
         // Create the shader binding table.
         let shader_binding_table =

@@ -22,7 +22,7 @@ pub struct Textures {
     pub image_views: Vec<Arc<ImageView>>,
 
     /// Maps unique texture paths to their index in `image_view`.
-    pub texture_indices: HashMap<String, i32>, /* GLSL int => i32*/
+    pub indices: HashMap<String, i32>, /* GLSL int => i32*/
 }
 
 impl Textures {
@@ -34,7 +34,7 @@ impl Textures {
         queue: Arc<Queue>,
     ) -> Result<Self> {
         let mut image_views = vec![];
-        let mut texture_indices: HashMap<String, i32> = HashMap::new();
+        let mut indices: HashMap<String, i32> = HashMap::new();
 
         let mut builder = AutoCommandBufferBuilder::primary(
             command_buffer_allocator.clone(),
@@ -44,11 +44,11 @@ impl Textures {
 
         for model in models.iter() {
             for path in model.get_texture_paths() {
-                if !texture_indices.contains_key(&path) {
+                if !indices.contains_key(&path) {
                     let texture = load_texture(&path, memory_allocator.clone(), &mut builder)?;
 
                     image_views.push(texture);
-                    texture_indices.insert(path.clone(), image_views.len() as i32);
+                    indices.insert(path.clone(), image_views.len() as i32);
                 }
             }
         }
@@ -57,7 +57,7 @@ impl Textures {
 
         Ok(Self {
             image_views,
-            texture_indices,
+            indices,
         })
     }
 }

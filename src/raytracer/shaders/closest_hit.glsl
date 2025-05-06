@@ -1,6 +1,5 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
-#extension GL_EXT_buffer_reference2 : enable
 #extension GL_EXT_scalar_block_layout: enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
@@ -22,13 +21,13 @@ MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
     Mesh mesh = mesh_data.values[instanceId];
 
     uint i = primitiveId * 3;
-    uint i0 = mesh.indices_ref.values[i];
-    uint i1 = mesh.indices_ref.values[i + 1];
-    uint i2 = mesh.indices_ref.values[i + 2];
+    uint i0 = mesh.indicesRef.values[i];
+    uint i1 = mesh.indicesRef.values[i + 1];
+    uint i2 = mesh.indicesRef.values[i + 2];
 
-    MeshVertex v0 = mesh.vertices_ref.values[i0];
-    MeshVertex v1 = mesh.vertices_ref.values[i1];
-    MeshVertex v2 = mesh.vertices_ref.values[i2];
+    MeshVertex v0 = mesh.verticesRef.values[i0];
+    MeshVertex v1 = mesh.verticesRef.values[i1];
+    MeshVertex v2 = mesh.verticesRef.values[i2];
 
     const vec3 position =
         v0.position * barycentricCoords.x +
@@ -41,9 +40,9 @@ MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
         v2.normal * barycentricCoords.z;
 
     const vec2 texCoord = 
-        v0.tex_coord * barycentricCoords.x +
-        v1.tex_coord * barycentricCoords.y +
-        v2.tex_coord * barycentricCoords.z;
+        v0.texCoord * barycentricCoords.x +
+        v1.texCoord * barycentricCoords.y +
+        v2.texCoord * barycentricCoords.z;
 
     const vec3 worldSpacePosition = vec3(gl_ObjectToWorldEXT * vec4(position, 1.0));
     const vec3 worldSpaceNormal = normalize(vec3(normal * gl_WorldToObjectEXT));
@@ -52,6 +51,6 @@ MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
 
 void main() {
     MeshVertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
-    rayPayload = texture(nonuniformEXT(sampler2D(textures[0], textureSampler)), vertex.tex_coord);
+    rayPayload = texture(nonuniformEXT(sampler2D(textures[0], textureSampler)), vertex.texCoord);
 }
 

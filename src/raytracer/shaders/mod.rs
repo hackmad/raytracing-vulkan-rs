@@ -3,7 +3,6 @@ use std::sync::Arc;
 use vulkano::{
     device::Device,
     pipeline::{PipelineShaderStageCreateInfo, ray_tracing::RayTracingShaderGroupCreateInfo},
-    shader::EntryPoint,
 };
 
 pub mod ray_gen {

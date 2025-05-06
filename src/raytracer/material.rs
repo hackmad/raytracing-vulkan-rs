@@ -31,11 +31,11 @@ impl MaterialPropertyData {
         }
     }
 
-    pub fn from_property_type(
-        prop_type: &MaterialPropertyValue,
+    pub fn from_property_value(
+        value: &MaterialPropertyValue,
         texture_indices: &HashMap<String, i32>,
     ) -> Self {
-        match prop_type {
+        match value {
             MaterialPropertyValue::None => Self::default(),
             MaterialPropertyValue::RGB { color } => Self::new_color(color),
             MaterialPropertyValue::Texture { path } => {
