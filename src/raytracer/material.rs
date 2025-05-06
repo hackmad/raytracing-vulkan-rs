@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use vulkano::buffer::BufferContents;
 
 const MAT_PROP_NONE: u8 = 0;
@@ -50,4 +52,20 @@ pub enum MaterialPropertyDataEnum {
     None,
     RGB { color: [f32; 3] },
     Texture { path: String },
+}
+
+pub fn get_material_data(
+    prop_type: &MaterialPropertyDataEnum,
+    texture_indices: &HashMap<String, i32>,
+) -> MaterialPropertyData {
+    match prop_type {
+        MaterialPropertyDataEnum::None => MaterialPropertyData::default(),
+        MaterialPropertyDataEnum::RGB { color } => MaterialPropertyData::new_color(color),
+        MaterialPropertyDataEnum::Texture { path } => {
+            let texture_index = texture_indices
+                .get(path)
+                .expect(format!("Texture {path} not found").as_ref());
+            MaterialPropertyData::new_texture(*texture_index)
+        }
+    }
 }

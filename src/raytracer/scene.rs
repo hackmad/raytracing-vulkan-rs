@@ -58,7 +58,7 @@ impl Scene {
         camera: Arc<RwLock<dyn Camera>>,
     ) -> Self {
         // Load shader modules
-        let (stages, groups) = load_shader_modules(device.clone());
+        let shader_modules = ShaderModules::load(device.clone());
 
         // Load Textures.
         let textures = Textures::load(
@@ -72,8 +72,8 @@ impl Scene {
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(
             device.clone(),
-            &stages,
-            &groups,
+            &shader_modules.stages,
+            &shader_modules.groups,
             textures.image_views.len() as _,
         )
         .unwrap();
@@ -316,52 +316,5 @@ impl Scene {
             .unwrap();
 
         after_future.boxed()
-    }
-}
-
-/// Load shader modules
-fn load_shader_modules(
-    device: Arc<Device>,
-) -> (
-    Vec<PipelineShaderStageCreateInfo>,
-    Vec<RayTracingShaderGroupCreateInfo>,
-) {
-    // Load the shader modules.
-    let shader_modules = ShaderModules::load(device.clone());
-
-    // Make a list of the shader stages that the pipeline will have.
-    let stages = vec![
-        PipelineShaderStageCreateInfo::new(shader_modules.ray_gen),
-        PipelineShaderStageCreateInfo::new(shader_modules.ray_miss),
-        PipelineShaderStageCreateInfo::new(shader_modules.closest_hit),
-    ];
-
-    // Define the shader groups that will eventually turn into the shader binding table.
-    // The numbers are the indices of the stages in the `stages` array.
-    let groups = vec![
-        RayTracingShaderGroupCreateInfo::General { general_shader: 0 },
-        RayTracingShaderGroupCreateInfo::General { general_shader: 1 },
-        RayTracingShaderGroupCreateInfo::TrianglesHit {
-            closest_hit_shader: Some(2),
-            any_hit_shader: None,
-        },
-    ];
-
-    (stages, groups)
-}
-
-fn get_material_data(
-    prop_type: &MaterialPropertyDataEnum,
-    texture_indices: &HashMap<String, i32>,
-) -> MaterialPropertyData {
-    match prop_type {
-        MaterialPropertyDataEnum::None => MaterialPropertyData::default(),
-        MaterialPropertyDataEnum::RGB { color } => MaterialPropertyData::new_color(color),
-        MaterialPropertyDataEnum::Texture { path } => {
-            let texture_index = texture_indices
-                .get(path)
-                .expect(format!("Texture {path} not found").as_ref());
-            MaterialPropertyData::new_texture(*texture_index)
-        }
     }
 }
