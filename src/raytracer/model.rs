@@ -1,4 +1,4 @@
-use super::{MaterialPropertyDataEnum, shaders::closest_hit};
+use super::{MaterialPropertyValue, shaders::closest_hit};
 use anyhow::{Context, Result};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use vulkano::{
@@ -15,7 +15,7 @@ use vulkano::{
 
 #[derive(Debug)]
 pub struct ModelMaterial {
-    pub diffuse: MaterialPropertyDataEnum,
+    pub diffuse: MaterialPropertyValue,
 }
 
 pub struct Model {
@@ -88,7 +88,7 @@ impl Model {
 
                 let material = mesh.material_id.map(|mat_id| {
                     let mat = &materials[mat_id];
-                    let diffuse = get_material_property(
+                    let diffuse = MaterialPropertyValue::new(
                         &mat.diffuse,
                         &mat.diffuse_texture,
                         parent_path.clone(),
@@ -180,41 +180,12 @@ impl Model {
         let mut paths = HashSet::new();
 
         if let Some(mat) = &self.material {
-            if let MaterialPropertyDataEnum::Texture { path } = &mat.diffuse {
+            if let MaterialPropertyValue::Texture { path } = &mat.diffuse {
                 paths.insert(path.clone());
             }
         }
 
         paths
-    }
-}
-
-fn get_material_property(
-    color: &Option<[f32; 3]>,
-    texture: &Option<String>,
-    mut parent_path: PathBuf,
-) -> MaterialPropertyDataEnum {
-    match color {
-        Some(c) => MaterialPropertyDataEnum::RGB { color: c.clone() },
-
-        None => texture
-            .clone()
-            .map_or(MaterialPropertyDataEnum::None, |path| {
-                if PathBuf::from(&path).is_absolute() {
-                    MaterialPropertyDataEnum::Texture { path }
-                } else {
-                    parent_path.push(&path);
-
-                    if let Some(path) = parent_path.to_str() {
-                        MaterialPropertyDataEnum::Texture {
-                            path: path.to_string(),
-                        }
-                    } else {
-                        println!("Invalid texture path {path}.");
-                        MaterialPropertyDataEnum::None
-                    }
-                }
-            }),
     }
 }
 

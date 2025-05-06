@@ -1,10 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use vulkano::buffer::BufferContents;
-
-const MAT_PROP_NONE: u8 = 0;
-const MAT_PROP_RGB: u8 = 1;
-const MAT_PROP_TEXTURE: u8 = 2;
 
 #[repr(C)]
 #[derive(BufferContents, Clone, Copy)]
@@ -15,9 +11,13 @@ pub struct MaterialPropertyData {
 }
 
 impl MaterialPropertyData {
+    pub const MAT_PROP_NONE: u8 = 0;
+    pub const MAT_PROP_RGB: u8 = 1;
+    pub const MAT_PROP_TEXTURE: u8 = 2;
+
     pub fn new_color(rgb: &[f32; 3]) -> Self {
         Self {
-            prop_type: MAT_PROP_RGB,
+            prop_type: Self::MAT_PROP_RGB,
             color: rgb.clone(),
             texture_index: -1,
         }
@@ -25,9 +25,25 @@ impl MaterialPropertyData {
 
     pub fn new_texture(index: i32) -> Self {
         Self {
-            prop_type: MAT_PROP_TEXTURE,
+            prop_type: Self::MAT_PROP_TEXTURE,
             color: [0.0, 0.0, 0.0],
             texture_index: index,
+        }
+    }
+
+    pub fn from_property_type(
+        prop_type: &MaterialPropertyValue,
+        texture_indices: &HashMap<String, i32>,
+    ) -> Self {
+        match prop_type {
+            MaterialPropertyValue::None => Self::default(),
+            MaterialPropertyValue::RGB { color } => Self::new_color(color),
+            MaterialPropertyValue::Texture { path } => {
+                let texture_index = texture_indices
+                    .get(path)
+                    .expect(format!("Texture {path} not found").as_ref());
+                Self::new_texture(*texture_index)
+            }
         }
     }
 }
@@ -35,37 +51,45 @@ impl MaterialPropertyData {
 impl Default for MaterialPropertyData {
     fn default() -> Self {
         Self {
-            prop_type: MAT_PROP_NONE,
+            prop_type: Self::MAT_PROP_NONE,
             color: [0.0, 0.0, 0.0],
             texture_index: -1,
         }
     }
 }
 
-#[derive(Debug, Eq, Hash, PartialEq)]
-pub enum MaterialProperty {
-    Diffuse,
-}
-
 #[derive(Clone, Debug)]
-pub enum MaterialPropertyDataEnum {
+pub enum MaterialPropertyValue {
     None,
     RGB { color: [f32; 3] },
     Texture { path: String },
 }
 
-pub fn get_material_data(
-    prop_type: &MaterialPropertyDataEnum,
-    texture_indices: &HashMap<String, i32>,
-) -> MaterialPropertyData {
-    match prop_type {
-        MaterialPropertyDataEnum::None => MaterialPropertyData::default(),
-        MaterialPropertyDataEnum::RGB { color } => MaterialPropertyData::new_color(color),
-        MaterialPropertyDataEnum::Texture { path } => {
-            let texture_index = texture_indices
-                .get(path)
-                .expect(format!("Texture {path} not found").as_ref());
-            MaterialPropertyData::new_texture(*texture_index)
+impl MaterialPropertyValue {
+    pub fn new(
+        color: &Option<[f32; 3]>,
+        texture: &Option<String>,
+        mut parent_path: PathBuf,
+    ) -> Self {
+        match color {
+            Some(c) => MaterialPropertyValue::RGB { color: c.clone() },
+
+            None => texture.clone().map_or(Self::None, |path| {
+                if PathBuf::from(&path).is_absolute() {
+                    Self::Texture { path }
+                } else {
+                    parent_path.push(&path);
+
+                    if let Some(path) = parent_path.to_str() {
+                        Self::Texture {
+                            path: path.to_string(),
+                        }
+                    } else {
+                        println!("Invalid texture path {path}.");
+                        Self::None
+                    }
+                }
+            }),
         }
     }
 }

@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{
@@ -14,15 +11,12 @@ use vulkano::{
         view::ImageView,
     },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
-    pipeline::{
-        PipelineBindPoint, PipelineShaderStageCreateInfo,
-        ray_tracing::{RayTracingShaderGroupCreateInfo, ShaderBindingTable},
-    },
+    pipeline::{PipelineBindPoint, ray_tracing::ShaderBindingTable},
     sync::GpuFuture,
 };
 
 use super::{
-    Camera, MaterialPropertyData, MaterialPropertyDataEnum,
+    Camera,
     acceleration::AccelerationStructures,
     model::Model,
     pipeline::RtPipeline,
