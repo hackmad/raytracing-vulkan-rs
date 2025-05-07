@@ -1,71 +1,43 @@
-use std::{
-    iter,
-    mem::size_of,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 use vulkano::{
-    acceleration_structure::{
-        AccelerationStructure, AccelerationStructureBuildGeometryInfo,
-        AccelerationStructureBuildRangeInfo, AccelerationStructureBuildType,
-        AccelerationStructureCreateInfo, AccelerationStructureGeometries,
-        AccelerationStructureGeometryInstancesData, AccelerationStructureGeometryInstancesDataType,
-        AccelerationStructureGeometryTrianglesData, AccelerationStructureInstance,
-        AccelerationStructureType, BuildAccelerationStructureFlags, BuildAccelerationStructureMode,
-    },
-    buffer::{Buffer, BufferCreateInfo, BufferUsage, IndexBuffer, Subbuffer},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBufferAbstract,
-        allocator::{
-            CommandBufferAllocator, StandardCommandBufferAllocator,
-            StandardCommandBufferAllocatorCreateInfo,
-        },
+        AutoCommandBufferBuilder, CommandBufferUsage, allocator::CommandBufferAllocator,
     },
-    descriptor_set::{
-        DescriptorSet, WriteDescriptorSet,
-        allocator::StandardDescriptorSetAllocator,
-        layout::{
-            DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo,
-            DescriptorType,
-        },
-    },
+    descriptor_set::{DescriptorSet, WriteDescriptorSet, allocator::DescriptorSetAllocator},
     device::{Device, Queue},
-    format::Format,
-    image::view::ImageView,
-    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
-    pipeline::{
-        PipelineBindPoint, PipelineLayout, PipelineShaderStageCreateInfo,
-        layout::PipelineLayoutCreateInfo,
-        ray_tracing::{
-            RayTracingPipeline, RayTracingPipelineCreateInfo, RayTracingShaderGroupCreateInfo,
-            ShaderBindingTable,
-        },
+    image::{
+        sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
+        view::ImageView,
     },
-    shader::ShaderStages,
+    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    pipeline::{PipelineBindPoint, ray_tracing::ShaderBindingTable},
     sync::GpuFuture,
 };
 
 use super::{
     Camera,
-    geometry::VertexData,
+    acceleration::AccelerationStructures,
+    create_mesh_storage_buffer,
     model::Model,
-    shaders::{ShaderModules, closest_hit, ray_gen},
+    pipeline::RtPipeline,
+    shaders::{ShaderModules, ray_gen},
+    texture::Textures,
 };
 
 pub struct Scene {
     queue: Arc<Queue>,
-    descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+    descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
     tlas_descriptor_set: Arc<DescriptorSet>,
     mesh_data_descriptor_set: Arc<DescriptorSet>,
-    pipeline_layout: Arc<PipelineLayout>,
+    textures_descriptor_set: Arc<DescriptorSet>,
     shader_binding_table: ShaderBindingTable,
-    pipeline: Arc<RayTracingPipeline>,
+    rt_pipeline: RtPipeline,
     memory_allocator: Arc<dyn MemoryAllocator>,
-    command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
 
-    // The bottom-level acceleration structure is required to be kept alive
-    // as we reference it in the top-level acceleration structure.
-    _blas_vec: Vec<Arc<AccelerationStructure>>,
-    _tlas: Arc<AccelerationStructure>,
+    /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
+    _acceleration_structures: AccelerationStructures,
 
     camera: Arc<RwLock<dyn Camera>>,
 }
@@ -75,147 +47,117 @@ impl Scene {
         device: Arc<Device>,
         queue: Arc<Queue>,
         memory_allocator: Arc<dyn MemoryAllocator>,
-        descriptor_set_allocator: Arc<StandardDescriptorSetAllocator>,
+        descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
         models: &[Model],
         camera: Arc<RwLock<dyn Camera>>,
     ) -> Self {
-        let pipeline_layout = create_pipeline_layout(device.clone());
-        let pipeline = create_raytracing_pipeline(device.clone(), pipeline_layout.clone());
+        // Load shader modules
+        let shader_modules = ShaderModules::load(device.clone());
 
-        let vertex_buffers: Vec<_> = models
-            .iter()
-            .map(|model| {
-                model
-                    .create_vertex_buffer(memory_allocator.clone())
-                    .unwrap()
-            })
-            .collect();
+        // Load Textures.
+        let textures = Textures::load(
+            models,
+            memory_allocator.clone(),
+            command_buffer_allocator.clone(),
+            queue.clone(),
+        )
+        .unwrap();
+        //println!("Textures: {textures:?}");
 
-        let index_buffers: Vec<_> = models
-            .iter()
-            .map(|model| model.create_index_buffer(memory_allocator.clone()).unwrap())
-            .collect();
-
-        let vertex_buffer_device_addresses: Vec<u64> = vertex_buffers
-            .iter()
-            .map(|buf| buf.device_address().unwrap().into())
-            .collect();
-
-        let index_buffer_device_addresses: Vec<u64> = index_buffers
-            .iter()
-            .map(|buf| buf.device_address().unwrap().into())
-            .collect();
-
-        // Create an allocator for command-buffer data
-        let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
-            queue.device().clone(),
-            StandardCommandBufferAllocatorCreateInfo {
-                secondary_buffer_count: 32,
-                ..Default::default()
-            },
-        ));
-
-        // Build the bottom-level acceleration structure and then the top-level acceleration
-        // structure. Acceleration structures are used to accelerate ray tracing. The bottom-level
-        // acceleration structure contains the geometry data. The top-level acceleration structure
-        // contains the instances of the bottom-level acceleration structures. In our shader, we
-        // will trace rays against the top-level acceleration structure.
-        let blas_vec: Vec<_> = vertex_buffers
-            .into_iter()
-            .zip(index_buffers)
-            .map(|(vertex_buffer, index_buffer)| {
-                build_acceleration_structure_triangles(
-                    vertex_buffer,
-                    index_buffer,
-                    memory_allocator.clone(),
-                    command_buffer_allocator.clone(),
-                    device.clone(),
-                    queue.clone(),
-                )
-            })
-            .collect();
-
-        let blas_instances = blas_vec
-            .iter()
-            .map(|blas| AccelerationStructureInstance {
-                acceleration_structure_reference: blas.device_address().into(),
-                ..Default::default()
-            })
-            .collect();
-
-        // Build the top-level acceleration structure.
-        let tlas = unsafe {
-            build_top_level_acceleration_structure(
-                blas_instances,
-                memory_allocator.clone(),
-                command_buffer_allocator.clone(),
-                device.clone(),
-                queue.clone(),
-            )
-        };
+        // Create the raytracing pipeline.
+        let rt_pipeline = RtPipeline::new(
+            device.clone(),
+            &shader_modules.stages,
+            &shader_modules.groups,
+            textures.image_views.len() as _,
+        )
+        .unwrap();
+        let pipeline_layout = rt_pipeline.get_layout();
+        let layouts = pipeline_layout.set_layouts();
 
         // For now the acceleration structure is non-changing. We can create its descriptor set
         // and clone it later during render.
-        let tlas_descriptor_set = DescriptorSet::new(
-            descriptor_set_allocator.clone(),
-            pipeline_layout.set_layouts()[0].clone(),
-            [WriteDescriptorSet::acceleration_structure(0, tlas.clone())],
-            [],
+        let acceleration_structures = AccelerationStructures::new(
+            models,
+            memory_allocator.clone(),
+            command_buffer_allocator.clone(),
+            device.clone(),
+            queue.clone(),
         )
         .unwrap();
 
-        // Mesh data references for vertex and index buffer.
-        let mesh_data_refs = vertex_buffer_device_addresses
-            .into_iter()
-            .zip(index_buffer_device_addresses)
-            .map(|(vba, iba)| closest_hit::MeshData {
-                vertexBufferAddress: vba,
-                indexBufferAddress: iba,
-            });
-
-        let mesh_data = Buffer::from_iter(
-            memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER
-                    | BufferUsage::SHADER_DEVICE_ADDRESS
-                    | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            mesh_data_refs,
+        let tlas_descriptor_set = DescriptorSet::new(
+            descriptor_set_allocator.clone(),
+            layouts[RtPipeline::TLAS_LAYOUT].clone(),
+            [WriteDescriptorSet::acceleration_structure(
+                0,
+                acceleration_structures.tlas.clone(),
+            )],
+            [],
         )
         .unwrap();
 
         // Mesh data won't change either. We can create its descriptor set and clone it later
         // during render.
+        let mesh_data = create_mesh_storage_buffer(
+            models,
+            memory_allocator.clone(),
+            command_buffer_allocator.clone(),
+            queue.clone(),
+            &textures,
+        )
+        .unwrap();
+
         let mesh_data_descriptor_set = DescriptorSet::new(
             descriptor_set_allocator.clone(),
-            pipeline_layout.set_layouts()[3].clone(),
-            [WriteDescriptorSet::buffer(0, mesh_data.clone())],
+            layouts[RtPipeline::MESH_DATA_LAYOUT].clone(),
+            [WriteDescriptorSet::buffer(0, mesh_data)],
+            [],
+        )
+        .unwrap();
+
+        // Textures + Sampler
+        let sampler = Sampler::new(
+            device.clone(),
+            SamplerCreateInfo {
+                mag_filter: Filter::Linear,
+                min_filter: Filter::Linear,
+                address_mode: [SamplerAddressMode::Repeat; 3],
+                //mipmap_mode: SamplerMipmapMode::Nearest,
+                //mip_lod_bias: 0.0,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let textures_descriptor_set = DescriptorSet::new_variable(
+            descriptor_set_allocator.clone(),
+            layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
+            textures.image_views.len() as _,
+            [
+                WriteDescriptorSet::sampler(0, sampler.clone()),
+                WriteDescriptorSet::image_view_array(1, 0, textures.image_views),
+            ],
             [],
         )
         .unwrap();
 
         // Create the shader binding table.
         let shader_binding_table =
-            ShaderBindingTable::new(memory_allocator.clone(), &pipeline).unwrap();
+            ShaderBindingTable::new(memory_allocator.clone(), &rt_pipeline.get()).unwrap();
 
         Scene {
             queue,
             descriptor_set_allocator,
             tlas_descriptor_set,
             mesh_data_descriptor_set,
-            pipeline_layout,
+            textures_descriptor_set,
             shader_binding_table,
-            pipeline,
+            rt_pipeline,
             memory_allocator,
             command_buffer_allocator,
-            _blas_vec: blas_vec,
-            _tlas: tlas,
+            _acceleration_structures: acceleration_structures,
             camera,
         }
     }
@@ -254,17 +196,20 @@ impl Scene {
         )
         .unwrap();
 
+        let pipeline_layout = self.rt_pipeline.get_layout();
+        let layouts = pipeline_layout.set_layouts();
+
         let uniform_buffer_descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
-            self.pipeline_layout.set_layouts()[1].clone(),
-            [WriteDescriptorSet::buffer(0, uniform_buffer.clone())],
+            layouts[RtPipeline::UNIFORM_BUFFER_LAYOUT].clone(),
+            [WriteDescriptorSet::buffer(0, uniform_buffer)],
             [],
         )
         .unwrap();
 
-        let storage_image_descriptor_set = DescriptorSet::new(
+        let render_image_descriptor_set = DescriptorSet::new(
             self.descriptor_set_allocator.clone(),
-            self.pipeline_layout.set_layouts()[2].clone(),
+            layouts[RtPipeline::RENDER_IMAGE_LAYOUT].clone(),
             [WriteDescriptorSet::image_view(0, image_view.clone())],
             [],
         )
@@ -280,17 +225,18 @@ impl Scene {
         builder
             .bind_descriptor_sets(
                 PipelineBindPoint::RayTracing,
-                self.pipeline_layout.clone(),
+                self.rt_pipeline.get_layout(),
                 0,
                 vec![
                     self.tlas_descriptor_set.clone(),
                     uniform_buffer_descriptor_set,
-                    storage_image_descriptor_set,
+                    render_image_descriptor_set,
                     self.mesh_data_descriptor_set.clone(),
+                    self.textures_descriptor_set.clone(),
                 ],
             )
             .unwrap()
-            .bind_pipeline_ray_tracing(self.pipeline.clone())
+            .bind_pipeline_ray_tracing(self.rt_pipeline.get())
             .unwrap();
 
         unsafe {
@@ -307,306 +253,4 @@ impl Scene {
 
         after_future.boxed()
     }
-}
-
-/// A helper function to build a acceleration structure and wait for its completion.
-///
-/// # Safety
-///
-/// - If you are referencing a bottom-level acceleration structure in a top-level acceleration
-///   structure, you must ensure that the bottom-level acceleration structure is kept alive.
-fn build_acceleration_structure_common(
-    geometries: AccelerationStructureGeometries,
-    primitive_count: u32,
-    ty: AccelerationStructureType,
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    device: Arc<Device>,
-    queue: Arc<Queue>,
-) -> Arc<AccelerationStructure> {
-    let mut as_build_geometry_info = AccelerationStructureBuildGeometryInfo {
-        mode: BuildAccelerationStructureMode::Build,
-        flags: BuildAccelerationStructureFlags::PREFER_FAST_TRACE,
-        ..AccelerationStructureBuildGeometryInfo::new(geometries)
-    };
-
-    let as_build_sizes_info = device
-        .acceleration_structure_build_sizes(
-            AccelerationStructureBuildType::Device,
-            &as_build_geometry_info,
-            &[primitive_count],
-        )
-        .unwrap();
-
-    // We create a new scratch buffer for each acceleration structure for simplicity. You may want
-    // to reuse scratch buffers if you need to build many acceleration structures.
-    let scratch_buffer = Buffer::new_slice::<u8>(
-        memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::SHADER_DEVICE_ADDRESS | BufferUsage::STORAGE_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo::default(),
-        as_build_sizes_info.build_scratch_size,
-    )
-    .unwrap();
-
-    let as_create_info = AccelerationStructureCreateInfo {
-        ty,
-        ..AccelerationStructureCreateInfo::new(
-            Buffer::new_slice::<u8>(
-                memory_allocator,
-                BufferCreateInfo {
-                    usage: BufferUsage::ACCELERATION_STRUCTURE_STORAGE
-                        | BufferUsage::SHADER_DEVICE_ADDRESS,
-                    ..Default::default()
-                },
-                AllocationCreateInfo::default(),
-                as_build_sizes_info.acceleration_structure_size,
-            )
-            .unwrap(),
-        )
-    };
-
-    let acceleration = unsafe { AccelerationStructure::new(device, as_create_info) }.unwrap();
-
-    as_build_geometry_info.dst_acceleration_structure = Some(acceleration.clone());
-    as_build_geometry_info.scratch_data = Some(scratch_buffer);
-
-    let as_build_range_info = AccelerationStructureBuildRangeInfo {
-        primitive_count,
-        ..Default::default()
-    };
-
-    // For simplicity, we build a single command buffer that builds the acceleration structure,
-    // then waits for its execution to complete.
-    let mut builder = AutoCommandBufferBuilder::primary(
-        command_buffer_allocator,
-        queue.queue_family_index(),
-        CommandBufferUsage::OneTimeSubmit,
-    )
-    .unwrap();
-
-    unsafe {
-        builder
-            .build_acceleration_structure(
-                as_build_geometry_info,
-                iter::once(as_build_range_info).collect(),
-            )
-            .unwrap()
-    };
-
-    builder
-        .build()
-        .unwrap()
-        .execute(queue)
-        .unwrap()
-        .then_signal_fence_and_flush()
-        .unwrap()
-        .wait(None)
-        .unwrap();
-
-    acceleration
-}
-
-fn build_acceleration_structure_triangles(
-    vertex_buffer: Subbuffer<[VertexData]>,
-    index_buffer: Subbuffer<[u32]>,
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    device: Arc<Device>,
-    queue: Arc<Queue>,
-) -> Arc<AccelerationStructure> {
-    let primitive_count = (vertex_buffer.len() / 3) as u32;
-
-    let as_geometry_triangles_data = AccelerationStructureGeometryTrianglesData {
-        max_vertex: vertex_buffer.len() as _,
-        vertex_data: Some(vertex_buffer.into_bytes()),
-        index_data: Some(IndexBuffer::U32(index_buffer)),
-        vertex_stride: size_of::<VertexData>() as _,
-        ..AccelerationStructureGeometryTrianglesData::new(Format::R32G32B32_SFLOAT)
-    };
-
-    let geometries = AccelerationStructureGeometries::Triangles(vec![as_geometry_triangles_data]);
-
-    build_acceleration_structure_common(
-        geometries,
-        primitive_count,
-        AccelerationStructureType::BottomLevel,
-        memory_allocator,
-        command_buffer_allocator,
-        device,
-        queue,
-    )
-}
-
-unsafe fn build_top_level_acceleration_structure(
-    as_instances: Vec<AccelerationStructureInstance>,
-    allocator: Arc<dyn MemoryAllocator>,
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    device: Arc<Device>,
-    queue: Arc<Queue>,
-) -> Arc<AccelerationStructure> {
-    let primitive_count = as_instances.len() as u32;
-
-    let instance_buffer = Buffer::from_iter(
-        allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::SHADER_DEVICE_ADDRESS
-                | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        as_instances,
-    )
-    .unwrap();
-
-    let as_geometry_instances_data = AccelerationStructureGeometryInstancesData::new(
-        AccelerationStructureGeometryInstancesDataType::Values(Some(instance_buffer)),
-    );
-
-    let geometries = AccelerationStructureGeometries::Instances(as_geometry_instances_data);
-
-    build_acceleration_structure_common(
-        geometries,
-        primitive_count,
-        AccelerationStructureType::TopLevel,
-        allocator,
-        command_buffer_allocator,
-        device,
-        queue,
-    )
-}
-
-/// Create a raytracing pipeline.
-fn create_raytracing_pipeline(
-    device: Arc<Device>,
-    pipeline_layout: Arc<PipelineLayout>,
-) -> Arc<RayTracingPipeline> {
-    // Load the shader modules.
-    let shader_modules = ShaderModules::load(device.clone());
-
-    // Make a list of the shader stages that the pipeline will have.
-    let stages = [
-        PipelineShaderStageCreateInfo::new(shader_modules.ray_gen),
-        PipelineShaderStageCreateInfo::new(shader_modules.ray_miss),
-        PipelineShaderStageCreateInfo::new(shader_modules.closest_hit),
-    ];
-
-    // Define the shader groups that will eventually turn into the shader binding table.
-    // The numbers are the indices of the stages in the `stages` array.
-    let groups = [
-        RayTracingShaderGroupCreateInfo::General { general_shader: 0 },
-        RayTracingShaderGroupCreateInfo::General { general_shader: 1 },
-        RayTracingShaderGroupCreateInfo::TrianglesHit {
-            closest_hit_shader: Some(2),
-            any_hit_shader: None,
-        },
-    ];
-
-    RayTracingPipeline::new(
-        device.clone(),
-        None,
-        RayTracingPipelineCreateInfo {
-            stages: stages.into_iter().collect(),
-            groups: groups.into_iter().collect(),
-            max_pipeline_ray_recursion_depth: 1,
-            ..RayTracingPipelineCreateInfo::layout(pipeline_layout.clone())
-        },
-    )
-    .unwrap()
-}
-
-/// Create the pipeline layout. This will contain the descriptor sets matching the layouts in
-/// ray_gen.glsl shader.
-fn create_pipeline_layout(device: Arc<Device>) -> Arc<PipelineLayout> {
-    PipelineLayout::new(
-        device.clone(),
-        PipelineLayoutCreateInfo {
-            set_layouts: vec![
-                // Top level acceleration structure.
-                DescriptorSetLayout::new(
-                    device.clone(),
-                    DescriptorSetLayoutCreateInfo {
-                        bindings: [(
-                            0,
-                            DescriptorSetLayoutBinding {
-                                stages: ShaderStages::RAYGEN,
-                                ..DescriptorSetLayoutBinding::descriptor_type(
-                                    DescriptorType::AccelerationStructure,
-                                )
-                            },
-                        )]
-                        .into_iter()
-                        .collect(),
-                        ..Default::default()
-                    },
-                )
-                .unwrap(),
-                // Uniform buffer containing camera matrices.
-                DescriptorSetLayout::new(
-                    device.clone(),
-                    DescriptorSetLayoutCreateInfo {
-                        bindings: [(
-                            0,
-                            DescriptorSetLayoutBinding {
-                                stages: ShaderStages::RAYGEN,
-                                ..DescriptorSetLayoutBinding::descriptor_type(
-                                    DescriptorType::UniformBuffer,
-                                )
-                            },
-                        )]
-                        .into_iter()
-                        .collect(),
-                        ..Default::default()
-                    },
-                )
-                .unwrap(),
-                // Storage image for the render.
-                DescriptorSetLayout::new(
-                    device.clone(),
-                    DescriptorSetLayoutCreateInfo {
-                        bindings: [(
-                            0,
-                            DescriptorSetLayoutBinding {
-                                stages: ShaderStages::RAYGEN,
-                                ..DescriptorSetLayoutBinding::descriptor_type(
-                                    DescriptorType::StorageImage,
-                                )
-                            },
-                        )]
-                        .into_iter()
-                        .collect(),
-                        ..Default::default()
-                    },
-                )
-                .unwrap(),
-                // Storage buffer for the mesh data references.
-                DescriptorSetLayout::new(
-                    device.clone(),
-                    DescriptorSetLayoutCreateInfo {
-                        bindings: [(
-                            0,
-                            DescriptorSetLayoutBinding {
-                                stages: ShaderStages::CLOSEST_HIT,
-                                ..DescriptorSetLayoutBinding::descriptor_type(
-                                    DescriptorType::StorageBuffer,
-                                )
-                            },
-                        )]
-                        .into_iter()
-                        .collect(),
-                        ..Default::default()
-                    },
-                )
-                .unwrap(),
-            ],
-            ..Default::default()
-        },
-    )
-    .unwrap()
 }

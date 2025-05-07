@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use vulkano::{device::Device, shader::EntryPoint};
+use vulkano::{
+    device::Device,
+    pipeline::{PipelineShaderStageCreateInfo, ray_tracing::RayTracingShaderGroupCreateInfo},
+};
 
 pub mod ray_gen {
     vulkano_shaders::shader! {
@@ -27,9 +30,8 @@ pub mod ray_miss {
 }
 
 pub struct ShaderModules {
-    pub ray_gen: EntryPoint,
-    pub closest_hit: EntryPoint,
-    pub ray_miss: EntryPoint,
+    pub stages: Vec<PipelineShaderStageCreateInfo>,
+    pub groups: Vec<RayTracingShaderGroupCreateInfo>,
 }
 
 impl ShaderModules {
@@ -49,10 +51,24 @@ impl ShaderModules {
             .entry_point("main")
             .unwrap();
 
-        Self {
-            ray_gen,
-            closest_hit,
-            ray_miss,
-        }
+        // Make a list of the shader stages that the pipeline will have.
+        let stages = vec![
+            PipelineShaderStageCreateInfo::new(ray_gen),
+            PipelineShaderStageCreateInfo::new(ray_miss),
+            PipelineShaderStageCreateInfo::new(closest_hit),
+        ];
+
+        // Define the shader groups that will eventually turn into the shader binding table.
+        // The numbers are the indices of the stages in the `stages` array.
+        let groups = vec![
+            RayTracingShaderGroupCreateInfo::General { general_shader: 0 },
+            RayTracingShaderGroupCreateInfo::General { general_shader: 1 },
+            RayTracingShaderGroupCreateInfo::TrianglesHit {
+                closest_hit_shader: Some(2),
+                any_hit_shader: None,
+            },
+        ];
+
+        Self { stages, groups }
     }
 }

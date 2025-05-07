@@ -1,34 +1,33 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
-#extension GL_EXT_buffer_reference : enable
 #extension GL_EXT_scalar_block_layout: enable
+#extension GL_EXT_nonuniform_qualifier : enable
 
 #include "common.glsl"
 
-layout(location = 0) rayPayloadInEXT vec3 rayPayload;
+layout(location = 0) rayPayloadInEXT vec4 rayPayload;
 hitAttributeEXT vec2 hitAttribs;
 
-layout(buffer_reference, scalar) buffer Vertices {
-    Vertex values[];
-};
-layout(buffer_reference, scalar) buffer Indices {
-    uvec3 values[];
-};
-layout(set = 3, binding = 0, scalar) buffer Data {
-    MeshData values[];
-} data;
+layout(set = 3, binding = 0, scalar) buffer MeshData {
+    Mesh values[];
+} mesh_data;
 
-Vertex unpackInstanceVertex(const int intanceId) {
-    MeshData meshData = data.values[intanceId];
-    Vertices vertices = Vertices(meshData.vertexBufferAddress);
-    Indices indices = Indices(meshData.indexBufferAddress);
+layout(set = 4, binding = 0) uniform sampler textureSampler;
+layout(set = 4, binding = 1) uniform texture2D textures[];
 
-    uvec3 triangleIndices = indices.values[gl_PrimitiveID];
-    Vertex v0 = vertices.values[triangleIndices.x];
-    Vertex v1 = vertices.values[triangleIndices.y];
-    Vertex v2 = vertices.values[triangleIndices.z];
-
+MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
     vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
+
+    Mesh mesh = mesh_data.values[instanceId];
+
+    uint i = primitiveId * 3;
+    uint i0 = mesh.indicesRef.values[i];
+    uint i1 = mesh.indicesRef.values[i + 1];
+    uint i2 = mesh.indicesRef.values[i + 2];
+
+    MeshVertex v0 = mesh.verticesRef.values[i0];
+    MeshVertex v1 = mesh.verticesRef.values[i1];
+    MeshVertex v2 = mesh.verticesRef.values[i2];
 
     const vec3 position =
         v0.position * barycentricCoords.x +
@@ -45,15 +44,31 @@ Vertex unpackInstanceVertex(const int intanceId) {
         v1.texCoord * barycentricCoords.y +
         v2.texCoord * barycentricCoords.z;
 
-
     const vec3 worldSpacePosition = vec3(gl_ObjectToWorldEXT * vec4(position, 1.0));
     const vec3 worldSpaceNormal = normalize(vec3(normal * gl_WorldToObjectEXT));
+    return MeshVertex(worldSpacePosition, worldSpaceNormal, texCoord);
+}
 
-    return Vertex(worldSpacePosition, worldSpaceNormal, texCoord);
+Material unpackInstanceMaterial(const int instanceId, const uint mat_prop_type) {
+    Mesh mesh = mesh_data.values[instanceId];
+    return mesh.materialsRef.values[mat_prop_type];
 }
 
 void main() {
-    const Vertex vertex = unpackInstanceVertex(gl_InstanceCustomIndexEXT);
-    rayPayload = map(vertex.normal, -1.0, 1.0, 0.0, 1.0);
+    MeshVertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
+
+    Material diffuse = unpackInstanceMaterial(gl_InstanceID, MAT_PROP_TYPE_DIFFUSE);
+
+    rayPayload = vec4(0.0, 0.0, 0.0, 1.0);
+    if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_RGB) {
+        rayPayload = vec4(diffuse.color, 1.0); // For now alpha = 1.0
+    } else if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_TEXTURE) {
+        if (diffuse.textureIndex >= 0) {
+            rayPayload = texture(
+                nonuniformEXT(sampler2D(textures[diffuse.textureIndex], textureSampler)),
+                vertex.texCoord
+            );
+        }
+    }
 }
 

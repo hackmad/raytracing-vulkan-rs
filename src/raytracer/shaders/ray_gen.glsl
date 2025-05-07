@@ -1,14 +1,16 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 
-layout(location = 0) rayPayloadEXT vec3 rayPayload;
+layout(location = 0) rayPayloadEXT vec4 rayPayload;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
+
 layout(set = 1, binding = 0) uniform Camera {
     mat4 viewProj;    // Camera view * projection
     mat4 viewInverse; // Camera inverse view matrix
     mat4 projInverse; // Camera inverse projection matrix
 } camera;
+
 layout(set = 2, binding = 0, rgba32f) uniform image2D image;
 
 void main() {
@@ -37,5 +39,5 @@ void main() {
         tMax,          // ray max range
         0);            // payload (location = 0)
 
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(rayPayload, 1.0));
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), rayPayload);
 }

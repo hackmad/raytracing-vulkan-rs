@@ -1,25 +1,41 @@
-use anyhow::{Result, anyhow};
-use std::{fs::File, io::BufReader, sync::Arc};
+use crate::raytracer::{MaterialPropertyData, MaterialPropertyType};
 
+use super::{MaterialPropertyValue, shaders::closest_hit, texture::Textures};
+use anyhow::{Context, Result};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
+    DeviceSize,
+    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
+    command_buffer::{
+        AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryCommandBufferAbstract,
+        allocator::CommandBufferAllocator,
+    },
+    device::Queue,
     memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    sync::GpuFuture,
 };
 
-use super::geometry::VertexData;
+#[derive(Debug)]
+pub struct ModelMaterial {
+    pub diffuse: MaterialPropertyValue,
+}
 
 pub struct Model {
-    pub vertices: Vec<VertexData>,
-    pub indices: Vec<u32>,
+    vertices: Vec<closest_hit::MeshVertex>,
+    indices: Vec<u32>,
+    pub material: Option<ModelMaterial>,
 }
 
 impl Model {
     pub fn load_obj(path: &str) -> Result<Vec<Self>> {
         let (models, materials) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?;
 
-        for (i, material) in materials.iter().enumerate() {
-            println!("{i} {:?}", material);
-        }
+        let materials = &materials?;
+
+        let parent_path = PathBuf::from(path)
+            .parent()
+            .context(format!("Invalid path {path}"))?
+            .to_path_buf();
 
         let models: Vec<Self> = models
             .iter()
@@ -34,7 +50,7 @@ impl Model {
                     let pos_offset = (3 * index) as usize;
                     let tex_coord_offset = (2 * index) as usize;
 
-                    let vertex = VertexData {
+                    let vertex = closest_hit::MeshVertex {
                         position: [
                             mesh.positions[pos_offset],
                             mesh.positions[pos_offset + 1],
@@ -45,64 +61,316 @@ impl Model {
                             mesh.normals[pos_offset + 1],
                             mesh.normals[pos_offset + 2],
                         ],
-                        tex_coord: [
+                        texCoord: [
                             mesh.texcoords[tex_coord_offset],
                             1.0 - mesh.texcoords[tex_coord_offset + 1],
                         ],
                     };
 
+                    let vertex_index = vertices.len() as u32;
+
                     vertices.push(vertex);
-                    indices.push(indices.len() as u32);
+                    indices.push(vertex_index);
                 }
 
-                Self { vertices, indices }
+                /*
+                println!(
+                    "Vertex count: {}, Indices count: {}",
+                    vertices.len(),
+                    indices.len()
+                );
+
+                for (i, v) in vertices.iter().enumerate() {
+                    println!(
+                        "{i} {{position: {:?}, normal: {:?}, tex_coord: {:?}}}",
+                        v.position, v.normal, v.tex_coord,
+                    );
+                }
+                println!("{indices:?}");
+                */
+
+                let material = mesh.material_id.map(|mat_id| {
+                    let mat = &materials[mat_id];
+                    let diffuse = MaterialPropertyValue::new(
+                        &mat.diffuse,
+                        &mat.diffuse_texture,
+                        parent_path.clone(),
+                    );
+                    ModelMaterial { diffuse }
+                });
+
+                Self {
+                    vertices,
+                    indices,
+                    material,
+                }
             })
             .collect();
 
         Ok(models)
     }
 
-    pub fn create_vertex_buffer(
+    /// Create a vertex buffer for buildng the acceleration structure.
+    pub fn create_blas_vertex_buffer(
         &self,
         memory_allocator: Arc<dyn MemoryAllocator>,
-    ) -> Result<Subbuffer<[VertexData]>> {
-        Buffer::from_iter(
-            memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::VERTEX_BUFFER
-                    | BufferUsage::SHADER_DEVICE_ADDRESS
-                    | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
+    ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::VERTEX_BUFFER
+                | BufferUsage::SHADER_DEVICE_ADDRESS
+                | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
             self.vertices.clone(),
         )
-        .map_err(|e| anyhow!("{e:?}"))
     }
 
-    pub fn create_index_buffer(
+    /// Create an index buffer for buildng the acceleration structure.
+    pub fn create_blas_index_buffer(
         &self,
         memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
     ) -> Result<Subbuffer<[u32]>> {
-        Buffer::from_iter(
-            memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::INDEX_BUFFER
-                    | BufferUsage::SHADER_DEVICE_ADDRESS
-                    | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::INDEX_BUFFER
+                | BufferUsage::SHADER_DEVICE_ADDRESS
+                | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
             self.indices.clone(),
         )
-        .map_err(|e| anyhow!("{e:?}"))
     }
+
+    /// Create a storage buffer for accessing vertices in shader code.
+    pub fn create_vertices_storage_buffer(
+        &self,
+        memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
+    ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+            self.vertices.clone(),
+        )
+    }
+
+    /// Create a storage buffer for accessing indices in shader code.
+    pub fn create_indices_storage_buffer(
+        &self,
+        memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
+    ) -> Result<Subbuffer<[u32]>> {
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+            self.indices.clone(),
+        )
+    }
+
+    /// Create a storage buffer for accessing materials in shader code.
+    pub fn create_material_storage_buffer(
+        &self,
+        memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
+        textures: &Textures,
+    ) -> Result<Subbuffer<[closest_hit::Material]>> {
+        let diffuse = if let Some(material) = &self.material {
+            MaterialPropertyData::from_property_value(
+                MaterialPropertyType::Diffuse,
+                &material.diffuse,
+                &textures.indices,
+            )
+        } else {
+            MaterialPropertyData::new_none(MaterialPropertyType::Diffuse)
+        };
+        // println!("{diffuse:?}");
+
+        let materials = vec![diffuse.into()]; // Order should respect `MAT_PROP_TYPE_*` indices
+
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+            materials,
+        )
+    }
+
+    /// Return a set of all texture paths.
+    pub fn get_texture_paths(&self) -> HashSet<String> {
+        let mut paths = HashSet::new();
+
+        if let Some(mat) = &self.material {
+            if let MaterialPropertyValue::Texture { path } = &mat.diffuse {
+                paths.insert(path.clone());
+            }
+        }
+
+        paths
+    }
+}
+
+/// This will create buffers that can be accessed only by the GPU. One specific use case is to
+/// access them via device addresses in shaders.
+pub fn create_device_local_buffer<T, I>(
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+    queue: Arc<Queue>,
+    usage: BufferUsage,
+    data: I,
+) -> Result<Subbuffer<[T]>>
+where
+    T: BufferContents,
+    I: IntoIterator<Item = T>,
+    I::IntoIter: ExactSizeIterator,
+{
+    let iter = data.into_iter();
+    let size = iter.len() as DeviceSize;
+
+    let temporary_accessible_buffer = Buffer::from_iter(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::TRANSFER_SRC,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_HOST
+                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        iter,
+    )?;
+
+    let device_local_buffer = Buffer::new_slice::<T>(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: usage | BufferUsage::TRANSFER_DST,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
+            ..Default::default()
+        },
+        size,
+    )?;
+
+    let mut builder = AutoCommandBufferBuilder::primary(
+        command_buffer_allocator.clone(),
+        queue.queue_family_index(),
+        CommandBufferUsage::OneTimeSubmit,
+    )?;
+
+    builder.copy_buffer(CopyBufferInfo::buffers(
+        temporary_accessible_buffer,
+        device_local_buffer.clone(),
+    ))?;
+
+    builder
+        .build()?
+        .execute(queue.clone())?
+        .then_signal_fence_and_flush()?
+        .wait(None /* timeout */)?;
+
+    Ok(device_local_buffer)
+}
+
+/// This will create 2 storage buffers that can be accessed by their device address only by the GPU for the vertices
+/// and indices. These addresses will be packed in another storage buffer representing the mesh data which will be
+/// returned.
+pub fn create_mesh_storage_buffer(
+    models: &[Model],
+    memory_allocator: Arc<dyn MemoryAllocator>,
+    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+    queue: Arc<Queue>,
+    textures: &Textures,
+) -> Result<Subbuffer<[closest_hit::Mesh]>> {
+    let vertices_storage_buffers = models
+        .iter()
+        .map(|model| {
+            model.create_vertices_storage_buffer(
+                memory_allocator.clone(),
+                command_buffer_allocator.clone(),
+                queue.clone(),
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let indices_storage_buffers = models
+        .iter()
+        .map(|model| {
+            model.create_indices_storage_buffer(
+                memory_allocator.clone(),
+                command_buffer_allocator.clone(),
+                queue.clone(),
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let materials_storage_buffers = models
+        .iter()
+        .map(|model| {
+            model.create_material_storage_buffer(
+                memory_allocator.clone(),
+                command_buffer_allocator.clone(),
+                queue.clone(),
+                textures,
+            )
+        })
+        .collect::<Result<Vec<_>>>()
+        .unwrap();
+
+    let vertices_buffer_device_addresses: Vec<u64> = vertices_storage_buffers
+        .iter()
+        .map(|buf| buf.device_address().unwrap().into())
+        .collect();
+
+    let indices_buffer_device_addresses: Vec<u64> = indices_storage_buffers
+        .iter()
+        .map(|buf| buf.device_address().unwrap().into())
+        .collect();
+
+    let materials_buffer_device_addresses: Vec<u64> = materials_storage_buffers
+        .iter()
+        .map(|buf| buf.device_address().unwrap().into())
+        .collect();
+
+    let meshes = vertices_buffer_device_addresses
+        .into_iter()
+        .zip(indices_buffer_device_addresses)
+        .zip(materials_buffer_device_addresses)
+        .map(
+            |((vertices_ref, indices_ref), materials_ref)| closest_hit::Mesh {
+                verticesRef: vertices_ref,
+                indicesRef: indices_ref,
+                materialsRef: materials_ref,
+            },
+        );
+
+    let data = Buffer::from_iter(
+        memory_allocator.clone(),
+        BufferCreateInfo {
+            usage: BufferUsage::STORAGE_BUFFER,
+            ..Default::default()
+        },
+        AllocationCreateInfo {
+            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+            ..Default::default()
+        },
+        meshes,
+    )?;
+
+    Ok(data)
 }
