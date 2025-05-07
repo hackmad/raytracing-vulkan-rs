@@ -16,7 +16,7 @@ use vulkano::{
 };
 
 use super::{
-    Camera, MaterialPropertyData,
+    Camera,
     acceleration::AccelerationStructures,
     create_mesh_storage_buffer,
     model::Model,
@@ -63,6 +63,7 @@ impl Scene {
             queue.clone(),
         )
         .unwrap();
+        //println!("Textures: {textures:?}");
 
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(
@@ -104,6 +105,7 @@ impl Scene {
             memory_allocator.clone(),
             command_buffer_allocator.clone(),
             queue.clone(),
+            &textures,
         )
         .unwrap();
 
@@ -140,14 +142,6 @@ impl Scene {
             [],
         )
         .unwrap();
-
-        // Materials
-        for model in models.iter() {
-            if let Some(material) = &model.material {
-                let diffuse =
-                    MaterialPropertyData::from_property_value(&material.diffuse, &textures.indices);
-            }
-        }
 
         // Create the shader binding table.
         let shader_binding_table =

@@ -1,4 +1,6 @@
-use super::{MaterialPropertyValue, shaders::closest_hit};
+use crate::raytracer::{MaterialPropertyData, MaterialPropertyType};
+
+use super::{MaterialPropertyValue, shaders::closest_hit, texture::Textures};
 use anyhow::{Context, Result};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use vulkano::{
@@ -175,6 +177,36 @@ impl Model {
         )
     }
 
+    /// Create a storage buffer for accessing materials in shader code.
+    pub fn create_material_storage_buffer(
+        &self,
+        memory_allocator: Arc<dyn MemoryAllocator>,
+        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
+        queue: Arc<Queue>,
+        textures: &Textures,
+    ) -> Result<Subbuffer<[closest_hit::Material]>> {
+        let diffuse = if let Some(material) = &self.material {
+            MaterialPropertyData::from_property_value(
+                MaterialPropertyType::Diffuse,
+                &material.diffuse,
+                &textures.indices,
+            )
+        } else {
+            MaterialPropertyData::new_none(MaterialPropertyType::Diffuse)
+        };
+        // println!("{diffuse:?}");
+
+        let materials = vec![diffuse.into()]; // Order should respect `MAT_PROP_TYPE_*` indices
+
+        create_device_local_buffer(
+            memory_allocator,
+            command_buffer_allocator,
+            queue,
+            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+            materials,
+        )
+    }
+
     /// Return a set of all texture paths.
     pub fn get_texture_paths(&self) -> HashSet<String> {
         let mut paths = HashSet::new();
@@ -261,6 +293,7 @@ pub fn create_mesh_storage_buffer(
     memory_allocator: Arc<dyn MemoryAllocator>,
     command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
     queue: Arc<Queue>,
+    textures: &Textures,
 ) -> Result<Subbuffer<[closest_hit::Mesh]>> {
     let vertices_storage_buffers = models
         .iter()
@@ -284,6 +317,19 @@ pub fn create_mesh_storage_buffer(
         })
         .collect::<Result<Vec<_>>>()?;
 
+    let materials_storage_buffers = models
+        .iter()
+        .map(|model| {
+            model.create_material_storage_buffer(
+                memory_allocator.clone(),
+                command_buffer_allocator.clone(),
+                queue.clone(),
+                textures,
+            )
+        })
+        .collect::<Result<Vec<_>>>()
+        .unwrap();
+
     let vertices_buffer_device_addresses: Vec<u64> = vertices_storage_buffers
         .iter()
         .map(|buf| buf.device_address().unwrap().into())
@@ -294,13 +340,22 @@ pub fn create_mesh_storage_buffer(
         .map(|buf| buf.device_address().unwrap().into())
         .collect();
 
+    let materials_buffer_device_addresses: Vec<u64> = materials_storage_buffers
+        .iter()
+        .map(|buf| buf.device_address().unwrap().into())
+        .collect();
+
     let meshes = vertices_buffer_device_addresses
         .into_iter()
         .zip(indices_buffer_device_addresses)
-        .map(|(vertices_ref, indices_ref)| closest_hit::Mesh {
-            verticesRef: vertices_ref,
-            indicesRef: indices_ref,
-        });
+        .zip(materials_buffer_device_addresses)
+        .map(
+            |((vertices_ref, indices_ref), materials_ref)| closest_hit::Mesh {
+                verticesRef: vertices_ref,
+                indicesRef: indices_ref,
+                materialsRef: materials_ref,
+            },
+        );
 
     let data = Buffer::from_iter(
         memory_allocator.clone(),

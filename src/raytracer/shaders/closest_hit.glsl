@@ -49,8 +49,26 @@ MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
     return MeshVertex(worldSpacePosition, worldSpaceNormal, texCoord);
 }
 
+Material unpackInstanceMaterial(const int instanceId, const uint mat_prop_type) {
+    Mesh mesh = mesh_data.values[instanceId];
+    return mesh.materialsRef.values[mat_prop_type];
+}
+
 void main() {
     MeshVertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
-    rayPayload = texture(nonuniformEXT(sampler2D(textures[0], textureSampler)), vertex.texCoord);
+
+    Material diffuse = unpackInstanceMaterial(gl_InstanceID, MAT_PROP_TYPE_DIFFUSE);
+
+    rayPayload = vec4(0.0, 0.0, 0.0, 1.0);
+    if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_RGB) {
+        rayPayload = vec4(diffuse.color, 1.0); // For now alpha = 1.0
+    } else if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_TEXTURE) {
+        if (diffuse.textureIndex >= 0) {
+            rayPayload = texture(
+                nonuniformEXT(sampler2D(textures[diffuse.textureIndex], textureSampler)),
+                vertex.texCoord
+            );
+        }
+    }
 }
 

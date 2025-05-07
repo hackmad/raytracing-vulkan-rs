@@ -1,6 +1,6 @@
 use anyhow::Result;
 use image::{GenericImageView, ImageReader};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt, sync::Arc};
 use vulkano::{
     DeviceSize,
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -24,6 +24,14 @@ pub struct Textures {
     /// Maps unique texture paths to their index in `image_view`.
     pub indices: HashMap<String, i32>, /* GLSL int => i32*/
 }
+impl fmt::Debug for Textures {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Textures")
+            .field("image_views", &self.image_views.len())
+            .field("indices", &self.indices)
+            .finish()
+    }
+}
 
 impl Textures {
     /// Load all unique texture paths from all models. Assumes images have alpha channel.
@@ -46,9 +54,8 @@ impl Textures {
             for path in model.get_texture_paths() {
                 if !indices.contains_key(&path) {
                     let texture = load_texture(&path, memory_allocator.clone(), &mut builder)?;
-
-                    image_views.push(texture);
                     indices.insert(path.clone(), image_views.len() as i32);
+                    image_views.push(texture);
                 }
             }
         }

@@ -1,59 +1,83 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use vulkano::buffer::BufferContents;
+use super::shaders::closest_hit;
 
+#[derive(Clone, Copy, Debug)]
+#[repr(u32)]
+pub enum MaterialPropertyType {
+    Diffuse = 0,
+}
+
+#[derive(Clone, Copy, Debug)]
+#[repr(u32)]
+pub enum MaterialPropertyValueType {
+    None = 0,
+    RGB = 1,
+    Texture = 2,
+}
+
+#[derive(Clone, Copy, Debug)]
 #[repr(C)]
-#[derive(BufferContents, Clone, Copy)]
 pub struct MaterialPropertyData {
-    pub prop_type: u8,
+    pub prop_type: u32,
+    pub prop_value_type: u32,
     pub color: [f32; 3],
     pub texture_index: i32,
 }
 
 impl MaterialPropertyData {
-    pub const MAT_PROP_NONE: u8 = 0;
-    pub const MAT_PROP_RGB: u8 = 1;
-    pub const MAT_PROP_TEXTURE: u8 = 2;
-
-    pub fn new_color(rgb: &[f32; 3]) -> Self {
+    pub fn new_color(prop_type: MaterialPropertyType, rgb: &[f32; 3]) -> Self {
         Self {
-            prop_type: Self::MAT_PROP_RGB,
+            prop_type: prop_type as _,
+            prop_value_type: MaterialPropertyValueType::RGB as _,
             color: rgb.clone(),
             texture_index: -1,
         }
     }
 
-    pub fn new_texture(index: i32) -> Self {
+    pub fn new_texture_index(prop_type: MaterialPropertyType, index: i32) -> Self {
         Self {
-            prop_type: Self::MAT_PROP_TEXTURE,
+            prop_type: prop_type as _,
+            prop_value_type: MaterialPropertyValueType::Texture as _,
             color: [0.0, 0.0, 0.0],
             texture_index: index,
         }
     }
 
+    pub fn new_none(prop_type: MaterialPropertyType) -> Self {
+        Self {
+            prop_type: prop_type as _,
+            prop_value_type: MaterialPropertyValueType::None as _,
+            color: [0.0, 0.0, 0.0],
+            texture_index: -1,
+        }
+    }
+
     pub fn from_property_value(
+        prop_type: MaterialPropertyType,
         value: &MaterialPropertyValue,
         texture_indices: &HashMap<String, i32>,
     ) -> Self {
         match value {
-            MaterialPropertyValue::None => Self::default(),
-            MaterialPropertyValue::RGB { color } => Self::new_color(color),
+            MaterialPropertyValue::None => Self::new_none(prop_type),
+            MaterialPropertyValue::RGB { color } => Self::new_color(prop_type, color),
             MaterialPropertyValue::Texture { path } => {
                 let texture_index = texture_indices
                     .get(path)
                     .expect(format!("Texture {path} not found").as_ref());
-                Self::new_texture(*texture_index)
+                Self::new_texture_index(prop_type, *texture_index)
             }
         }
     }
 }
 
-impl Default for MaterialPropertyData {
-    fn default() -> Self {
-        Self {
-            prop_type: Self::MAT_PROP_NONE,
-            color: [0.0, 0.0, 0.0],
-            texture_index: -1,
+impl Into<closest_hit::Material> for MaterialPropertyData {
+    fn into(self) -> closest_hit::Material {
+        closest_hit::Material {
+            propType: self.prop_type,
+            propValueType: self.prop_value_type,
+            color: self.color,
+            textureIndex: self.texture_index,
         }
     }
 }
