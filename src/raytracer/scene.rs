@@ -1,22 +1,19 @@
 use std::sync::{Arc, RwLock};
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
-    command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, allocator::CommandBufferAllocator,
-    },
-    descriptor_set::{DescriptorSet, WriteDescriptorSet, allocator::DescriptorSetAllocator},
-    device::{Device, Queue},
+    command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage},
+    descriptor_set::{DescriptorSet, WriteDescriptorSet},
     image::{
         sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::ImageView,
     },
-    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
     pipeline::{PipelineBindPoint, ray_tracing::ShaderBindingTable},
     sync::GpuFuture,
 };
 
 use super::{
-    Camera,
+    Camera, Vk,
     acceleration::AccelerationStructures,
     create_mesh_storage_buffer,
     model::Model,
@@ -25,16 +22,12 @@ use super::{
     texture::Textures,
 };
 
-pub struct Scene {
-    queue: Arc<Queue>,
-    descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
+struct SceneResources {
     tlas_descriptor_set: Arc<DescriptorSet>,
     mesh_data_descriptor_set: Arc<DescriptorSet>,
     textures_descriptor_set: Arc<DescriptorSet>,
     shader_binding_table: ShaderBindingTable,
     rt_pipeline: RtPipeline,
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
 
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
     _acceleration_structures: AccelerationStructures,
@@ -42,32 +35,18 @@ pub struct Scene {
     camera: Arc<RwLock<dyn Camera>>,
 }
 
-impl Scene {
-    pub fn new(
-        device: Arc<Device>,
-        queue: Arc<Queue>,
-        memory_allocator: Arc<dyn MemoryAllocator>,
-        descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
-        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-        models: &[Model],
-        camera: Arc<RwLock<dyn Camera>>,
-    ) -> Self {
+impl SceneResources {
+    fn new(vk: Arc<Vk>, models: &[Model], camera: Arc<RwLock<dyn Camera>>) -> Self {
         // Load shader modules
-        let shader_modules = ShaderModules::load(device.clone());
+        let shader_modules = ShaderModules::load(vk.device.clone());
 
         // Load Textures.
-        let textures = Textures::load(
-            models,
-            memory_allocator.clone(),
-            command_buffer_allocator.clone(),
-            queue.clone(),
-        )
-        .unwrap();
+        let textures = Textures::load(models, vk.clone()).unwrap();
         //println!("Textures: {textures:?}");
 
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(
-            device.clone(),
+            vk.device.clone(),
             &shader_modules.stages,
             &shader_modules.groups,
             textures.image_views.len() as _,
@@ -78,17 +57,10 @@ impl Scene {
 
         // For now the acceleration structure is non-changing. We can create its descriptor set
         // and clone it later during render.
-        let acceleration_structures = AccelerationStructures::new(
-            models,
-            memory_allocator.clone(),
-            command_buffer_allocator.clone(),
-            device.clone(),
-            queue.clone(),
-        )
-        .unwrap();
+        let acceleration_structures = AccelerationStructures::new(vk.clone(), models).unwrap();
 
         let tlas_descriptor_set = DescriptorSet::new(
-            descriptor_set_allocator.clone(),
+            vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::TLAS_LAYOUT].clone(),
             [WriteDescriptorSet::acceleration_structure(
                 0,
@@ -100,17 +72,10 @@ impl Scene {
 
         // Mesh data won't change either. We can create its descriptor set and clone it later
         // during render.
-        let mesh_data = create_mesh_storage_buffer(
-            models,
-            memory_allocator.clone(),
-            command_buffer_allocator.clone(),
-            queue.clone(),
-            &textures,
-        )
-        .unwrap();
+        let mesh_data = create_mesh_storage_buffer(vk.clone(), models, &textures).unwrap();
 
         let mesh_data_descriptor_set = DescriptorSet::new(
-            descriptor_set_allocator.clone(),
+            vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::MESH_DATA_LAYOUT].clone(),
             [WriteDescriptorSet::buffer(0, mesh_data)],
             [],
@@ -119,20 +84,18 @@ impl Scene {
 
         // Textures + Sampler
         let sampler = Sampler::new(
-            device.clone(),
+            vk.device.clone(),
             SamplerCreateInfo {
                 mag_filter: Filter::Linear,
                 min_filter: Filter::Linear,
                 address_mode: [SamplerAddressMode::Repeat; 3],
-                //mipmap_mode: SamplerMipmapMode::Nearest,
-                //mip_lod_bias: 0.0,
                 ..Default::default()
             },
         )
         .unwrap();
 
         let textures_descriptor_set = DescriptorSet::new_variable(
-            descriptor_set_allocator.clone(),
+            vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
             textures.image_views.len() as _,
             [
@@ -145,26 +108,43 @@ impl Scene {
 
         // Create the shader binding table.
         let shader_binding_table =
-            ShaderBindingTable::new(memory_allocator.clone(), &rt_pipeline.get()).unwrap();
+            ShaderBindingTable::new(vk.memory_allocator.clone(), &rt_pipeline.get()).unwrap();
 
-        Scene {
-            queue,
-            descriptor_set_allocator,
+        SceneResources {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
             shader_binding_table,
             rt_pipeline,
-            memory_allocator,
-            command_buffer_allocator,
             _acceleration_structures: acceleration_structures,
             camera,
         }
     }
+}
+
+pub struct Scene {
+    vk: Arc<Vk>,
+    resources: Option<SceneResources>,
+}
+
+impl Scene {
+    pub fn new(vk: Arc<Vk>, models: &[Model], camera: Arc<RwLock<dyn Camera>>) -> Self {
+        if models.len() == 0 {
+            Scene {
+                vk,
+                resources: None,
+            }
+        } else {
+            let resources = Some(SceneResources::new(vk.clone(), models, camera));
+            Scene { vk, resources }
+        }
+    }
 
     pub fn update_window_size(&mut self, window_size: [f32; 2]) {
-        let mut camera = self.camera.write().unwrap();
-        camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
+        if let Some(resources) = self.resources.as_ref() {
+            let mut camera = resources.camera.write().unwrap();
+            camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
+        }
     }
 
     pub fn render(
@@ -172,85 +152,94 @@ impl Scene {
         before_future: Box<dyn GpuFuture>,
         image_view: Arc<ImageView>,
     ) -> Box<dyn GpuFuture> {
-        let dimensions = image_view.image().extent();
+        if let Some(resources) = self.resources.as_ref() {
+            let dimensions = image_view.image().extent();
 
-        let camera = self.camera.read().unwrap();
+            let camera = resources.camera.read().unwrap();
 
-        let uniform_buffer = Buffer::from_data(
-            self.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::UNIFORM_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            ray_gen::Camera {
-                viewProj: (camera.get_projection_matrix() * camera.get_view_matrix())
-                    .to_cols_array_2d(),
-                viewInverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
-                projInverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
-            },
-        )
-        .unwrap();
-
-        let pipeline_layout = self.rt_pipeline.get_layout();
-        let layouts = pipeline_layout.set_layouts();
-
-        let uniform_buffer_descriptor_set = DescriptorSet::new(
-            self.descriptor_set_allocator.clone(),
-            layouts[RtPipeline::UNIFORM_BUFFER_LAYOUT].clone(),
-            [WriteDescriptorSet::buffer(0, uniform_buffer)],
-            [],
-        )
-        .unwrap();
-
-        let render_image_descriptor_set = DescriptorSet::new(
-            self.descriptor_set_allocator.clone(),
-            layouts[RtPipeline::RENDER_IMAGE_LAYOUT].clone(),
-            [WriteDescriptorSet::image_view(0, image_view.clone())],
-            [],
-        )
-        .unwrap();
-
-        let mut builder = AutoCommandBufferBuilder::primary(
-            self.command_buffer_allocator.clone(),
-            self.queue.queue_family_index(),
-            CommandBufferUsage::OneTimeSubmit,
-        )
-        .unwrap();
-
-        builder
-            .bind_descriptor_sets(
-                PipelineBindPoint::RayTracing,
-                self.rt_pipeline.get_layout(),
-                0,
-                vec![
-                    self.tlas_descriptor_set.clone(),
-                    uniform_buffer_descriptor_set,
-                    render_image_descriptor_set,
-                    self.mesh_data_descriptor_set.clone(),
-                    self.textures_descriptor_set.clone(),
-                ],
+            let uniform_buffer = Buffer::from_data(
+                self.vk.memory_allocator.clone(),
+                BufferCreateInfo {
+                    usage: BufferUsage::UNIFORM_BUFFER,
+                    ..Default::default()
+                },
+                AllocationCreateInfo {
+                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                    ..Default::default()
+                },
+                ray_gen::Camera {
+                    viewProj: (camera.get_projection_matrix() * camera.get_view_matrix())
+                        .to_cols_array_2d(),
+                    viewInverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
+                    projInverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
+                },
             )
-            .unwrap()
-            .bind_pipeline_ray_tracing(self.rt_pipeline.get())
             .unwrap();
 
-        unsafe {
+            let pipeline_layout = resources.rt_pipeline.get_layout();
+            let layouts = pipeline_layout.set_layouts();
+
+            let uniform_buffer_descriptor_set = DescriptorSet::new(
+                self.vk.descriptor_set_allocator.clone(),
+                layouts[RtPipeline::UNIFORM_BUFFER_LAYOUT].clone(),
+                [WriteDescriptorSet::buffer(0, uniform_buffer)],
+                [],
+            )
+            .unwrap();
+
+            let render_image_descriptor_set = DescriptorSet::new(
+                self.vk.descriptor_set_allocator.clone(),
+                layouts[RtPipeline::RENDER_IMAGE_LAYOUT].clone(),
+                [WriteDescriptorSet::image_view(0, image_view.clone())],
+                [],
+            )
+            .unwrap();
+
+            let mut builder = AutoCommandBufferBuilder::primary(
+                self.vk.command_buffer_allocator.clone(),
+                self.vk.queue.queue_family_index(),
+                CommandBufferUsage::OneTimeSubmit,
+            )
+            .unwrap();
+
             builder
-                .trace_rays(self.shader_binding_table.addresses().clone(), dimensions)
+                .bind_descriptor_sets(
+                    PipelineBindPoint::RayTracing,
+                    resources.rt_pipeline.get_layout(),
+                    0,
+                    vec![
+                        resources.tlas_descriptor_set.clone(),
+                        uniform_buffer_descriptor_set,
+                        render_image_descriptor_set,
+                        resources.mesh_data_descriptor_set.clone(),
+                        resources.textures_descriptor_set.clone(),
+                    ],
+                )
+                .unwrap()
+                .bind_pipeline_ray_tracing(resources.rt_pipeline.get())
                 .unwrap();
+
+            unsafe {
+                builder
+                    .trace_rays(
+                        resources.shader_binding_table.addresses().clone(),
+                        dimensions,
+                    )
+                    .unwrap();
+            }
+
+            let command_buffer = builder.build().unwrap();
+
+            let after_future = before_future
+                .then_execute(self.vk.queue.clone(), command_buffer)
+                .unwrap();
+
+            after_future.boxed()
+        } else {
+            // Do nothing.
+            let after_future = before_future;
+            after_future.boxed()
         }
-
-        let command_buffer = builder.build().unwrap();
-
-        let after_future = before_future
-            .then_execute(self.queue.clone(), command_buffer)
-            .unwrap();
-
-        after_future.boxed()
     }
 }

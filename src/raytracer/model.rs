@@ -1,6 +1,6 @@
 use crate::raytracer::{MaterialPropertyData, MaterialPropertyType};
 
-use super::{MaterialPropertyValue, shaders::closest_hit, texture::Textures};
+use super::{MaterialPropertyValue, Vk, shaders::closest_hit, texture::Textures};
 use anyhow::{Context, Result};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use vulkano::{
@@ -8,10 +8,8 @@ use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferInfo, PrimaryCommandBufferAbstract,
-        allocator::CommandBufferAllocator,
     },
-    device::Queue,
-    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
     sync::GpuFuture,
 };
 
@@ -113,14 +111,10 @@ impl Model {
     /// Create a vertex buffer for buildng the acceleration structure.
     pub fn create_blas_vertex_buffer(
         &self,
-        memory_allocator: Arc<dyn MemoryAllocator>,
-        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-        queue: Arc<Queue>,
+        vk: Arc<Vk>,
     ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
         create_device_local_buffer(
-            memory_allocator,
-            command_buffer_allocator,
-            queue,
+            vk.clone(),
             BufferUsage::VERTEX_BUFFER
                 | BufferUsage::SHADER_DEVICE_ADDRESS
                 | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
@@ -129,16 +123,9 @@ impl Model {
     }
 
     /// Create an index buffer for buildng the acceleration structure.
-    pub fn create_blas_index_buffer(
-        &self,
-        memory_allocator: Arc<dyn MemoryAllocator>,
-        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-        queue: Arc<Queue>,
-    ) -> Result<Subbuffer<[u32]>> {
+    pub fn create_blas_index_buffer(&self, vk: Arc<Vk>) -> Result<Subbuffer<[u32]>> {
         create_device_local_buffer(
-            memory_allocator,
-            command_buffer_allocator,
-            queue,
+            vk.clone(),
             BufferUsage::INDEX_BUFFER
                 | BufferUsage::SHADER_DEVICE_ADDRESS
                 | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
@@ -149,30 +136,19 @@ impl Model {
     /// Create a storage buffer for accessing vertices in shader code.
     pub fn create_vertices_storage_buffer(
         &self,
-        memory_allocator: Arc<dyn MemoryAllocator>,
-        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-        queue: Arc<Queue>,
+        vk: Arc<Vk>,
     ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
         create_device_local_buffer(
-            memory_allocator,
-            command_buffer_allocator,
-            queue,
+            vk.clone(),
             BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
             self.vertices.clone(),
         )
     }
 
     /// Create a storage buffer for accessing indices in shader code.
-    pub fn create_indices_storage_buffer(
-        &self,
-        memory_allocator: Arc<dyn MemoryAllocator>,
-        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-        queue: Arc<Queue>,
-    ) -> Result<Subbuffer<[u32]>> {
+    pub fn create_indices_storage_buffer(&self, vk: Arc<Vk>) -> Result<Subbuffer<[u32]>> {
         create_device_local_buffer(
-            memory_allocator,
-            command_buffer_allocator,
-            queue,
+            vk.clone(),
             BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
             self.indices.clone(),
         )
@@ -181,9 +157,7 @@ impl Model {
     /// Create a storage buffer for accessing materials in shader code.
     pub fn create_material_storage_buffer(
         &self,
-        memory_allocator: Arc<dyn MemoryAllocator>,
-        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-        queue: Arc<Queue>,
+        vk: Arc<Vk>,
         textures: &Textures,
     ) -> Result<Subbuffer<[closest_hit::Material]>> {
         let diffuse = if let Some(material) = &self.material {
@@ -200,9 +174,7 @@ impl Model {
         let materials = vec![diffuse.into()]; // Order should respect `MAT_PROP_TYPE_*` indices
 
         create_device_local_buffer(
-            memory_allocator,
-            command_buffer_allocator,
-            queue,
+            vk.clone(),
             BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
             materials,
         )
@@ -225,9 +197,7 @@ impl Model {
 /// This will create buffers that can be accessed only by the GPU. One specific use case is to
 /// access them via device addresses in shaders.
 pub fn create_device_local_buffer<T, I>(
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    queue: Arc<Queue>,
+    vk: Arc<Vk>,
     usage: BufferUsage,
     data: I,
 ) -> Result<Subbuffer<[T]>>
@@ -240,7 +210,7 @@ where
     let size = iter.len() as DeviceSize;
 
     let temporary_accessible_buffer = Buffer::from_iter(
-        memory_allocator.clone(),
+        vk.memory_allocator.clone(),
         BufferCreateInfo {
             usage: BufferUsage::TRANSFER_SRC,
             ..Default::default()
@@ -254,7 +224,7 @@ where
     )?;
 
     let device_local_buffer = Buffer::new_slice::<T>(
-        memory_allocator.clone(),
+        vk.memory_allocator.clone(),
         BufferCreateInfo {
             usage: usage | BufferUsage::TRANSFER_DST,
             ..Default::default()
@@ -267,8 +237,8 @@ where
     )?;
 
     let mut builder = AutoCommandBufferBuilder::primary(
-        command_buffer_allocator.clone(),
-        queue.queue_family_index(),
+        vk.command_buffer_allocator.clone(),
+        vk.queue.queue_family_index(),
         CommandBufferUsage::OneTimeSubmit,
     )?;
 
@@ -279,7 +249,7 @@ where
 
     builder
         .build()?
-        .execute(queue.clone())?
+        .execute(vk.queue.clone())?
         .then_signal_fence_and_flush()?
         .wait(None /* timeout */)?;
 
@@ -290,44 +260,23 @@ where
 /// and indices. These addresses will be packed in another storage buffer representing the mesh data which will be
 /// returned.
 pub fn create_mesh_storage_buffer(
+    vk: Arc<Vk>,
     models: &[Model],
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    queue: Arc<Queue>,
     textures: &Textures,
 ) -> Result<Subbuffer<[closest_hit::Mesh]>> {
     let vertices_storage_buffers = models
         .iter()
-        .map(|model| {
-            model.create_vertices_storage_buffer(
-                memory_allocator.clone(),
-                command_buffer_allocator.clone(),
-                queue.clone(),
-            )
-        })
+        .map(|model| model.create_vertices_storage_buffer(vk.clone()))
         .collect::<Result<Vec<_>>>()?;
 
     let indices_storage_buffers = models
         .iter()
-        .map(|model| {
-            model.create_indices_storage_buffer(
-                memory_allocator.clone(),
-                command_buffer_allocator.clone(),
-                queue.clone(),
-            )
-        })
+        .map(|model| model.create_indices_storage_buffer(vk.clone()))
         .collect::<Result<Vec<_>>>()?;
 
     let materials_storage_buffers = models
         .iter()
-        .map(|model| {
-            model.create_material_storage_buffer(
-                memory_allocator.clone(),
-                command_buffer_allocator.clone(),
-                queue.clone(),
-                textures,
-            )
-        })
+        .map(|model| model.create_material_storage_buffer(vk.clone(), textures))
         .collect::<Result<Vec<_>>>()
         .unwrap();
 
@@ -359,7 +308,7 @@ pub fn create_mesh_storage_buffer(
         );
 
     let data = Buffer::from_iter(
-        memory_allocator.clone(),
+        vk.memory_allocator.clone(),
         BufferCreateInfo {
             usage: BufferUsage::STORAGE_BUFFER,
             ..Default::default()

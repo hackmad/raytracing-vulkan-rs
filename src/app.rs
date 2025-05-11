@@ -4,8 +4,8 @@ use egui_winit_vulkano::{Gui, GuiConfig};
 use glam::Vec3;
 use vulkano::{
     Version,
-    command_buffer::allocator::{CommandBufferAllocator, StandardCommandBufferAllocator},
-    descriptor_set::allocator::{DescriptorSetAllocator, StandardDescriptorSetAllocator},
+    command_buffer::allocator::StandardCommandBufferAllocator,
+    descriptor_set::allocator::StandardDescriptorSetAllocator,
     device::{DeviceExtensions, DeviceFeatures},
     format::Format,
     image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
@@ -29,7 +29,7 @@ use winit::{
 
 use crate::{
     gui::GuiState,
-    raytracer::{Camera, Model, PerspectiveCamera, Scene},
+    raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk},
 };
 
 const INITIAL_WIDTH: u32 = 1024;
@@ -38,12 +38,11 @@ const INITIAL_HEIGHT: u32 = 576;
 pub struct App {
     context: VulkanoContext,
     windows: VulkanoWindows,
+    vk: Arc<Vk>,
     scene_image: Option<Arc<ImageView>>,
     scene: Option<Scene>,
     gui: Option<Gui>,
     gui_state: Option<GuiState>,
-    command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-    descriptor_set_allocator: Arc<dyn DescriptorSetAllocator>,
 }
 
 impl App {
@@ -94,7 +93,7 @@ impl App {
         // Vulkano windows
         let windows = VulkanoWindows::default();
 
-        // Command buffer allocator.
+        // Create some common alloctors we want to use.
         let command_buffer_allocator = Arc::new(StandardCommandBufferAllocator::new(
             context.device().clone(),
             Default::default(),
@@ -105,6 +104,15 @@ impl App {
             Default::default(),
         ));
 
+        // Create our own Vulkan context.
+        let vk = Arc::new(Vk {
+            device: context.device().clone(),
+            queue: context.graphics_queue().clone(),
+            memory_allocator: context.memory_allocator().clone(),
+            command_buffer_allocator,
+            descriptor_set_allocator,
+        });
+
         // The app
         Self {
             context,
@@ -113,8 +121,7 @@ impl App {
             scene: None,
             gui: None,
             gui_state: None,
-            command_buffer_allocator,
-            descriptor_set_allocator,
+            vk,
         }
     }
 
@@ -154,18 +161,14 @@ impl ApplicationHandler for App {
             },
         );
 
-        let device = self.context.device();
-
         let renderer = self
             .windows
             .get_primary_renderer_mut()
             .expect("Failed to get primary renderer");
 
-        let queue = renderer.graphics_queue();
-
         // Create storage image for rendering and display.
         let window_size = renderer.window_size();
-        let scene_image = create_scene_image(self.context.memory_allocator().clone(), window_size);
+        let scene_image = create_scene_image(self.vk.memory_allocator.clone(), window_size);
 
         // Load models.
         //let models = Model::load_obj("assets/obj/triangle.obj").unwrap();
@@ -187,21 +190,13 @@ impl ApplicationHandler for App {
         )));
 
         // Create the raytracing pipeline
-        self.scene = Some(Scene::new(
-            device.clone(),
-            queue.clone(),
-            self.context.memory_allocator().clone(),
-            self.descriptor_set_allocator.clone(),
-            self.command_buffer_allocator.clone(),
-            &models,
-            camera,
-        ));
+        self.scene = Some(Scene::new(self.vk.clone(), &models, camera));
 
         // Create gui
         let mut gui = Gui::new(
             event_loop,
             renderer.surface(),
-            queue.clone(),
+            self.vk.queue.clone(),
             renderer.swapchain_format(),
             GuiConfig::default(),
         );

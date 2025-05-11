@@ -6,15 +6,14 @@ use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
-        PrimaryAutoCommandBuffer, PrimaryCommandBufferAbstract, allocator::CommandBufferAllocator,
+        PrimaryAutoCommandBuffer, PrimaryCommandBufferAbstract,
     },
-    device::Queue,
     format::Format,
     image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
-    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use super::model::Model;
+use super::{Vk, model::Model};
 
 /// Stores texture image views.
 pub struct Textures {
@@ -35,32 +34,27 @@ impl fmt::Debug for Textures {
 
 impl Textures {
     /// Load all unique texture paths from all models. Assumes images have alpha channel.
-    pub fn load(
-        models: &[Model],
-        memory_allocator: Arc<dyn MemoryAllocator>,
-        command_buffer_allocator: Arc<dyn CommandBufferAllocator>,
-        queue: Arc<Queue>,
-    ) -> Result<Self> {
+    pub fn load(models: &[Model], vk: Arc<Vk>) -> Result<Self> {
         let mut image_views = vec![];
         let mut indices: HashMap<String, i32> = HashMap::new();
 
         let mut builder = AutoCommandBufferBuilder::primary(
-            command_buffer_allocator.clone(),
-            queue.queue_family_index(),
+            vk.command_buffer_allocator.clone(),
+            vk.queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )?;
 
         for model in models.iter() {
             for path in model.get_texture_paths() {
                 if !indices.contains_key(&path) {
-                    let texture = load_texture(&path, memory_allocator.clone(), &mut builder)?;
+                    let texture = load_texture(vk.clone(), &path, &mut builder)?;
                     indices.insert(path.clone(), image_views.len() as i32);
                     image_views.push(texture);
                 }
             }
         }
 
-        let _ = builder.build()?.execute(queue.clone())?;
+        let _ = builder.build()?.execute(vk.queue.clone())?;
 
         Ok(Self {
             image_views,
@@ -71,8 +65,8 @@ impl Textures {
 
 /// Loads the image texture into an new image view. Assumes image has alpha.
 fn load_texture(
+    vk: Arc<Vk>,
     path: &str,
-    memory_allocator: Arc<dyn MemoryAllocator>,
     builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
 ) -> Result<Arc<ImageView>> {
     println!("Loading texture {path}...");
@@ -83,7 +77,7 @@ fn load_texture(
     println!("Loaded texture {path}: {width} x {height}");
 
     let image = Image::new(
-        memory_allocator.clone(),
+        vk.memory_allocator.clone(),
         ImageCreateInfo {
             image_type: ImageType::Dim2d,
             format: Format::R8G8B8A8_SRGB, // Needs to match image format from device.
@@ -96,7 +90,7 @@ fn load_texture(
     )?;
 
     let buffer: Subbuffer<[u8]> = Buffer::new_slice(
-        memory_allocator.clone(),
+        vk.memory_allocator.clone(),
         BufferCreateInfo {
             usage: BufferUsage::TRANSFER_SRC,
             ..Default::default()
