@@ -57,7 +57,7 @@ impl App {
             debug_create_info: setup_debug_callback(enable_debug_logging),
             instance_create_info: InstanceCreateInfo {
                 #[cfg(target_vendor = "apple")]
-                flags: InstanceCreateFlags::ENUMERATE_PORTABILITY,
+                flags: vulkano::instance::InstanceCreateFlags::ENUMERATE_PORTABILITY,
                 application_version: Version::V1_3,
                 enabled_extensions: InstanceExtensions {
                     ext_debug_utils: true,
