@@ -31,24 +31,23 @@ pub struct AccelerationStructures {
 
 impl AccelerationStructures {
     pub fn new(vk: Arc<Vk>, models: &[Model]) -> Result<Self> {
-        let vertex_buffers: Vec<_> = models
+        let vertex_buffers = models
             .iter()
-            .map(|model| model.create_blas_vertex_buffer(vk.clone()).unwrap())
-            .collect();
+            .map(|model| model.create_blas_vertex_buffer(vk.clone()))
+            .collect::<Result<Vec<_>>>()?;
 
-        let index_buffers: Vec<_> = models
+        let index_buffers = models
             .iter()
-            .map(|model| model.create_blas_index_buffer(vk.clone()).unwrap())
-            .collect();
+            .map(|model| model.create_blas_index_buffer(vk.clone()))
+            .collect::<Result<Vec<_>>>()?;
 
-        let blas_vec_result: Result<Vec<_>> = vertex_buffers
+        let blas_vec = vertex_buffers
             .into_iter()
             .zip(index_buffers)
             .map(|(vertex_buffer, index_buffer)| {
                 build_acceleration_structure_triangles(vk.clone(), vertex_buffer, index_buffer)
             })
-            .collect();
-        let blas_vec = blas_vec_result?;
+            .collect::<Result<Vec<_>>>()?;
 
         let blas_instances = blas_vec
             .iter()
@@ -118,8 +117,7 @@ fn build_acceleration_structure_common(
         )?)
     };
 
-    let acceleration =
-        unsafe { AccelerationStructure::new(vk.device.clone(), as_create_info) }.unwrap();
+    let acceleration = unsafe { AccelerationStructure::new(vk.device.clone(), as_create_info) }?;
 
     as_build_geometry_info.dst_acceleration_structure = Some(acceleration.clone());
     as_build_geometry_info.scratch_data = Some(scratch_buffer);
@@ -135,16 +133,13 @@ fn build_acceleration_structure_common(
         vk.command_buffer_allocator.clone(),
         vk.queue.queue_family_index(),
         CommandBufferUsage::OneTimeSubmit,
-    )
-    .unwrap();
+    )?;
 
     unsafe {
-        builder
-            .build_acceleration_structure(
-                as_build_geometry_info,
-                iter::once(as_build_range_info).collect(),
-            )
-            .unwrap()
+        builder.build_acceleration_structure(
+            as_build_geometry_info,
+            iter::once(as_build_range_info).collect(),
+        )?
     };
 
     builder

@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::sync::{Arc, RwLock};
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
@@ -31,17 +32,15 @@ struct SceneResources {
 
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
     _acceleration_structures: AccelerationStructures,
-
-    camera: Arc<RwLock<dyn Camera>>,
 }
 
 impl SceneResources {
-    fn new(vk: Arc<Vk>, models: &[Model], camera: Arc<RwLock<dyn Camera>>) -> Self {
+    fn new(vk: Arc<Vk>, models: &[Model]) -> Result<Self> {
         // Load shader modules
         let shader_modules = ShaderModules::load(vk.device.clone());
 
         // Load Textures.
-        let textures = Textures::load(models, vk.clone()).unwrap();
+        let textures = Textures::load(models, vk.clone())?;
         //println!("Textures: {textures:?}");
 
         // Create the raytracing pipeline.
@@ -50,14 +49,13 @@ impl SceneResources {
             &shader_modules.stages,
             &shader_modules.groups,
             textures.image_views.len() as _,
-        )
-        .unwrap();
+        )?;
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
 
         // For now the acceleration structure is non-changing. We can create its descriptor set
         // and clone it later during render.
-        let acceleration_structures = AccelerationStructures::new(vk.clone(), models).unwrap();
+        let acceleration_structures = AccelerationStructures::new(vk.clone(), models)?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -67,20 +65,18 @@ impl SceneResources {
                 acceleration_structures.tlas.clone(),
             )],
             [],
-        )
-        .unwrap();
+        )?;
 
         // Mesh data won't change either. We can create its descriptor set and clone it later
         // during render.
-        let mesh_data = create_mesh_storage_buffer(vk.clone(), models, &textures).unwrap();
+        let mesh_data = create_mesh_storage_buffer(vk.clone(), models, &textures)?;
 
         let mesh_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::MESH_DATA_LAYOUT].clone(),
             [WriteDescriptorSet::buffer(0, mesh_data)],
             [],
-        )
-        .unwrap();
+        )?;
 
         // Textures + Sampler
         let sampler = Sampler::new(
@@ -91,9 +87,9 @@ impl SceneResources {
                 address_mode: [SamplerAddressMode::Repeat; 3],
                 ..Default::default()
             },
-        )
-        .unwrap();
+        )?;
 
+        // TODO - Support textures.image_views.len() == 0.
         let textures_descriptor_set = DescriptorSet::new_variable(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
@@ -103,48 +99,55 @@ impl SceneResources {
                 WriteDescriptorSet::image_view_array(1, 0, textures.image_views),
             ],
             [],
-        )
-        .unwrap();
+        )?;
 
         // Create the shader binding table.
         let shader_binding_table =
-            ShaderBindingTable::new(vk.memory_allocator.clone(), &rt_pipeline.get()).unwrap();
+            ShaderBindingTable::new(vk.memory_allocator.clone(), &rt_pipeline.get())?;
 
-        SceneResources {
+        Ok(SceneResources {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             _acceleration_structures: acceleration_structures,
-            camera,
-        }
+        })
     }
 }
 
 pub struct Scene {
     vk: Arc<Vk>,
+    camera: Arc<RwLock<dyn Camera>>,
     resources: Option<SceneResources>,
 }
 
 impl Scene {
-    pub fn new(vk: Arc<Vk>, models: &[Model], camera: Arc<RwLock<dyn Camera>>) -> Self {
+    pub fn new(vk: Arc<Vk>, models: &[Model], camera: Arc<RwLock<dyn Camera>>) -> Result<Self> {
         if models.len() == 0 {
-            Scene {
+            Ok(Scene {
                 vk,
                 resources: None,
-            }
+                camera,
+            })
         } else {
-            let resources = Some(SceneResources::new(vk.clone(), models, camera));
-            Scene { vk, resources }
+            SceneResources::new(vk.clone(), models).map(|resources| Scene {
+                vk,
+                resources: Some(resources),
+                camera,
+            })
         }
     }
 
+    pub fn update_models(&mut self, models: &[Model]) -> Result<()> {
+        let resources = SceneResources::new(self.vk.clone(), models)?;
+        self.resources = Some(resources);
+        Ok(())
+    }
+
     pub fn update_window_size(&mut self, window_size: [f32; 2]) {
-        if let Some(resources) = self.resources.as_ref() {
-            let mut camera = resources.camera.write().unwrap();
-            camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
-        }
+        let mut camera = self.camera.write().unwrap();
+        camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
     }
 
     pub fn render(
@@ -155,7 +158,7 @@ impl Scene {
         if let Some(resources) = self.resources.as_ref() {
             let dimensions = image_view.image().extent();
 
-            let camera = resources.camera.read().unwrap();
+            let camera = self.camera.read().unwrap();
 
             let uniform_buffer = Buffer::from_data(
                 self.vk.memory_allocator.clone(),

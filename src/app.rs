@@ -43,6 +43,7 @@ pub struct App {
     scene: Option<Scene>,
     gui: Option<Gui>,
     gui_state: Option<GuiState>,
+    current_file_path: String,
 }
 
 impl App {
@@ -122,6 +123,7 @@ impl App {
             gui: None,
             gui_state: None,
             vk,
+            current_file_path: "assets/obj/sphere-on-plane.obj".to_string(),
         }
     }
 
@@ -171,12 +173,7 @@ impl ApplicationHandler for App {
         let scene_image = create_scene_image(self.vk.memory_allocator.clone(), window_size);
 
         // Load models.
-        //let models = Model::load_obj("assets/obj/triangle.obj").unwrap();
-        //let models = Model::load_obj("assets/obj/quad.obj").unwrap();
-        //let models = Model::load_obj("assets/obj/box.obj").unwrap();
-        //let models = Model::load_obj("assets/obj/sphere-flat.obj").unwrap();
-        //let models = Model::load_obj("assets/obj/sphere-smooth.obj").unwrap();
-        let models = Model::load_obj("assets/obj/sphere-on-plane.obj").unwrap();
+        let models = Model::load_obj(&self.current_file_path).unwrap();
 
         // Create camera.
         let camera: Arc<RwLock<dyn Camera>> = Arc::new(RwLock::new(PerspectiveCamera::new(
@@ -190,7 +187,8 @@ impl ApplicationHandler for App {
         )));
 
         // Create the raytracing pipeline
-        self.scene = Some(Scene::new(self.vk.clone(), &models, camera));
+        let scene = Scene::new(self.vk.clone(), &models, camera).unwrap();
+        self.scene = Some(scene);
 
         // Create gui
         let mut gui = Gui::new(
@@ -200,7 +198,11 @@ impl ApplicationHandler for App {
             renderer.swapchain_format(),
             GuiConfig::default(),
         );
-        self.gui_state = Some(GuiState::new(&mut gui, scene_image.clone()));
+        self.gui_state = Some(GuiState::new(
+            &mut gui,
+            scene_image.clone(),
+            "assets/obj/sphere-on-plane.obj",
+        ));
         self.gui = Some(gui);
 
         self.scene_image = Some(scene_image);
@@ -234,6 +236,27 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 let gui = self.gui.as_mut().unwrap();
+                let gui_state = self.gui_state.as_mut().unwrap();
+
+                let gui_state_file_path = gui_state.get_file_path();
+                if self.current_file_path != gui_state_file_path {
+                    match Model::load_obj(gui_state_file_path) {
+                        Ok(models) => match scene.update_models(&models) {
+                            Ok(()) => {
+                                self.current_file_path = gui_state_file_path.to_string();
+                            }
+                            Err(e) => {
+                                println!("Unable to load file {}. {:?}", gui_state_file_path, e);
+                                gui_state.set_file_path(&self.current_file_path);
+                            }
+                        },
+
+                        Err(e) => {
+                            println!("Error loading file {}. {e:?}", gui_state_file_path);
+                            gui_state.set_file_path(&self.current_file_path);
+                        }
+                    }
+                }
 
                 // Set immediate UI in redraw here
                 gui.immediate_ui(|gui| {

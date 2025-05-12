@@ -1,7 +1,7 @@
 use crate::raytracer::{MaterialPropertyData, MaterialPropertyType};
 
 use super::{MaterialPropertyValue, Vk, shaders::closest_hit, texture::Textures};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use vulkano::{
     DeviceSize,
@@ -209,6 +209,10 @@ where
     let iter = data.into_iter();
     let size = iter.len() as DeviceSize;
 
+    if size == 0 {
+        return Err(anyhow!("Cannot create device local buffer with empty data"));
+    }
+
     let temporary_accessible_buffer = Buffer::from_iter(
         vk.memory_allocator.clone(),
         BufferCreateInfo {
@@ -277,23 +281,34 @@ pub fn create_mesh_storage_buffer(
     let materials_storage_buffers = models
         .iter()
         .map(|model| model.create_material_storage_buffer(vk.clone(), textures))
-        .collect::<Result<Vec<_>>>()
-        .unwrap();
+        .collect::<Result<Vec<_>>>()?;
 
-    let vertices_buffer_device_addresses: Vec<u64> = vertices_storage_buffers
+    let vertices_buffer_device_addresses = vertices_storage_buffers
         .iter()
-        .map(|buf| buf.device_address().unwrap().into())
-        .collect();
+        .map(|buf| {
+            buf.device_address()
+                .map(|addr| addr.get())
+                .map_err(|e| anyhow!(e.to_string()))
+        })
+        .collect::<Result<Vec<_>>>()?;
 
-    let indices_buffer_device_addresses: Vec<u64> = indices_storage_buffers
+    let indices_buffer_device_addresses = indices_storage_buffers
         .iter()
-        .map(|buf| buf.device_address().unwrap().into())
-        .collect();
+        .map(|buf| {
+            buf.device_address()
+                .map(|addr| addr.get())
+                .map_err(|e| anyhow!(e.to_string()))
+        })
+        .collect::<Result<Vec<_>>>()?;
 
-    let materials_buffer_device_addresses: Vec<u64> = materials_storage_buffers
+    let materials_buffer_device_addresses = materials_storage_buffers
         .iter()
-        .map(|buf| buf.device_address().unwrap().into())
-        .collect();
+        .map(|buf| {
+            buf.device_address()
+                .map(|addr| addr.get())
+                .map_err(|e| anyhow!(e.to_string()))
+        })
+        .collect::<Result<Vec<_>>>()?;
 
     let meshes = vertices_buffer_device_addresses
         .into_iter()
