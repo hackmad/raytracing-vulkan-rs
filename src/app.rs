@@ -32,17 +32,35 @@ use crate::{
     raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk},
 };
 
+const DEFAULT_ASSET_FILE_PATH: &str = "assets/obj/sphere-on-plane.obj";
 const INITIAL_WIDTH: u32 = 1024;
 const INITIAL_HEIGHT: u32 = 576;
 
+/// Winit application.
 pub struct App {
+    /// Vulkano context.
     context: VulkanoContext,
+
+    /// Handles window management.
     windows: VulkanoWindows,
+
+    /// Our own vulkano context.
     vk: Arc<Vk>,
+
+    /// The image view for rendering the scene separate from the GUI.
     scene_image: Option<Arc<ImageView>>,
+
+    /// The scene to render.
     scene: Option<Scene>,
+
+    /// The egui/winit/vulkano wrapper.
     gui: Option<Gui>,
+
+    /// Handles GUI statement management.
     gui_state: Option<GuiState>,
+
+    /// The current scene file being rendered. This will be used to track when egui File > Open
+    /// will result in rebuilding a scene.
     current_file_path: String,
 }
 
@@ -114,7 +132,7 @@ impl App {
             descriptor_set_allocator,
         });
 
-        // The app
+        // Create the app with a default asset file loaded.
         Self {
             context,
             windows,
@@ -123,10 +141,11 @@ impl App {
             gui: None,
             gui_state: None,
             vk,
-            current_file_path: "assets/obj/sphere-on-plane.obj".to_string(),
+            current_file_path: DEFAULT_ASSET_FILE_PATH.to_string(),
         }
     }
 
+    /// Rebuild the image view used for rendering and update camera settings when window size changes.
     fn rebuild_scene_image(&mut self, window_size: [f32; 2]) {
         let scene_image = create_scene_image(self.context.memory_allocator().clone(), window_size);
 
@@ -147,7 +166,7 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        // Note that fractional scaling in the OS will give a scaled width/height.
+        // Create a new window and renderer. Note that fractional scaling in the OS will give a scaled width/height.
         self.windows.create_window(
             event_loop,
             &self.context,
@@ -190,7 +209,7 @@ impl ApplicationHandler for App {
         let scene = Scene::new(self.vk.clone(), &models, camera).unwrap();
         self.scene = Some(scene);
 
-        // Create gui
+        // Create the GUI.
         let mut gui = Gui::new(
             event_loop,
             renderer.surface(),
@@ -201,7 +220,7 @@ impl ApplicationHandler for App {
         self.gui_state = Some(GuiState::new(
             &mut gui,
             scene_image.clone(),
-            "assets/obj/sphere-on-plane.obj",
+            DEFAULT_ASSET_FILE_PATH,
         ));
         self.gui = Some(gui);
 
@@ -235,13 +254,14 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
+                // Handle File > Open.
                 let gui = self.gui.as_mut().unwrap();
                 let gui_state = self.gui_state.as_mut().unwrap();
 
                 let gui_state_file_path = gui_state.get_file_path();
                 if self.current_file_path != gui_state_file_path {
                     match Model::load_obj(gui_state_file_path) {
-                        Ok(models) => match scene.update_models(&models) {
+                        Ok(models) => match scene.rebuild(&models) {
                             Ok(()) => {
                                 self.current_file_path = gui_state_file_path.to_string();
                             }
@@ -258,7 +278,7 @@ impl ApplicationHandler for App {
                     }
                 }
 
-                // Set immediate UI in redraw here
+                // Set immediate UI in redraw here.
                 gui.immediate_ui(|gui| {
                     let ctx = gui.context();
                     self.gui_state.as_mut().unwrap().layout(
@@ -268,7 +288,7 @@ impl ApplicationHandler for App {
                     )
                 });
 
-                // Acquire swapchain future
+                // Acquire swapchain future and render the scene overlayed with the GUI.
                 match renderer.acquire(None, |_| {}) {
                     Ok(future) => {
                         // Render scene
@@ -306,6 +326,7 @@ impl ApplicationHandler for App {
     }
 }
 
+/// Create a new image view to render the scene and overlay the GUI.
 fn create_scene_image(
     memory_allocator: Arc<dyn MemoryAllocator>,
     window_size: [f32; 2],
@@ -322,8 +343,8 @@ fn create_scene_image(
                     1,
                 ],
                 array_layers: 1,
-                usage: ImageUsage::STORAGE | // This is for the raytracer's descriptor set layout
-                        ImageUsage::SAMPLED | ImageUsage::COLOR_ATTACHMENT, // These are for egui
+                usage: ImageUsage::STORAGE | // This is for the raytracer's descriptor set layout.
+                        ImageUsage::SAMPLED | ImageUsage::COLOR_ATTACHMENT, // These are for egui.
                 ..Default::default()
             },
             AllocationCreateInfo::default(),
@@ -333,6 +354,7 @@ fn create_scene_image(
     .unwrap()
 }
 
+/// Setup callback for logging debug information the GPU.
 fn setup_debug_callback(enable_debug_logging: bool) -> Option<DebugUtilsMessengerCreateInfo> {
     let debug_callback = if enable_debug_logging {
         unsafe {
@@ -374,6 +396,7 @@ fn setup_debug_callback(enable_debug_logging: bool) -> Option<DebugUtilsMessenge
     } else {
         None
     };
+
     debug_callback.map(|callback| DebugUtilsMessengerCreateInfo {
         message_severity: DebugUtilsMessageSeverity::ERROR
             | DebugUtilsMessageSeverity::WARNING

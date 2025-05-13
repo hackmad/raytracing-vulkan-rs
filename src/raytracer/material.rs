@@ -4,12 +4,14 @@ use egui_winit_vulkano::egui::emath::OrderedFloat;
 
 use super::{Model, shaders::closest_hit};
 
+/// Material property types. These will correspond to `MAT_PROP_TYPE_*` constants in the shader source.
 #[derive(Clone, Copy, Debug)]
 #[repr(u32)]
 pub enum MaterialPropertyType {
     Diffuse = 0,
 }
 
+/// Material property value types. These will correspond to `MAT_PROP_VALUE_TYPE_*` constants in the shader source.
 #[derive(Clone, Copy, Debug)]
 #[repr(u32)]
 pub enum MaterialPropertyValueType {
@@ -18,17 +20,24 @@ pub enum MaterialPropertyValueType {
     Texture = 2,
 }
 
+/// Represents the `Material` struct in shader source.
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
 pub struct MaterialPropertyData {
+    /// The `MaterialPropertyType`.
     pub prop_type: u32,
+
+    /// The `MaterialPropertyValueType`.
     pub prop_value_type: u32,
 
     /// Index into material color or texture buffers. -1 => None.
+    /// This is done to reduce the overhead of storing both a color value and texture index in
+    /// the shader's `Material` struct.
     pub index: i32,
 }
 
 impl MaterialPropertyData {
+    /// Create material using a solid color.
     fn new_color(prop_type: MaterialPropertyType, index: i32) -> Self {
         Self {
             prop_type: prop_type as _,
@@ -37,6 +46,7 @@ impl MaterialPropertyData {
         }
     }
 
+    /// Create material using a texture for sampling colors.
     fn new_texture_index(prop_type: MaterialPropertyType, index: i32) -> Self {
         Self {
             prop_type: prop_type as _,
@@ -45,6 +55,7 @@ impl MaterialPropertyData {
         }
     }
 
+    /// Create a material property with no value.
     pub fn new_none(prop_type: MaterialPropertyType) -> Self {
         Self {
             prop_type: prop_type as _,
@@ -53,6 +64,7 @@ impl MaterialPropertyData {
         }
     }
 
+    /// Create material for the given property type and value.
     pub fn from_property_value(
         prop_type: MaterialPropertyType,
         value: &MaterialPropertyValue,
@@ -81,6 +93,7 @@ impl MaterialPropertyData {
 
 impl Into<closest_hit::Material> for MaterialPropertyData {
     fn into(self) -> closest_hit::Material {
+        // Convert to the shader's `Material` struct.
         closest_hit::Material {
             propType: self.prop_type,
             propValueType: self.prop_value_type,
@@ -89,14 +102,21 @@ impl Into<closest_hit::Material> for MaterialPropertyData {
     }
 }
 
+/// Enumerates material property values.
 #[derive(Clone, Debug)]
 pub enum MaterialPropertyValue {
+    /// No value.
     None,
+
+    /// Solid RGB color.
     RGB { color: [f32; 3] },
+
+    /// Texture image path.
     Texture { path: String },
 }
 
 impl MaterialPropertyValue {
+    /// Create a new material property value.
     pub fn new(
         color: &Option<[f32; 3]>,
         texture: &Option<String>,
@@ -125,7 +145,8 @@ impl MaterialPropertyValue {
     }
 }
 
-/// Stores unique material RGB values.
+/// Stores unique material RGB values which will be added to to a storage buffer used by the
+/// shader.
 pub struct MaterialColors {
     /// The material colors.
     pub colors: Vec<[f32; 3]>,

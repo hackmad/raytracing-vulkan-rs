@@ -2,14 +2,25 @@ use std::f32::consts::FRAC_PI_2;
 
 use glam::{Mat4, Vec3};
 
+/// Camera interface.
 pub trait Camera {
+    /// Update the rendered image size.
     fn update_image_size(&mut self, image_width: u32, image_height: u32);
+
+    /// Returns the view matrix.
     fn get_view_matrix(&self) -> Mat4;
+
+    /// Returns the inverse view matrix.
     fn get_view_inverse_matrix(&self) -> Mat4;
+
+    /// Returns the projection matrix.
     fn get_projection_matrix(&self) -> Mat4;
+
+    /// Returns the inverse projection matrix.
     fn get_projection_inverse_matrix(&self) -> Mat4;
 }
 
+/// Perspective camera.
 pub struct PerspectiveCamera {
     eye: Vec3,
     look_at: Vec3,
@@ -21,6 +32,7 @@ pub struct PerspectiveCamera {
 }
 
 impl PerspectiveCamera {
+    /// Create a new perspective camera.
     pub fn new(
         eye: Vec3,
         look_at: Vec3,

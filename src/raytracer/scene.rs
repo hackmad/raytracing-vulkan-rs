@@ -25,13 +25,27 @@ use super::{
     texture::Textures,
 };
 
+/// The vulkano resources specific to the rendering pipeline.
 struct SceneResources {
+    /// Descriptor set for binding the top-level acceleration structure for the scene.
     tlas_descriptor_set: Arc<DescriptorSet>,
+
+    /// Descriptor set for binding mesh data.
     mesh_data_descriptor_set: Arc<DescriptorSet>,
+
+    /// Descriptor set for binding textures.
     textures_descriptor_set: Arc<DescriptorSet>,
+
+    /// Descriptor set for binding material data.
     material_colors_descriptor_set: Arc<DescriptorSet>,
+
+    /// The shader binding table.
     shader_binding_table: ShaderBindingTable,
+
+    /// The raytracing pipeline and layout.
     rt_pipeline: RtPipeline,
+
+    /// Push constants for the closest hit shader.
     closest_hit_push_constants: closest_hit::PushConstantData,
 
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
@@ -39,8 +53,9 @@ struct SceneResources {
 }
 
 impl SceneResources {
+    /// Create vulkano resources for rendering a new scene with given models.
     fn new(vk: Arc<Vk>, models: &[Model]) -> Result<Self> {
-        // Load shader modules
+        // Load shader modules.
         let shader_modules = ShaderModules::load(vk.device.clone());
 
         // Load Textures.
@@ -174,13 +189,20 @@ impl SceneResources {
     }
 }
 
+/// Describes the scene for raytracing.
 pub struct Scene {
+    /// Vulkano conext.
     vk: Arc<Vk>,
+
+    /// Camera.
     camera: Arc<RwLock<dyn Camera>>,
+
+    /// Vulkano resources specific to the rendering pipeline.
     resources: Option<SceneResources>,
 }
 
 impl Scene {
+    /// Create a new scene from the given models and camera.
     pub fn new(vk: Arc<Vk>, models: &[Model], camera: Arc<RwLock<dyn Camera>>) -> Result<Self> {
         if models.len() == 0 {
             Ok(Scene {
@@ -197,25 +219,32 @@ impl Scene {
         }
     }
 
-    pub fn update_models(&mut self, models: &[Model]) -> Result<()> {
+    /// Rebuilds the scene with new models.
+    pub fn rebuild(&mut self, models: &[Model]) -> Result<()> {
         let resources = SceneResources::new(self.vk.clone(), models)?;
         self.resources = Some(resources);
         Ok(())
     }
 
+    /// Updates the camera image size to match a new window size.
     pub fn update_window_size(&mut self, window_size: [f32; 2]) {
         let mut camera = self.camera.write().unwrap();
         camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
     }
 
+    /// Renders a scene to an image view after the given future completes. This will return a new
+    /// future for the rendering operation.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if any Vulkan resources fail to create.
     pub fn render(
         &self,
         before_future: Box<dyn GpuFuture>,
         image_view: Arc<ImageView>,
     ) -> Box<dyn GpuFuture> {
         if let Some(resources) = self.resources.as_ref() {
-            let dimensions = image_view.image().extent();
-
+            // Create the uniform buffer for the camera.
             let camera = self.camera.read().unwrap();
 
             let uniform_buffer = Buffer::from_data(
@@ -238,6 +267,7 @@ impl Scene {
             )
             .unwrap();
 
+            // Create the descriptor sets for the raytracing pipeline.
             let pipeline_layout = resources.rt_pipeline.get_layout();
             let layouts = pipeline_layout.set_layouts();
 
@@ -257,6 +287,7 @@ impl Scene {
             )
             .unwrap();
 
+            // Build a command buffer to bind resources and trace rays.
             let mut builder = AutoCommandBufferBuilder::primary(
                 self.vk.command_buffer_allocator.clone(),
                 self.vk.queue.queue_family_index(),
@@ -288,11 +319,12 @@ impl Scene {
                 .bind_pipeline_ray_tracing(resources.rt_pipeline.get())
                 .unwrap();
 
+            // https://docs.rs/vulkano/latest/vulkano/shader/index.html#safety
             unsafe {
                 builder
                     .trace_rays(
                         resources.shader_binding_table.addresses().clone(),
-                        dimensions,
+                        image_view.image().extent(),
                     )
                     .unwrap();
             }

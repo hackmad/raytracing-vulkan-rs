@@ -15,7 +15,7 @@ use vulkano::{
 
 use super::{Vk, model::Model};
 
-/// Stores texture image views.
+/// Stores texture image views that will be added to a `SampledImage` variable descriptor used by the shader.
 pub struct Textures {
     /// The texture image views.
     pub image_views: Vec<Arc<ImageView>>,
@@ -23,6 +23,7 @@ pub struct Textures {
     /// Maps unique texture paths to their index in `image_view`.
     pub indices: HashMap<String, i32>, /* GLSL int => i32*/
 }
+
 impl fmt::Debug for Textures {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Textures")

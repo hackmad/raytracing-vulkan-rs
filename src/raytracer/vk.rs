@@ -7,7 +7,7 @@ use vulkano::{
     memory::allocator::MemoryAllocator,
 };
 
-// Our own Vulkan context. Wraps some common resources we will want to use.
+/// Our own vulkano context. Wraps some common resources we will want to use.
 pub struct Vk {
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,

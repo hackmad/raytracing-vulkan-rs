@@ -30,6 +30,7 @@ pub struct AccelerationStructures {
 }
 
 impl AccelerationStructures {
+    /// Create new acceleration structures for the given model.
     pub fn new(vk: Arc<Vk>, models: &[Model]) -> Result<Self> {
         let vertex_buffers = models
             .iter()
@@ -151,6 +152,7 @@ fn build_acceleration_structure_common(
     Ok(acceleration)
 }
 
+/// Builds a bottom level accerlation strucuture for a set of triangles.
 fn build_acceleration_structure_triangles(
     vk: Arc<Vk>,
     vertex_buffer: Subbuffer<[closest_hit::MeshVertex]>,
@@ -176,6 +178,12 @@ fn build_acceleration_structure_triangles(
     )
 }
 
+/// Builds the top level accerlation strucuture.
+///
+/// # Safety
+///
+/// - If you are referencing a bottom-level acceleration structure in a top-level acceleration
+///   structure, you must ensure that the bottom-level acceleration structure is kept alive.
 unsafe fn build_top_level_acceleration_structure(
     vk: Arc<Vk>,
     as_instances: Vec<AccelerationStructureInstance>,

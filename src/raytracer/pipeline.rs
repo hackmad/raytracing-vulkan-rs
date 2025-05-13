@@ -16,27 +16,47 @@ use vulkano::{
     shader::ShaderStages,
 };
 
+/// The raytracing pipeline.
 pub struct RtPipeline {
+    /// The pipeline.
     pipeline: Arc<RayTracingPipeline>,
+
+    /// The pipeline layout.
     pipeline_layout: Arc<PipelineLayout>,
 }
 
 impl RtPipeline {
+    // These make it easier to set the descriptor set layout.
+
+    /// Top-level acceleration structure.
     pub const TLAS_LAYOUT: usize = 0;
+
+    /// Uniform buffer for the camera data.
     pub const UNIFORM_BUFFER_LAYOUT: usize = 1;
+
+    /// Storage image used for rendering.
     pub const RENDER_IMAGE_LAYOUT: usize = 2;
+
+    /// Storage buffer used for mesh data.
     pub const MESH_DATA_LAYOUT: usize = 3;
+
+    /// Sampler + Sampled Images
     pub const SAMPLERS_AND_TEXTURES_LAYOUT: usize = 4;
+
+    /// Storage buffer used for material color data.
     pub const MATERIAL_COLORS_LAYOUT: usize = 5;
 
+    /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
         self.pipeline.clone()
     }
 
+    /// Returns the pipeline layout.
     pub fn get_layout(&self) -> Arc<PipelineLayout> {
         self.pipeline_layout.clone()
     }
 
+    /// Create a new raytracing pipeline.
     pub fn new(
         device: Arc<Device>,
         stages: &[PipelineShaderStageCreateInfo],
@@ -83,7 +103,7 @@ impl RtPipeline {
     }
 }
 
-/// Pipeline layout for top level acceleration structure.
+/// Create a pipeline layout for top level acceleration structure.
 fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device,
@@ -105,7 +125,7 @@ fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     .unwrap()
 }
 
-/// Pipeline layout for uniform buffer containing camera matrices.
+/// Create a pipeline layout for uniform buffer containing camera matrices.
 fn create_uniform_buffer_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device,
@@ -125,7 +145,7 @@ fn create_uniform_buffer_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout>
     .unwrap()
 }
 
-/// Pipeline layout for the render image storage buffer.
+/// Create a pipeline layout for the render image storage buffer.
 fn create_render_image_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
@@ -145,7 +165,7 @@ fn create_render_image_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     .unwrap()
 }
 
-/// Piepline layout for mesh data references storage buffer.
+/// Create a pipeline layout for mesh data references storage buffer.
 fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
@@ -165,7 +185,7 @@ fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     .unwrap()
 }
 
-/// Pipeline layout for sampler and textures.
+/// Create a pipeline layout for sampler and textures.
 fn create_sample_and_textures_layout(
     device: Arc<Device>,
     texture_count: u32,
@@ -199,7 +219,7 @@ fn create_sample_and_textures_layout(
     .unwrap()
 }
 
-/// Pipeline layout for material colors.
+/// Create a pipeline layout for material colors.
 fn create_material_colors_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),

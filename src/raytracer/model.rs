@@ -13,18 +13,27 @@ use vulkano::{
     sync::GpuFuture,
 };
 
+/// Materials for a given `Model`.
 #[derive(Debug)]
 pub struct ModelMaterial {
+    /// Diffuse property.
     pub diffuse: MaterialPropertyValue,
 }
 
+/// The model.
 pub struct Model {
+    /// Vertex data for the mesh.
     vertices: Vec<closest_hit::MeshVertex>,
+
+    /// Vertex indices for the mesh.
     indices: Vec<u32>,
+
+    /// Material.
     pub material: Option<ModelMaterial>,
 }
 
 impl Model {
+    /// Load a Wavefront OBJ file.
     pub fn load_obj(path: &str) -> Result<Vec<Self>> {
         let (models, materials) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?;
 
