@@ -19,7 +19,7 @@ use super::{
     create_mesh_storage_buffer,
     model::Model,
     pipeline::RtPipeline,
-    shaders::{ShaderModules, ray_gen},
+    shaders::{ShaderModules, closest_hit, ray_gen},
     texture::Textures,
 };
 
@@ -29,6 +29,7 @@ struct SceneResources {
     textures_descriptor_set: Arc<DescriptorSet>,
     shader_binding_table: ShaderBindingTable,
     rt_pipeline: RtPipeline,
+    closest_hit_push_constants: closest_hit::PushConstantData,
 
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
     _acceleration_structures: AccelerationStructures,
@@ -41,7 +42,13 @@ impl SceneResources {
 
         // Load Textures.
         let textures = Textures::load(models, vk.clone())?;
+        let texture_count = textures.image_views.len() as u32;
         //println!("Textures: {textures:?}");
+
+        // Push constants.
+        let closest_hit_push_constants = closest_hit::PushConstantData { texture_count };
+        let closest_hit_push_constants_bytes = size_of::<closest_hit::PushConstantData>() as u32;
+        println!("closest_hit_push_constants_bytes = {closest_hit_push_constants_bytes}");
 
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(
@@ -49,6 +56,7 @@ impl SceneResources {
             &shader_modules.stages,
             &shader_modules.groups,
             textures.image_views.len() as _,
+            closest_hit_push_constants_bytes,
         )?;
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
@@ -89,15 +97,23 @@ impl SceneResources {
             },
         )?;
 
-        // TODO - Support textures.image_views.len() == 0.
+        let mut descriptor_set = vec![WriteDescriptorSet::sampler(0, sampler.clone())];
+        if texture_count > 0 {
+            // We cannot create descriptor set for empty array.
+            // Push constants will have texture count which can be used in shaders to make sure
+            // out-of-bounds access can be checked.
+            descriptor_set.push(WriteDescriptorSet::image_view_array(
+                1,
+                0,
+                textures.image_views,
+            ));
+        }
+
         let textures_descriptor_set = DescriptorSet::new_variable(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
-            textures.image_views.len() as _,
-            [
-                WriteDescriptorSet::sampler(0, sampler.clone()),
-                WriteDescriptorSet::image_view_array(1, 0, textures.image_views),
-            ],
+            texture_count as _,
+            descriptor_set,
             [],
         )?;
 
@@ -111,6 +127,7 @@ impl SceneResources {
             textures_descriptor_set,
             shader_binding_table,
             rt_pipeline,
+            closest_hit_push_constants,
             _acceleration_structures: acceleration_structures,
         })
     }
@@ -218,6 +235,12 @@ impl Scene {
                         resources.mesh_data_descriptor_set.clone(),
                         resources.textures_descriptor_set.clone(),
                     ],
+                )
+                .unwrap()
+                .push_constants(
+                    resources.rt_pipeline.get_layout(),
+                    0,
+                    resources.closest_hit_push_constants.clone(),
                 )
                 .unwrap()
                 .bind_pipeline_ray_tracing(resources.rt_pipeline.get())

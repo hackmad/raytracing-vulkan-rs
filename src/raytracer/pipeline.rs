@@ -8,7 +8,7 @@ use vulkano::{
     device::Device,
     pipeline::{
         PipelineLayout, PipelineShaderStageCreateInfo,
-        layout::PipelineLayoutCreateInfo,
+        layout::{PipelineLayoutCreateInfo, PushConstantRange},
         ray_tracing::{
             RayTracingPipeline, RayTracingPipelineCreateInfo, RayTracingShaderGroupCreateInfo,
         },
@@ -41,6 +41,7 @@ impl RtPipeline {
         stages: &[PipelineShaderStageCreateInfo],
         groups: &[RayTracingShaderGroupCreateInfo],
         texture_count: u32,
+        closest_hit_push_constants_bytes: u32,
     ) -> Result<Self> {
         let pipeline_layout = PipelineLayout::new(
             device.clone(),
@@ -53,6 +54,11 @@ impl RtPipeline {
                     create_mesh_data_layout(device.clone()),
                     create_sample_and_textures_layout(device.clone(), texture_count),
                 ],
+                push_constant_ranges: vec![PushConstantRange {
+                    stages: ShaderStages::CLOSEST_HIT,
+                    offset: 0,
+                    size: closest_hit_push_constants_bytes,
+                }],
                 ..Default::default()
             },
         )?;

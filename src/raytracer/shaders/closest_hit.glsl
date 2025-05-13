@@ -15,6 +15,10 @@ layout(set = 3, binding = 0, scalar) buffer MeshData {
 layout(set = 4, binding = 0) uniform sampler textureSampler;
 layout(set = 4, binding = 1) uniform texture2D textures[];
 
+layout(push_constant) uniform PushConstantData {
+    uint texture_count;
+} pc;
+
 MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
     vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
 
@@ -63,7 +67,7 @@ void main() {
     if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_RGB) {
         rayPayload = vec4(diffuse.color, 1.0); // For now alpha = 1.0
     } else if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_TEXTURE) {
-        if (diffuse.textureIndex >= 0) {
+        if (diffuse.textureIndex >= 0 && diffuse.textureIndex < pc.texture_count) {
             rayPayload = texture(
                 nonuniformEXT(sampler2D(textures[diffuse.textureIndex], textureSampler)),
                 vertex.texCoord
