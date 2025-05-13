@@ -1,6 +1,6 @@
 use crate::raytracer::{MaterialPropertyData, MaterialPropertyType};
 
-use super::{MaterialPropertyValue, Vk, shaders::closest_hit, texture::Textures};
+use super::{MaterialColors, MaterialPropertyValue, Vk, shaders::closest_hit, texture::Textures};
 use anyhow::{Context, Result, anyhow};
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use vulkano::{
@@ -159,12 +159,14 @@ impl Model {
         &self,
         vk: Arc<Vk>,
         textures: &Textures,
+        material_colors: &MaterialColors,
     ) -> Result<Subbuffer<[closest_hit::Material]>> {
         let diffuse = if let Some(material) = &self.material {
             MaterialPropertyData::from_property_value(
                 MaterialPropertyType::Diffuse,
                 &material.diffuse,
                 &textures.indices,
+                &material_colors.indices,
             )
         } else {
             MaterialPropertyData::new_none(MaterialPropertyType::Diffuse)
@@ -267,6 +269,7 @@ pub fn create_mesh_storage_buffer(
     vk: Arc<Vk>,
     models: &[Model],
     textures: &Textures,
+    material_colors: &MaterialColors,
 ) -> Result<Subbuffer<[closest_hit::Mesh]>> {
     let vertices_storage_buffers = models
         .iter()
@@ -280,7 +283,7 @@ pub fn create_mesh_storage_buffer(
 
     let materials_storage_buffers = models
         .iter()
-        .map(|model| model.create_material_storage_buffer(vk.clone(), textures))
+        .map(|model| model.create_material_storage_buffer(vk.clone(), textures, material_colors))
         .collect::<Result<Vec<_>>>()?;
 
     let vertices_buffer_device_addresses = vertices_storage_buffers

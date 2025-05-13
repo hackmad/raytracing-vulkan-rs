@@ -27,6 +27,7 @@ impl RtPipeline {
     pub const RENDER_IMAGE_LAYOUT: usize = 2;
     pub const MESH_DATA_LAYOUT: usize = 3;
     pub const SAMPLERS_AND_TEXTURES_LAYOUT: usize = 4;
+    pub const MATERIAL_COLORS_LAYOUT: usize = 5;
 
     pub fn get(&self) -> Arc<RayTracingPipeline> {
         self.pipeline.clone()
@@ -53,6 +54,7 @@ impl RtPipeline {
                     create_render_image_layout(device.clone()),
                     create_mesh_data_layout(device.clone()),
                     create_sample_and_textures_layout(device.clone(), texture_count),
+                    create_material_colors_layout(device.clone()),
                 ],
                 push_constant_ranges: vec![PushConstantRange {
                     stages: ShaderStages::CLOSEST_HIT,
@@ -189,6 +191,26 @@ fn create_sample_and_textures_layout(
                     },
                 ),
             ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+/// Pipeline layout for material colors.
+fn create_material_colors_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        device.clone(),
+        DescriptorSetLayoutCreateInfo {
+            bindings: [(
+                0,
+                DescriptorSetLayoutBinding {
+                    stages: ShaderStages::CLOSEST_HIT,
+                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                },
+            )]
             .into_iter()
             .collect(),
             ..Default::default()

@@ -15,8 +15,13 @@ layout(set = 3, binding = 0, scalar) buffer MeshData {
 layout(set = 4, binding = 0) uniform sampler textureSampler;
 layout(set = 4, binding = 1) uniform texture2D textures[];
 
+layout(set = 5, binding = 0) buffer MaterialColors {
+    vec3 values[];
+} material_color;
+
 layout(push_constant) uniform PushConstantData {
     uint texture_count;
+    uint material_color_count;
 } pc;
 
 MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
@@ -61,15 +66,18 @@ Material unpackInstanceMaterial(const int instanceId, const uint mat_prop_type) 
 void main() {
     MeshVertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
 
+    rayPayload = vec4(0.0, 0.0, 0.0, 1.0);
+
     Material diffuse = unpackInstanceMaterial(gl_InstanceID, MAT_PROP_TYPE_DIFFUSE);
 
-    rayPayload = vec4(0.0, 0.0, 0.0, 1.0);
     if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_RGB) {
-        rayPayload = vec4(diffuse.color, 1.0); // For now alpha = 1.0
+        if (diffuse.index >= 0 && diffuse.index < pc.material_color_count) {
+            rayPayload = vec4(material_color.values[diffuse.index], 1.0); // For now alpha = 1.0
+        }
     } else if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_TEXTURE) {
-        if (diffuse.textureIndex >= 0 && diffuse.textureIndex < pc.texture_count) {
+        if (diffuse.index >= 0 && diffuse.index < pc.texture_count) {
             rayPayload = texture(
-                nonuniformEXT(sampler2D(textures[diffuse.textureIndex], textureSampler)),
+                nonuniformEXT(sampler2D(textures[diffuse.index], textureSampler)),
                 vertex.texCoord
             );
         }

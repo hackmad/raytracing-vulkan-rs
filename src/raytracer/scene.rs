@@ -13,6 +13,8 @@ use vulkano::{
     sync::GpuFuture,
 };
 
+use crate::raytracer::MaterialColors;
+
 use super::{
     Camera, Vk,
     acceleration::AccelerationStructures,
@@ -27,6 +29,7 @@ struct SceneResources {
     tlas_descriptor_set: Arc<DescriptorSet>,
     mesh_data_descriptor_set: Arc<DescriptorSet>,
     textures_descriptor_set: Arc<DescriptorSet>,
+    material_colors_descriptor_set: Arc<DescriptorSet>,
     shader_binding_table: ShaderBindingTable,
     rt_pipeline: RtPipeline,
     closest_hit_push_constants: closest_hit::PushConstantData,
@@ -43,19 +46,28 @@ impl SceneResources {
         // Load Textures.
         let textures = Textures::load(models, vk.clone())?;
         let texture_count = textures.image_views.len() as u32;
-        //println!("Textures: {textures:?}");
+        //println!("{textures:?}");
+
+        // Load material colors.
+        let material_colors = MaterialColors::load(models);
+        let material_color_count = material_colors.colors.len() as u32;
+        //println!("{material_colors:?}");
 
         // Push constants.
-        let closest_hit_push_constants = closest_hit::PushConstantData { texture_count };
+        let closest_hit_push_constants = closest_hit::PushConstantData {
+            texture_count,
+            material_color_count,
+        };
+
         let closest_hit_push_constants_bytes = size_of::<closest_hit::PushConstantData>() as u32;
-        println!("closest_hit_push_constants_bytes = {closest_hit_push_constants_bytes}");
+        //println!("closest_hit_push_constants_bytes = {closest_hit_push_constants_bytes}");
 
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(
             vk.device.clone(),
             &shader_modules.stages,
             &shader_modules.groups,
-            textures.image_views.len() as _,
+            texture_count,
             closest_hit_push_constants_bytes,
         )?;
         let pipeline_layout = rt_pipeline.get_layout();
@@ -77,7 +89,8 @@ impl SceneResources {
 
         // Mesh data won't change either. We can create its descriptor set and clone it later
         // during render.
-        let mesh_data = create_mesh_storage_buffer(vk.clone(), models, &textures)?;
+        let mesh_data =
+            create_mesh_storage_buffer(vk.clone(), models, &textures, &material_colors)?;
 
         let mesh_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -97,12 +110,11 @@ impl SceneResources {
             },
         )?;
 
-        let mut descriptor_set = vec![WriteDescriptorSet::sampler(0, sampler.clone())];
+        let mut texture_descriptor_writes = vec![WriteDescriptorSet::sampler(0, sampler.clone())];
         if texture_count > 0 {
-            // We cannot create descriptor set for empty array.
-            // Push constants will have texture count which can be used in shaders to make sure
-            // out-of-bounds access can be checked.
-            descriptor_set.push(WriteDescriptorSet::image_view_array(
+            // We cannot create descriptor set for empty array. Push constants will have texture count which can
+            // be used in shaders to make sure out-of-bounds access can be checked.
+            texture_descriptor_writes.push(WriteDescriptorSet::image_view_array(
                 1,
                 0,
                 textures.image_views,
@@ -113,7 +125,35 @@ impl SceneResources {
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
             texture_count as _,
-            descriptor_set,
+            texture_descriptor_writes,
+            [],
+        )?;
+
+        // Material colors
+        let mat_colors = if material_color_count > 0 {
+            material_colors.colors
+        } else {
+            // We cannot create buffer for empty array. Push constants will have material colors count which can
+            // be used in shaders to make sure out-of-bounds access can be checked.
+            vec![[0.0, 0.0, 0.0]]
+        };
+        let material_colors_buffer = Buffer::from_iter(
+            vk.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            mat_colors,
+        )?;
+        let material_colors_descriptor_set = DescriptorSet::new(
+            vk.descriptor_set_allocator.clone(),
+            layouts[RtPipeline::MATERIAL_COLORS_LAYOUT].clone(),
+            vec![WriteDescriptorSet::buffer(0, material_colors_buffer)],
             [],
         )?;
 
@@ -125,6 +165,7 @@ impl SceneResources {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
+            material_colors_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             closest_hit_push_constants,
@@ -234,6 +275,7 @@ impl Scene {
                         render_image_descriptor_set,
                         resources.mesh_data_descriptor_set.clone(),
                         resources.textures_descriptor_set.clone(),
+                        resources.material_colors_descriptor_set.clone(),
                     ],
                 )
                 .unwrap()

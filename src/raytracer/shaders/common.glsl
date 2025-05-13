@@ -11,8 +11,7 @@ const uint MAT_PROP_VALUE_TYPE_TEXTURE = 2;
 struct Material {
     uint propType;
     uint propValueType;
-    vec3 color;
-    int textureIndex;
+    int index;
 };
 
 // Vertex data.

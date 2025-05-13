@@ -1,6 +1,8 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, fmt, path::PathBuf};
 
-use super::shaders::closest_hit;
+use egui_winit_vulkano::egui::emath::OrderedFloat;
+
+use super::{Model, shaders::closest_hit};
 
 #[derive(Clone, Copy, Debug)]
 #[repr(u32)]
@@ -21,26 +23,25 @@ pub enum MaterialPropertyValueType {
 pub struct MaterialPropertyData {
     pub prop_type: u32,
     pub prop_value_type: u32,
-    pub color: [f32; 3],
-    pub texture_index: i32,
+
+    /// Index into material color or texture buffers. -1 => None.
+    pub index: i32,
 }
 
 impl MaterialPropertyData {
-    pub fn new_color(prop_type: MaterialPropertyType, rgb: &[f32; 3]) -> Self {
+    fn new_color(prop_type: MaterialPropertyType, index: i32) -> Self {
         Self {
             prop_type: prop_type as _,
             prop_value_type: MaterialPropertyValueType::RGB as _,
-            color: rgb.clone(),
-            texture_index: -1,
+            index,
         }
     }
 
-    pub fn new_texture_index(prop_type: MaterialPropertyType, index: i32) -> Self {
+    fn new_texture_index(prop_type: MaterialPropertyType, index: i32) -> Self {
         Self {
             prop_type: prop_type as _,
             prop_value_type: MaterialPropertyValueType::Texture as _,
-            color: [0.0, 0.0, 0.0],
-            texture_index: index,
+            index,
         }
     }
 
@@ -48,8 +49,7 @@ impl MaterialPropertyData {
         Self {
             prop_type: prop_type as _,
             prop_value_type: MaterialPropertyValueType::None as _,
-            color: [0.0, 0.0, 0.0],
-            texture_index: -1,
+            index: -1,
         }
     }
 
@@ -57,15 +57,23 @@ impl MaterialPropertyData {
         prop_type: MaterialPropertyType,
         value: &MaterialPropertyValue,
         texture_indices: &HashMap<String, i32>,
+        material_color_indices: &HashMap<RgbColor, i32>,
     ) -> Self {
         match value {
             MaterialPropertyValue::None => Self::new_none(prop_type),
-            MaterialPropertyValue::RGB { color } => Self::new_color(prop_type, color),
+
+            MaterialPropertyValue::RGB { color } => {
+                let index = material_color_indices
+                    .get(&color.into())
+                    .expect(format!("Material color {color:?} not found").as_ref());
+                Self::new_color(prop_type, *index)
+            }
+
             MaterialPropertyValue::Texture { path } => {
-                let texture_index = texture_indices
+                let index = texture_indices
                     .get(path)
                     .expect(format!("Texture {path} not found").as_ref());
-                Self::new_texture_index(prop_type, *texture_index)
+                Self::new_texture_index(prop_type, *index)
             }
         }
     }
@@ -76,8 +84,7 @@ impl Into<closest_hit::Material> for MaterialPropertyData {
         closest_hit::Material {
             propType: self.prop_type,
             propValueType: self.prop_value_type,
-            color: self.color,
-            textureIndex: self.texture_index,
+            index: self.index,
         }
     }
 }
@@ -115,5 +122,91 @@ impl MaterialPropertyValue {
                 }
             }),
         }
+    }
+}
+
+/// Stores unique material RGB values.
+pub struct MaterialColors {
+    /// The material colors.
+    pub colors: Vec<[f32; 3]>,
+
+    /// Maps unique colors to their index in `colors`.
+    pub indices: HashMap<RgbColor, i32>, /* GLSL int => i32*/
+}
+
+impl fmt::Debug for MaterialColors {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MaterialColors")
+            .field("colors", &self.colors.len())
+            .field("indices", &self.indices)
+            .finish()
+    }
+}
+
+impl MaterialColors {
+    /// Load all unique texture paths from all models. Assumes images have alpha channel.
+    pub fn load(models: &[Model]) -> Self {
+        let mut colors = vec![];
+        let mut indices = HashMap::new();
+
+        for model in models.iter() {
+            if let Some(material) = &model.material {
+                match material.diffuse {
+                    MaterialPropertyValue::RGB { color } => {
+                        let rgb = RgbColor::from(color);
+                        if !indices.contains_key(&rgb) {
+                            indices.insert(rgb, colors.len() as i32);
+                            colors.push(color.clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Self { colors, indices }
+    }
+}
+
+#[derive(Clone, Copy, Hash, Eq, PartialEq)]
+pub struct RgbColor {
+    pub r: OrderedFloat<f32>,
+    pub g: OrderedFloat<f32>,
+    pub b: OrderedFloat<f32>,
+}
+
+impl fmt::Debug for RgbColor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RgbColor")
+            .field("r", &self.r.0)
+            .field("g", &self.g.0)
+            .field("b", &self.b.0)
+            .finish()
+    }
+}
+
+impl From<[f32; 3]> for RgbColor {
+    fn from(value: [f32; 3]) -> Self {
+        Self {
+            r: value[0].into(),
+            g: value[1].into(),
+            b: value[2].into(),
+        }
+    }
+}
+
+impl From<&[f32; 3]> for RgbColor {
+    fn from(value: &[f32; 3]) -> Self {
+        Self {
+            r: value[0].into(),
+            g: value[1].into(),
+            b: value[2].into(),
+        }
+    }
+}
+
+impl Into<[f32; 3]> for RgbColor {
+    fn into(self) -> [f32; 3] {
+        [self.r.0, self.g.0, self.b.0]
     }
 }
