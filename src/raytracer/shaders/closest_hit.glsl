@@ -5,7 +5,7 @@
 
 #include "common.glsl"
 
-layout(location = 0) rayPayloadInEXT vec4 rayPayload;
+layout(location = 0) rayPayloadInEXT vec3 rayPayload;
 hitAttributeEXT vec2 hitAttribs;
 
 layout(set = 3, binding = 0, scalar) buffer MeshData {
@@ -66,21 +66,34 @@ Material unpackInstanceMaterial(const int instanceId, const uint mat_prop_type) 
 void main() {
     MeshVertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
 
-    rayPayload = vec4(0.0, 0.0, 0.0, 1.0);
-
     Material diffuse = unpackInstanceMaterial(gl_InstanceID, MAT_PROP_TYPE_DIFFUSE);
 
+    // Diffuse color.
+    vec3 diffuseColor = vec3(0.0, 0.0, 0.0);
     if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_RGB) {
         if (diffuse.index >= 0 && diffuse.index < pc.material_color_count) {
-            rayPayload = vec4(material_color.values[diffuse.index], 1.0); // For now alpha = 1.0
+            diffuseColor = material_color.values[diffuse.index];
         }
     } else if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_TEXTURE) {
         if (diffuse.index >= 0 && diffuse.index < pc.texture_count) {
-            rayPayload = texture(
+            diffuseColor = texture(
                 nonuniformEXT(sampler2D(textures[diffuse.index], textureSampler)),
                 vertex.texCoord
-            );
+            ).rgb; // Ignore alpha for now.
         }
     }
+
+    // TODO Use uniform buffers to pass these in.
+    vec3 lightDir = vec3(1.0, 1.0, 0.0);
+    vec3 ambientColor = vec3(0.05, 0.05, 0.05); // ambient term
+
+    vec3 radiance = ambientColor;
+    float irradiance = max(dot(lightDir, vertex.normal), 0.0);
+    // TODO Check for shadows.
+    if (irradiance > 0.0) { // if receives light
+        radiance += diffuseColor * irradiance; // diffuse shading
+    }
+
+    rayPayload = radiance;
 }
 

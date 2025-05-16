@@ -1,7 +1,7 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 
-layout(location = 0) rayPayloadEXT vec4 rayPayload;
+layout(location = 0) rayPayloadEXT vec3 rayPayload;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
@@ -39,5 +39,5 @@ void main() {
         tMax,          // ray max range
         0);            // payload (location = 0)
 
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), rayPayload);
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(rayPayload, 0.0));
 }
