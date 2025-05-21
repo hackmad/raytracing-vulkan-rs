@@ -1,12 +1,15 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
-#extension GL_EXT_scalar_block_layout: enable
 #extension GL_EXT_nonuniform_qualifier : enable
 
 #include "common.glsl"
 
 layout(location = 0) rayPayloadInEXT vec3 rayPayload;
 hitAttributeEXT vec2 hitAttribs;
+
+layout(location = 1) rayPayloadEXT bool isShadowed;
+
+layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
 layout(set = 3, binding = 0, scalar) buffer MeshData {
     Mesh values[];
@@ -66,33 +69,91 @@ Material unpackInstanceMaterial(const int instanceId, const uint mat_prop_type) 
 void main() {
     MeshVertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
 
-    Material diffuse = unpackInstanceMaterial(gl_InstanceID, MAT_PROP_TYPE_DIFFUSE);
+    Material diffuseMat = unpackInstanceMaterial(gl_InstanceID, MAT_PROP_TYPE_DIFFUSE);
 
     // Diffuse color.
     vec3 diffuseColor = vec3(0.0, 0.0, 0.0);
-    if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_RGB) {
-        if (diffuse.index >= 0 && diffuse.index < pc.material_color_count) {
-            diffuseColor = material_color.values[diffuse.index];
+    if (diffuseMat.propValueType == MAT_PROP_VALUE_TYPE_RGB) {
+        if (diffuseMat.index >= 0 && diffuseMat.index < pc.material_color_count) {
+            diffuseColor = material_color.values[diffuseMat.index];
         }
-    } else if (diffuse.propValueType == MAT_PROP_VALUE_TYPE_TEXTURE) {
-        if (diffuse.index >= 0 && diffuse.index < pc.texture_count) {
+    } else if (diffuseMat.propValueType == MAT_PROP_VALUE_TYPE_TEXTURE) {
+        if (diffuseMat.index >= 0 && diffuseMat.index < pc.texture_count) {
             diffuseColor = texture(
-                nonuniformEXT(sampler2D(textures[diffuse.index], textureSampler)),
+                nonuniformEXT(sampler2D(textures[diffuseMat.index], textureSampler)),
                 vertex.texCoord
             ).rgb; // Ignore alpha for now.
         }
     }
 
-    // TODO Use uniform buffers to pass these in.
-    vec3 lightDir = vec3(1.0, 1.0, 0.0);
-    vec3 ambientColor = vec3(0.05, 0.05, 0.05); // ambient term
+    // Vector toward the light.
+    int lightType = 0;
+    float lightIntensity = 0.5;
+    vec3 lightPositionOrDirection = vec3(5.0, 5.0, 0.0);
+    float lightDistance = 10000.0; // Default for directional.
 
-    vec3 radiance = ambientColor;
-    float irradiance = max(dot(lightDir, vertex.normal), 0.0);
-    // TODO Check for shadows.
-    if (irradiance > 0.0) { // if receives light
-        radiance += diffuseColor * irradiance; // diffuse shading
+    vec3 L;
+    if (lightType == 0) {
+        // Point light.
+        vec3 lDir = lightPositionOrDirection - vertex.position;
+        lightDistance = length(lDir);
+        float lightDistanceSq = lightDistance * lightDistance;
+        lightIntensity /= lightDistanceSq;
+        L = lDir / lightDistance;
     }
+    else {
+        // Directional light.
+        L = normalize(lightPositionOrDirection);
+    }
+
+    float dotNL = max(dot(vertex.normal, L), 0.0);
+
+    // Ambient.
+    vec3 ambient = vec3(0.2, 0.2, 0.2);
+    float illum = 1;
+
+
+    // Lambertian.
+    vec3 diffuse = diffuseColor * dotNL;
+    if (illum >= 1) {
+        diffuse += ambient;
+    }
+
+    // Specular.
+    vec3 specular = vec3(0.0, 0.0, 0.0);
+
+    float attenuation = 1.0;
+    if (dotNL > 0.0) {
+        float tMin   = 0.001;
+        float tMax   = lightDistance;
+
+        float shadowBias = 0.01;
+        float frontFacing = dot(-gl_WorldRayDirectionEXT, vertex.normal);
+        vec3  origin = vertex.position + sign(frontFacing) * shadowBias * vertex.normal;
+
+        vec3  rayDir = L;
+        uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+        isShadowed = true;
+        traceRayEXT(topLevelAS,  // acceleration structure
+                flags,       // rayFlags
+                0xFF,        // cullMask
+                0,           // sbtRecordOffset
+                0,           // sbtRecordStride
+                1,           // missIndex
+                origin,      // ray origin
+                tMin,        // ray min range
+                rayDir,      // ray direction
+                tMax,        // ray max range
+                1);          // payload (location = 1)
+    }
+
+    if (isShadowed) {
+        attenuation = 0.3;
+    } else {
+        // Compute specular.
+    }
+
+    vec3 radiance = lightIntensity * attenuation * (diffuse + specular);
 
     rayPayload = radiance;
 }

@@ -111,7 +111,7 @@ fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
             bindings: [(
                 0,
                 DescriptorSetLayoutBinding {
-                    stages: ShaderStages::RAYGEN,
+                    stages: ShaderStages::RAYGEN | ShaderStages::CLOSEST_HIT,
                     ..DescriptorSetLayoutBinding::descriptor_type(
                         DescriptorType::AccelerationStructure,
                     )

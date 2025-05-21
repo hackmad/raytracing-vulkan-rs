@@ -29,6 +29,14 @@ pub mod ray_miss {
     }
 }
 
+pub mod shadow_miss {
+    vulkano_shaders::shader! {
+        ty: "miss",
+        path: "src/raytracer/shaders/shadow_miss.glsl",
+        vulkan_version: "1.3",
+    }
+}
+
 pub struct ShaderModules {
     pub stages: Vec<PipelineShaderStageCreateInfo>,
     pub groups: Vec<RayTracingShaderGroupCreateInfo>,
@@ -51,10 +59,16 @@ impl ShaderModules {
             .entry_point("main")
             .unwrap();
 
+        let shadow_miss = ray_miss::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+
         // Make a list of the shader stages that the pipeline will have.
         let stages = vec![
             PipelineShaderStageCreateInfo::new(ray_gen),
             PipelineShaderStageCreateInfo::new(ray_miss),
+            PipelineShaderStageCreateInfo::new(shadow_miss),
             PipelineShaderStageCreateInfo::new(closest_hit),
         ];
 
@@ -63,8 +77,9 @@ impl ShaderModules {
         let groups = vec![
             RayTracingShaderGroupCreateInfo::General { general_shader: 0 },
             RayTracingShaderGroupCreateInfo::General { general_shader: 1 },
+            RayTracingShaderGroupCreateInfo::General { general_shader: 2 },
             RayTracingShaderGroupCreateInfo::TrianglesHit {
-                closest_hit_shader: Some(2),
+                closest_hit_shader: Some(3),
                 any_hit_shader: None,
             },
         ];
