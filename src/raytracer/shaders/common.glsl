@@ -1,5 +1,6 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
 #extension GL_EXT_buffer_reference2 : enable
+#extension GL_EXT_scalar_block_layout: enable
 
 // --------------------------------------------------------------------------------
 // Constants
@@ -157,5 +158,37 @@ vec2 gaussianTransformVec2(inout uvec4 state) {
   float theta = 2.0 * PI * u1;
 
   return vec2(r * sin(theta), r * cos(theta));
+}
+
+
+// --------------------------------------------------------------------------------
+// Color space conversions.
+
+// Converts a color from linear light gamma to sRGB gamma.
+vec3 linearTosRGB(vec3 linearRGB)
+{
+    bvec3 cutoff = lessThan(linearRGB.rgb, vec3(0.0031308));
+    vec3 higher = vec3(1.055) * pow(linearRGB.rgb, vec3(1.0 / 2.4)) - vec3(0.055);
+    vec3 lower = linearRGB.rgb * vec3(12.92);
+    return mix(higher, lower, cutoff);
+}
+vec4 linearTosRGB(vec4 linearRGB)
+{
+    vec3 color = linearTosRGB(linearRGB.rgb);
+    return vec4(color, linearRGB.a);
+}
+
+// Converts a color from sRGB gamma to linear light gamma.
+vec3 sRGBToLinear(vec3 sRGB)
+{
+    bvec3 cutoff = lessThan(sRGB.rgb, vec3(0.04045));
+    vec3 higher = pow((sRGB.rgb + vec3(0.055)) / vec3(1.055), vec3(2.4));
+    vec3 lower = sRGB.rgb / vec3(12.92);
+    return mix(higher, lower, cutoff);
+}
+vec4 sRGBToLinear(vec4 sRGB)
+{
+    vec3 color = sRGBToLinear(sRGB.rgb);
+    return vec4(color, sRGB.a);
 }
 

@@ -1,6 +1,8 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 
+#include "common.glsl"
+
 layout(location = 0) rayPayloadEXT vec3 rayPayload;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
@@ -11,7 +13,7 @@ layout(set = 1, binding = 0) uniform Camera {
     mat4 projInverse; // Camera inverse projection matrix
 } camera;
 
-layout(set = 2, binding = 0, rgba32f) uniform image2D image;
+layout(set = 2, binding = 0, rgba8) uniform image2D image;
 
 void main() {
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
@@ -26,6 +28,11 @@ void main() {
     float tMin = 0.001;
     float tMax = 10000.0;
 
+    // sbtRecordOffset, sbtRecordStride control how the hitGroupId (VkAccelerationStructureInstanceKHR::
+    // instanceShaderBindingTableRecordOffset) of each instance is used to look up a hit group in the 
+    // SBT's hit group array. Since we only have one hit group, both are set to 0.
+    //
+    // missIndex is the index, within the miss shader group array of the SBT to call if no intersection is found.
     traceRayEXT(
         topLevelAS,    // acceleration structure
         rayFlags,      // rayFlags
@@ -39,5 +46,6 @@ void main() {
         tMax,          // ray max range
         0);            // payload (location = 0)
 
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(rayPayload, 0.0));
+    vec4 color = linearTosRGB(vec4(rayPayload, 1.0));
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), color);
 }
