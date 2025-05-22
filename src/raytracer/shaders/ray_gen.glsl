@@ -46,7 +46,6 @@ void main() {
         tMax,          // ray max range
         0);            // payload (location = 0)
 
-    vec4 color = vec4(rayPayload, 1.0);
-    color = linearTosRGB(vec4(rayPayload, 1.0));
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), color);
+    vec3 color = linearTosRGB(rayPayload);
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(color, 1.0));
 }
