@@ -1,14 +1,12 @@
-use std::sync::{Arc, RwLock};
-
-use egui_winit_vulkano::{Gui, GuiConfig};
+use crate::raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk};
 use glam::Vec3;
+use std::sync::{Arc, RwLock};
 use vulkano::{
     Version,
     command_buffer::allocator::StandardCommandBufferAllocator,
     descriptor_set::allocator::StandardDescriptorSetAllocator,
     device::{DeviceExtensions, DeviceFeatures},
-    format::Format,
-    image::{Image, ImageCreateInfo, ImageType, ImageUsage, view::ImageView},
+    image::ImageUsage,
     instance::{
         InstanceCreateInfo, InstanceExtensions,
         debug::{
@@ -16,20 +14,17 @@ use vulkano::{
             DebugUtilsMessengerCreateInfo,
         },
     },
-    memory::allocator::{AllocationCreateInfo, MemoryAllocator},
-    swapchain::{ColorSpace, Surface},
+    swapchain::Surface,
 };
 use vulkano_util::{
     context::{VulkanoConfig, VulkanoContext},
     window::{VulkanoWindows, WindowDescriptor},
 };
 use winit::{
-    application::ApplicationHandler, event::WindowEvent, raw_window_handle::HasDisplayHandle,
-};
-
-use crate::{
-    gui::GuiState,
-    raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk},
+    application::ApplicationHandler,
+    event::{ElementState, KeyEvent, WindowEvent},
+    keyboard::{Key, NamedKey},
+    raw_window_handle::HasDisplayHandle,
 };
 
 const DEFAULT_ASSET_FILE_PATH: &str = "assets/obj/sphere-on-plane.obj";
@@ -47,19 +42,10 @@ pub struct App {
     /// Our own vulkano context.
     vk: Arc<Vk>,
 
-    /// The image view for rendering the scene separate from the GUI.
-    scene_image_view: Option<Arc<ImageView>>,
-
     /// The scene to render.
     scene: Option<Scene>,
 
-    /// The egui/winit/vulkano wrapper.
-    gui: Option<Gui>,
-
-    /// Handles GUI statement management.
-    gui_state: Option<GuiState>,
-
-    /// The current scene file being rendered. This will be used to track when egui File > Open
+    /// The current scene file being rendered. This will be used to track egui File > Open
     /// will result in rebuilding a scene.
     current_file_path: String,
 }
@@ -136,35 +122,9 @@ impl App {
         Self {
             context,
             windows,
-            scene_image_view: None,
             scene: None,
-            gui: None,
-            gui_state: None,
             vk,
             current_file_path: DEFAULT_ASSET_FILE_PATH.to_string(),
-        }
-    }
-
-    /// Rebuild the image view used for rendering and update camera settings when window size changes.
-    fn rebuild_scene_image(&mut self, window_size: [f32; 2], format: Format, usage: ImageUsage) {
-        let scene_image_view = create_scene_image(
-            self.context.memory_allocator().clone(),
-            window_size,
-            format,
-            usage,
-        );
-
-        let gui = self.gui.as_mut().unwrap();
-
-        self.gui_state
-            .as_mut()
-            .unwrap()
-            .update_scene_image(gui, scene_image_view.clone());
-
-        self.scene_image_view = Some(scene_image_view);
-
-        if let Some(scene) = self.scene.as_mut() {
-            scene.update_window_size(window_size);
         }
     }
 }
@@ -182,10 +142,7 @@ impl ApplicationHandler for App {
                 ..Default::default()
             },
             |ci| {
-                ci.image_format = Format::B8G8R8A8_UNORM;
-                ci.image_color_space = ColorSpace::SrgbNonLinear;
-                ci.image_usage = ImageUsage::STORAGE  // For scene
-                    | ImageUsage::SAMPLED | ImageUsage::COLOR_ATTACHMENT; // For egui
+                ci.image_usage = ImageUsage::STORAGE;
                 ci.min_image_count = ci.min_image_count.max(2);
             },
         );
@@ -199,12 +156,6 @@ impl ApplicationHandler for App {
 
         // Create storage image for rendering and display.
         let window_size = renderer.window_size();
-        let scene_image_view = create_scene_image(
-            self.vk.memory_allocator.clone(),
-            window_size,
-            renderer.swapchain_format(),
-            renderer.swapchain_image_view().usage(),
-        );
 
         // Load models.
         let models = Model::load_obj(&self.current_file_path).unwrap();
@@ -223,23 +174,6 @@ impl ApplicationHandler for App {
         // Create the raytracing pipeline
         let scene = Scene::new(self.vk.clone(), &models, camera).unwrap();
         self.scene = Some(scene);
-
-        // Create the GUI.
-        let mut gui = Gui::new(
-            event_loop,
-            renderer.surface(),
-            self.vk.queue.clone(),
-            renderer.swapchain_format(),
-            GuiConfig::default(),
-        );
-        self.gui_state = Some(GuiState::new(
-            &mut gui,
-            scene_image_view.clone(),
-            DEFAULT_ASSET_FILE_PATH,
-        ));
-        self.gui = Some(gui);
-
-        self.scene_image_view = Some(scene_image_view);
     }
 
     fn window_event(
@@ -249,75 +183,76 @@ impl ApplicationHandler for App {
         event: WindowEvent,
     ) {
         let renderer = self.windows.get_renderer_mut(window_id).unwrap();
-        let renderer_window_id = renderer.window().id();
-        let renderer_window_size = renderer.window_size();
-        let renderer_scale_factor = renderer.window().scale_factor();
-
-        let swapchain_format = renderer.swapchain_format();
-        let swapchain_usage = renderer.swapchain_image_view().usage();
-
         let scene = self.scene.as_mut().unwrap();
-        let scene_image_view = self.scene_image_view.as_ref().unwrap();
 
         match event {
             WindowEvent::Resized(window_size) => {
+                scene.update_window_size([window_size.width as f32, window_size.height as f32]);
                 renderer.resize();
-                self.rebuild_scene_image(window_size.into(), swapchain_format, swapchain_usage);
             }
             WindowEvent::ScaleFactorChanged { .. } => {
+                scene.update_window_size(renderer.window_size());
                 renderer.resize();
-                self.rebuild_scene_image(renderer_window_size, swapchain_format, swapchain_usage);
             }
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            WindowEvent::RedrawRequested => {
-                // Handle File > Open.
-                let gui = self.gui.as_mut().unwrap();
-                let gui_state = self.gui_state.as_mut().unwrap();
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: key,
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => match key.as_ref() {
+                Key::Named(NamedKey::Escape) => {
+                    println!("Escape key was pressed; stopping.");
+                    event_loop.exit();
+                }
+                Key::Character("o") => {
+                    // Handle File > Open.
+                    let current_dir =
+                        std::env::current_dir().expect("Unable to get current directory.");
 
-                let gui_state_file_path = gui_state.get_file_path();
-                if self.current_file_path != gui_state_file_path {
-                    match Model::load_obj(gui_state_file_path) {
-                        Ok(models) => match scene.rebuild(&models) {
-                            Ok(()) => {
-                                self.current_file_path = gui_state_file_path.to_string();
-                            }
-                            Err(e) => {
-                                println!("Unable to load file {}. {:?}", gui_state_file_path, e);
-                                gui_state.set_file_path(&self.current_file_path);
-                            }
-                        },
+                    let fd = rfd::FileDialog::new()
+                        .set_directory(current_dir)
+                        .add_filter("Wavefront (.obj)", &["obj"]);
 
-                        Err(e) => {
-                            println!("Error loading file {}. {e:?}", gui_state_file_path);
-                            gui_state.set_file_path(&self.current_file_path);
+                    if let Some(path) = fd.pick_file() {
+                        let selected_path = path.display().to_string();
+
+                        if self.current_file_path != selected_path {
+                            match Model::load_obj(&selected_path) {
+                                Ok(models) => match scene.rebuild(&models) {
+                                    Ok(()) => {
+                                        self.current_file_path = selected_path;
+                                    }
+                                    Err(e) => {
+                                        println!("Unable to load file {}. {:?}", selected_path, e);
+                                        self.current_file_path = selected_path;
+                                    }
+                                },
+
+                                Err(e) => {
+                                    println!("Error loading file {}. {e:?}", selected_path);
+                                }
+                            }
                         }
                     }
                 }
-
-                // Set immediate UI in redraw here.
-                gui.immediate_ui(|gui| {
-                    let ctx = gui.context();
-                    self.gui_state.as_mut().unwrap().layout(
-                        ctx,
-                        renderer_window_size,
-                        renderer_scale_factor,
-                    )
-                });
-
+                _ => (),
+            },
+            WindowEvent::RedrawRequested => {
                 // Acquire swapchain future and render the scene overlayed with the GUI.
                 match renderer.acquire(None, |_| {}) {
                     Ok(future) => {
                         // Render scene
-                        let after_scene_render = scene.render(future, scene_image_view.clone());
-
-                        // Render gui
-                        let after_gui_render =
-                            gui.draw_on_image(after_scene_render, renderer.swapchain_image_view());
+                        let after_scene_render =
+                            scene.render(future, renderer.swapchain_image_view());
 
                         // Present swapchain
-                        renderer.present(after_gui_render, true);
+                        renderer.present(after_scene_render, true);
                     }
                     Err(vulkano::VulkanError::OutOfDate) => {
                         renderer.resize();
@@ -330,47 +265,12 @@ impl ApplicationHandler for App {
             }
             _ => (),
         }
-
-        if window_id == renderer_window_id {
-            // Update Egui integration so the UI works!
-            let gui = self.gui.as_mut().unwrap();
-            let _pass_events_to_game = !gui.update(&event);
-        }
     }
 
     fn about_to_wait(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop) {
         let renderer = self.windows.get_primary_renderer().unwrap();
         renderer.window().request_redraw();
     }
-}
-
-/// Create a new image view to render the scene and overlay the GUI.
-fn create_scene_image(
-    memory_allocator: Arc<dyn MemoryAllocator>,
-    window_size: [f32; 2],
-    format: Format,
-    usage: ImageUsage,
-) -> Arc<ImageView> {
-    ImageView::new_default(
-        Image::new(
-            memory_allocator,
-            ImageCreateInfo {
-                image_type: ImageType::Dim2d,
-                format,
-                usage,
-                extent: [
-                    window_size[0].round() as u32,
-                    window_size[1].round() as u32,
-                    1,
-                ],
-                array_layers: 1,
-                ..Default::default()
-            },
-            AllocationCreateInfo::default(),
-        )
-        .unwrap(),
-    )
-    .unwrap()
 }
 
 /// Setup callback for logging debug information the GPU.

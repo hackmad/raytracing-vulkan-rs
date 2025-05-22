@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0"
 bytemuck = "1.22"
-egui_winit_vulkano = "0.28"
 glam = "0.30"
 image = "0.25"
 ordered-float = "5.0.0"

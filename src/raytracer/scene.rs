@@ -1,3 +1,13 @@
+use super::{
+    Camera, Vk,
+    acceleration::AccelerationStructures,
+    create_mesh_storage_buffer,
+    model::Model,
+    pipeline::RtPipeline,
+    shaders::{ShaderModules, closest_hit, ray_gen},
+    texture::Textures,
+};
+use crate::raytracer::MaterialColors;
 use anyhow::Result;
 use std::sync::{Arc, RwLock};
 use vulkano::{
@@ -11,18 +21,6 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
     pipeline::{PipelineBindPoint, ray_tracing::ShaderBindingTable},
     sync::GpuFuture,
-};
-
-use crate::raytracer::MaterialColors;
-
-use super::{
-    Camera, Vk,
-    acceleration::AccelerationStructures,
-    create_mesh_storage_buffer,
-    model::Model,
-    pipeline::RtPipeline,
-    shaders::{ShaderModules, closest_hit, ray_gen},
-    texture::Textures,
 };
 
 /// The vulkano resources specific to the rendering pipeline.
