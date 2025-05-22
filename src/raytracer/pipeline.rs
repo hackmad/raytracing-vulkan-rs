@@ -43,8 +43,14 @@ impl RtPipeline {
     /// Sampler + Sampled Images
     pub const SAMPLERS_AND_TEXTURES_LAYOUT: usize = 4;
 
-    /// Storage buffer used for material color data.
-    pub const MATERIAL_COLORS_LAYOUT: usize = 5;
+    /// Storage buffer used for scene data.
+    pub const SCENE_DATA_LAYOUT: usize = 5;
+
+    /// Binding index used for scene data - material colours.
+    pub const MATERIAL_COLOURS_BINDING_INDEX: u32 = 0;
+
+    /// Binding index used for scene data - lights.
+    pub const LIGHTS_BINDING_INDEX: u32 = 1;
 
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
@@ -74,7 +80,7 @@ impl RtPipeline {
                     create_render_image_layout(device.clone()),
                     create_mesh_data_layout(device.clone()),
                     create_sample_and_textures_layout(device.clone(), texture_count),
-                    create_material_colors_layout(device.clone()),
+                    create_scene_data_layout(device.clone()),
                 ],
                 push_constant_ranges: vec![PushConstantRange {
                     stages: ShaderStages::CLOSEST_HIT,
@@ -219,18 +225,29 @@ fn create_sample_and_textures_layout(
     .unwrap()
 }
 
-/// Create a pipeline layout for material colors.
-fn create_material_colors_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+/// Create a pipeline layout for scene data.
+fn create_scene_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::CLOSEST_HIT,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                },
-            )]
+            bindings: [
+                // Materials.
+                (
+                    RtPipeline::MATERIAL_COLOURS_BINDING_INDEX,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                    },
+                ),
+                // Lights.
+                (
+                    RtPipeline::LIGHTS_BINDING_INDEX,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                    },
+                ),
+            ]
             .into_iter()
             .collect(),
             ..Default::default()

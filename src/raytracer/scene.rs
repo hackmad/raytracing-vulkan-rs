@@ -1,17 +1,17 @@
 use super::{
-    Camera, Vk,
+    Camera, LightPropertyData, Vk,
     acceleration::AccelerationStructures,
-    create_mesh_storage_buffer,
+    create_device_local_buffer, create_mesh_storage_buffer,
     model::Model,
     pipeline::RtPipeline,
     shaders::{ShaderModules, closest_hit, ray_gen},
     texture::Textures,
 };
-use crate::raytracer::MaterialColors;
+use crate::raytracer::MaterialColours;
 use anyhow::Result;
 use std::sync::{Arc, RwLock};
 use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage},
     descriptor_set::{DescriptorSet, WriteDescriptorSet},
     image::{
@@ -35,7 +35,7 @@ struct SceneResources {
     textures_descriptor_set: Arc<DescriptorSet>,
 
     /// Descriptor set for binding material data.
-    material_colors_descriptor_set: Arc<DescriptorSet>,
+    scene_data_descriptor_set: Arc<DescriptorSet>,
 
     /// The shader binding table.
     shader_binding_table: ShaderBindingTable,
@@ -52,7 +52,7 @@ struct SceneResources {
 
 impl SceneResources {
     /// Create vulkano resources for rendering a new scene with given models.
-    fn new(vk: Arc<Vk>, models: &[Model]) -> Result<Self> {
+    fn new(vk: Arc<Vk>, models: &[Model], lights: &[LightPropertyData]) -> Result<Self> {
         // Load shader modules.
         let shader_modules = ShaderModules::load(vk.device.clone());
 
@@ -61,15 +61,16 @@ impl SceneResources {
         let texture_count = textures.image_views.len() as u32;
         //println!("{textures:?}");
 
-        // Load material colors.
-        let material_colors = MaterialColors::load(models);
-        let material_color_count = material_colors.colors.len() as u32;
-        //println!("{material_colors:?}");
+        // Load material colours.
+        let material_colours = MaterialColours::load(models);
+        let material_colour_count = material_colours.colours.len() as u32;
+        //println!("{material_colours:?}");
 
         // Push constants.
         let closest_hit_push_constants = closest_hit::PushConstantData {
-            texture_count,
-            material_color_count,
+            textureCount: texture_count,
+            materialColourCount: material_colour_count,
+            lightCount: lights.len() as _,
         };
 
         let closest_hit_push_constants_bytes = size_of::<closest_hit::PushConstantData>() as u32;
@@ -103,7 +104,7 @@ impl SceneResources {
         // Mesh data won't change either. We can create its descriptor set and clone it later
         // during render.
         let mesh_data =
-            create_mesh_storage_buffer(vk.clone(), models, &textures, &material_colors)?;
+            create_mesh_storage_buffer(vk.clone(), models, &textures, &material_colours)?;
 
         let mesh_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -142,31 +143,37 @@ impl SceneResources {
             [],
         )?;
 
-        // Material colors
-        let mat_colors = if material_color_count > 0 {
-            material_colors.colors
+        // Scene data.
+        let mat_colours = if material_colour_count > 0 {
+            material_colours.colours
         } else {
-            // We cannot create buffer for empty array. Push constants will have material colors count which can
+            // We cannot create buffer for empty array. Push constants will have material colours count which can
             // be used in shaders to make sure out-of-bounds access can be checked.
             vec![[0.0, 0.0, 0.0]]
         };
-        let material_colors_buffer = Buffer::from_iter(
-            vk.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::STORAGE_BUFFER,
-                ..Default::default()
-            },
-            AllocationCreateInfo {
-                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                ..Default::default()
-            },
-            mat_colors,
+
+        let material_colours_buffer = create_device_local_buffer(
+            vk.clone(),
+            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+            mat_colours,
         )?;
-        let material_colors_descriptor_set = DescriptorSet::new(
+
+        let lights_buffer: Subbuffer<[closest_hit::Light]> = create_device_local_buffer(
+            vk.clone(),
+            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+            lights.iter().map(|light| light.into()),
+        )?;
+
+        let scene_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
-            layouts[RtPipeline::MATERIAL_COLORS_LAYOUT].clone(),
-            vec![WriteDescriptorSet::buffer(0, material_colors_buffer)],
+            layouts[RtPipeline::SCENE_DATA_LAYOUT].clone(),
+            vec![
+                WriteDescriptorSet::buffer(
+                    RtPipeline::MATERIAL_COLOURS_BINDING_INDEX,
+                    material_colours_buffer,
+                ),
+                WriteDescriptorSet::buffer(RtPipeline::LIGHTS_BINDING_INDEX, lights_buffer),
+            ],
             [],
         )?;
 
@@ -178,7 +185,7 @@ impl SceneResources {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
-            material_colors_descriptor_set,
+            scene_data_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             closest_hit_push_constants,
@@ -195,31 +202,41 @@ pub struct Scene {
     /// Camera.
     camera: Arc<RwLock<dyn Camera>>,
 
+    /// Lights.
+    lights: Vec<LightPropertyData>,
+
     /// Vulkano resources specific to the rendering pipeline.
     resources: Option<SceneResources>,
 }
 
 impl Scene {
     /// Create a new scene from the given models and camera.
-    pub fn new(vk: Arc<Vk>, models: &[Model], camera: Arc<RwLock<dyn Camera>>) -> Result<Self> {
+    pub fn new(
+        vk: Arc<Vk>,
+        models: &[Model],
+        camera: Arc<RwLock<dyn Camera>>,
+        lights: &[LightPropertyData],
+    ) -> Result<Self> {
         if models.len() == 0 {
             Ok(Scene {
                 vk,
                 resources: None,
                 camera,
+                lights: Vec::from(lights),
             })
         } else {
-            SceneResources::new(vk.clone(), models).map(|resources| Scene {
+            SceneResources::new(vk.clone(), models, lights).map(|resources| Scene {
                 vk,
                 resources: Some(resources),
                 camera,
+                lights: Vec::from(lights),
             })
         }
     }
 
     /// Rebuilds the scene with new models.
     pub fn rebuild(&mut self, models: &[Model]) -> Result<()> {
-        let resources = SceneResources::new(self.vk.clone(), models)?;
+        let resources = SceneResources::new(self.vk.clone(), models, &self.lights)?;
         self.resources = Some(resources);
         Ok(())
     }
@@ -304,7 +321,7 @@ impl Scene {
                         render_image_descriptor_set,
                         resources.mesh_data_descriptor_set.clone(),
                         resources.textures_descriptor_set.clone(),
-                        resources.material_colors_descriptor_set.clone(),
+                        resources.scene_data_descriptor_set.clone(),
                     ],
                 )
                 .unwrap()

@@ -1,4 +1,4 @@
-use crate::raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk};
+use crate::raytracer::{Camera, LightPropertyData, Model, PerspectiveCamera, Scene, Vk};
 use glam::Vec3;
 use std::sync::{Arc, RwLock};
 use vulkano::{
@@ -171,8 +171,14 @@ impl ApplicationHandler for App {
             window_size[1] as u32,
         )));
 
+        // Create lights.
+        let lights = [
+            LightPropertyData::new_spot(4.0, [3.0, 3.0, 0.0]),
+            LightPropertyData::new_directional(1.0, [-3.0, 3.0, 0.0]),
+        ];
+
         // Create the raytracing pipeline
-        let scene = Scene::new(self.vk.clone(), &models, camera).unwrap();
+        let scene = Scene::new(self.vk.clone(), &models, camera, &lights).unwrap();
         self.scene = Some(scene);
     }
 
