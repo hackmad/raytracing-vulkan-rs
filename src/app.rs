@@ -17,7 +17,7 @@ use vulkano::{
         },
     },
     memory::allocator::{AllocationCreateInfo, MemoryAllocator},
-    swapchain::Surface,
+    swapchain::{ColorSpace, Surface},
 };
 use vulkano_util::{
     context::{VulkanoConfig, VulkanoContext},
@@ -48,7 +48,7 @@ pub struct App {
     vk: Arc<Vk>,
 
     /// The image view for rendering the scene separate from the GUI.
-    scene_image: Option<Arc<ImageView>>,
+    scene_image_view: Option<Arc<ImageView>>,
 
     /// The scene to render.
     scene: Option<Scene>,
@@ -136,7 +136,7 @@ impl App {
         Self {
             context,
             windows,
-            scene_image: None,
+            scene_image_view: None,
             scene: None,
             gui: None,
             gui_state: None,
@@ -146,17 +146,22 @@ impl App {
     }
 
     /// Rebuild the image view used for rendering and update camera settings when window size changes.
-    fn rebuild_scene_image(&mut self, window_size: [f32; 2]) {
-        let scene_image = create_scene_image(self.context.memory_allocator().clone(), window_size);
+    fn rebuild_scene_image(&mut self, window_size: [f32; 2], format: Format, usage: ImageUsage) {
+        let scene_image_view = create_scene_image(
+            self.context.memory_allocator().clone(),
+            window_size,
+            format,
+            usage,
+        );
 
         let gui = self.gui.as_mut().unwrap();
 
         self.gui_state
             .as_mut()
             .unwrap()
-            .update_scene_image(gui, scene_image.clone());
+            .update_scene_image(gui, scene_image_view.clone());
 
-        self.scene_image = Some(scene_image);
+        self.scene_image_view = Some(scene_image_view);
 
         if let Some(scene) = self.scene.as_mut() {
             scene.update_window_size(window_size);
@@ -178,6 +183,9 @@ impl ApplicationHandler for App {
             },
             |ci| {
                 ci.image_format = Format::B8G8R8A8_UNORM;
+                ci.image_color_space = ColorSpace::SrgbNonLinear;
+                ci.image_usage = ImageUsage::STORAGE  // For scene
+                    | ImageUsage::SAMPLED | ImageUsage::COLOR_ATTACHMENT; // For egui
                 ci.min_image_count = ci.min_image_count.max(2);
             },
         );
@@ -187,9 +195,16 @@ impl ApplicationHandler for App {
             .get_primary_renderer_mut()
             .expect("Failed to get primary renderer");
 
+        println!("Swapchain image format: {:?}", renderer.swapchain_format());
+
         // Create storage image for rendering and display.
         let window_size = renderer.window_size();
-        let scene_image = create_scene_image(self.vk.memory_allocator.clone(), window_size);
+        let scene_image_view = create_scene_image(
+            self.vk.memory_allocator.clone(),
+            window_size,
+            renderer.swapchain_format(),
+            renderer.swapchain_image_view().usage(),
+        );
 
         // Load models.
         let models = Model::load_obj(&self.current_file_path).unwrap();
@@ -219,12 +234,12 @@ impl ApplicationHandler for App {
         );
         self.gui_state = Some(GuiState::new(
             &mut gui,
-            scene_image.clone(),
+            scene_image_view.clone(),
             DEFAULT_ASSET_FILE_PATH,
         ));
         self.gui = Some(gui);
 
-        self.scene_image = Some(scene_image);
+        self.scene_image_view = Some(scene_image_view);
     }
 
     fn window_event(
@@ -238,17 +253,20 @@ impl ApplicationHandler for App {
         let renderer_window_size = renderer.window_size();
         let renderer_scale_factor = renderer.window().scale_factor();
 
+        let swapchain_format = renderer.swapchain_format();
+        let swapchain_usage = renderer.swapchain_image_view().usage();
+
         let scene = self.scene.as_mut().unwrap();
-        let scene_image = self.scene_image.as_ref().unwrap();
+        let scene_image_view = self.scene_image_view.as_ref().unwrap();
 
         match event {
             WindowEvent::Resized(window_size) => {
                 renderer.resize();
-                self.rebuild_scene_image(window_size.into());
+                self.rebuild_scene_image(window_size.into(), swapchain_format, swapchain_usage);
             }
             WindowEvent::ScaleFactorChanged { .. } => {
                 renderer.resize();
-                self.rebuild_scene_image(renderer_window_size);
+                self.rebuild_scene_image(renderer_window_size, swapchain_format, swapchain_usage);
             }
             WindowEvent::CloseRequested => {
                 event_loop.exit();
@@ -292,7 +310,7 @@ impl ApplicationHandler for App {
                 match renderer.acquire(None, |_| {}) {
                     Ok(future) => {
                         // Render scene
-                        let after_scene_render = scene.render(future, scene_image.clone());
+                        let after_scene_render = scene.render(future, scene_image_view.clone());
 
                         // Render gui
                         let after_gui_render =
@@ -330,21 +348,22 @@ impl ApplicationHandler for App {
 fn create_scene_image(
     memory_allocator: Arc<dyn MemoryAllocator>,
     window_size: [f32; 2],
+    format: Format,
+    usage: ImageUsage,
 ) -> Arc<ImageView> {
     ImageView::new_default(
         Image::new(
             memory_allocator,
             ImageCreateInfo {
                 image_type: ImageType::Dim2d,
-                format: Format::B8G8R8A8_UNORM,
+                format,
+                usage,
                 extent: [
                     window_size[0].round() as u32,
                     window_size[1].round() as u32,
                     1,
                 ],
                 array_layers: 1,
-                usage: ImageUsage::STORAGE | // This is for the raytracer's descriptor set layout.
-                        ImageUsage::SAMPLED | ImageUsage::COLOR_ATTACHMENT, // These are for egui.
                 ..Default::default()
             },
             AllocationCreateInfo::default(),
