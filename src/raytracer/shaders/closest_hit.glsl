@@ -88,8 +88,8 @@ void main() {
 
     // Vector toward the light.
     int lightType = 0;
-    float lightIntensity = 0.5;
-    vec3 lightPositionOrDirection = vec3(5.0, 5.0, 0.0);
+    float lightIntensity = 4.0;
+    vec3 lightPositionOrDirection = vec3(3.0, 3.0, 0.0);
     float lightDistance = 10000.0; // Default for directional.
 
     vec3 L;

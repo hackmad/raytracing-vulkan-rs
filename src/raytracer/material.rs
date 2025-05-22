@@ -1,8 +1,6 @@
-use std::{collections::HashMap, fmt, path::PathBuf};
-
-use egui_winit_vulkano::egui::emath::OrderedFloat;
-
 use super::{Model, shaders::closest_hit};
+use ordered_float::OrderedFloat;
+use std::{collections::HashMap, fmt, path::PathBuf};
 
 /// Material property types. These will correspond to `MAT_PROP_TYPE_*` constants in the shader source.
 #[derive(Clone, Copy, Debug)]
