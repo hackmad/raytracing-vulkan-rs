@@ -63,6 +63,30 @@ struct Mesh {
 
 
 // --------------------------------------------------------------------------------
+// Ray payload
+
+struct RayPayload {
+    uint rngState;
+    bool isMissed;
+    bool isScattered;
+    vec3 scatteredRayOrigin;
+    vec3 scatteredRayDirection;
+    vec3 attenuation;
+};
+
+RayPayload initRayPayload(uint rngState) {
+    RayPayload rp;
+    rp.rngState = rngState;
+    rp.isMissed = false;
+    rp.isScattered = false;
+    rp.scatteredRayOrigin = vec3(0.0);
+    rp.scatteredRayDirection = vec3(0.0);
+    rp.attenuation = vec3(0.0);
+    return rp;
+}
+
+
+// --------------------------------------------------------------------------------
 // Map a value from [fromMin, fromMax] to [toMin, toMax].
 float map(float value, float fromMin, float fromMax, float toMin, float toMax) {
   return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
@@ -79,13 +103,20 @@ vec4 map(vec4 value, float fromMin, float fromMax, float toMin, float toMax) {
 
 
 // --------------------------------------------------------------------------------
-// Square of a vector's length.
+// General vector utility functions.
 
+// Square of a vector's length.
 float lengthSquared(vec2 v) {
     return v.x * v.x + v.y * v.y;
 }
 float lengthSquared(vec3 v) {
     return v.x * v.x + v.y * v.y + v.z * v.z;
+}
+
+// Return true if the vector is close to zero in all dimensions.
+bool nearZero(vec3 v) {
+    float s = 1e-8;
+    return (abs(v.x) < s) && (abs(v.y) < s) && (abs(v.z) < s);
 }
 
 // --------------------------------------------------------------------------------
@@ -148,6 +179,17 @@ vec3 randomUnitVec3(inout uint rngState) {
             return p / sqrt(lensq);
         }
     }
+}
+
+vec3 randomVec3OnHemisphere(inout uint rngState, vec3 normal) {
+    vec3 onUnitSphere = randomUnitVec3(rngState);
+
+    if (dot(onUnitSphere, normal) > 0.0) {
+        // In the same hemisphere as the normal.
+        return onUnitSphere;
+    }
+
+    return -onUnitSphere;
 }
 
 // Returns the vector to a random point in the [-.5, -.5] - [+.5, +.5] unit square.

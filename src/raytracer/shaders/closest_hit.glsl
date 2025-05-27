@@ -4,7 +4,7 @@
 
 #include "common.glsl"
 
-layout(location = 0) rayPayloadInEXT vec3 rayPayload;
+layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
 hitAttributeEXT vec2 hitAttribs;
 
 layout(location = 1) rayPayloadEXT bool isShadowed;
@@ -65,13 +65,46 @@ MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
     return MeshVertex(worldSpacePosition, worldSpaceNormal, texCoord);
 }
 
-Material unpackInstanceMaterial(const int instanceId, const uint mat_prop_type) {
+vec3 unpackInstanceMaterial(const int instanceId, const uint mat_prop_type, MeshVertex vertex) {
     Mesh mesh = mesh_data.values[instanceId];
-    return mesh.materialsRef.values[mat_prop_type];
+    Material mat = mesh.materialsRef.values[mat_prop_type];
+
+    vec3 colour = vec3(0.0);
+    switch (mat.propValueType) {
+        case MAT_PROP_VALUE_TYPE_RGB:
+            if (mat.index >= 0 && mat.index < pc.materialColourCount) {
+                colour = material_colour.values[mat.index];
+            }
+            break;
+
+        case MAT_PROP_VALUE_TYPE_TEXTURE:
+            if (mat.index >= 0 && mat.index < pc.textureCount) {
+                colour = texture(
+                        nonuniformEXT(sampler2D(textures[mat.index], textureSampler)),
+                        vertex.texCoord
+                        ).rgb; // Ignore alpha for now.
+            }
+            break;
+    }
+
+    return colour;
 }
 
 void main() {
     MeshVertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
-    rayPayload = map(vertex.normal, -1.0, 1.0, 0.0, 1.0);
+
+    vec3 albedo = unpackInstanceMaterial(gl_InstanceID, MAT_PROP_TYPE_DIFFUSE, vertex);
+
+    vec3 scatterDirection = vertex.normal + randomUnitVec3(rayPayload.rngState);
+
+    // Catch degenerate scatter direction.
+    if (nearZero(scatterDirection)) {
+        scatterDirection = vertex.normal;
+    }
+
+    rayPayload.attenuation = albedo;
+    rayPayload.isScattered = true;
+    rayPayload.scatteredRayDirection = scatterDirection;
+    rayPayload.scatteredRayOrigin = vertex.position;
 }
 

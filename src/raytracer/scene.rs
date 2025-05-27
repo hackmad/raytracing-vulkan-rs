@@ -84,7 +84,8 @@ impl SceneResources {
 
         let ray_gen_push_constants = ray_gen::PushConstantData {
             resolution: [window_size[0] as u32, window_size[1] as u32],
-            samplesPerPixel: 64,
+            samplesPerPixel: 100,
+            maxRayDepth: 50,
         };
         let ray_gen_push_constants_bytes = size_of::<ray_gen::PushConstantData>() as u32;
 
