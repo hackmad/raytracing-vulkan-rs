@@ -69,6 +69,7 @@ impl RtPipeline {
         groups: &[RayTracingShaderGroupCreateInfo],
         texture_count: u32,
         closest_hit_push_constants_bytes: u32,
+        ray_gen_push_constants_bytes: u32,
     ) -> Result<Self> {
         let pipeline_layout = PipelineLayout::new(
             device.clone(),
@@ -82,11 +83,18 @@ impl RtPipeline {
                     create_sample_and_textures_layout(device.clone(), texture_count),
                     create_scene_data_layout(device.clone()),
                 ],
-                push_constant_ranges: vec![PushConstantRange {
-                    stages: ShaderStages::CLOSEST_HIT,
-                    offset: 0,
-                    size: closest_hit_push_constants_bytes,
-                }],
+                push_constant_ranges: vec![
+                    PushConstantRange {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        offset: 0,
+                        size: closest_hit_push_constants_bytes,
+                    },
+                    PushConstantRange {
+                        stages: ShaderStages::RAYGEN,
+                        offset: 0,
+                        size: ray_gen_push_constants_bytes,
+                    },
+                ],
                 ..Default::default()
             },
         )?;

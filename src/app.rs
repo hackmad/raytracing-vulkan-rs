@@ -178,7 +178,7 @@ impl ApplicationHandler for App {
         ];
 
         // Create the raytracing pipeline
-        let scene = Scene::new(self.vk.clone(), &models, camera, &lights).unwrap();
+        let scene = Scene::new(self.vk.clone(), &models, camera, &lights, window_size).unwrap();
         self.scene = Some(scene);
     }
 
@@ -189,6 +189,7 @@ impl ApplicationHandler for App {
         event: WindowEvent,
     ) {
         let renderer = self.windows.get_renderer_mut(window_id).unwrap();
+        let window_size = renderer.window_size();
         let scene = self.scene.as_mut().unwrap();
 
         match event {
@@ -230,7 +231,7 @@ impl ApplicationHandler for App {
 
                         if self.current_file_path != selected_path {
                             match Model::load_obj(&selected_path) {
-                                Ok(models) => match scene.rebuild(&models) {
+                                Ok(models) => match scene.rebuild(&models, window_size) {
                                     Ok(()) => {
                                         self.current_file_path = selected_path;
                                     }

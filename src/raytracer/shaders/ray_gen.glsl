@@ -15,37 +15,53 @@ layout(set = 1, binding = 0) uniform Camera {
 
 layout(set = 2, binding = 0, rgba8) uniform image2D image;
 
-void main() {
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-    const vec2 in_uv = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
-    vec2 d = in_uv * 2.0 - 1.0;
+layout(push_constant) uniform PushConstantData {
+    uvec2 resolution;
+    uint  samplesPerPixel;
+} pc;
 
-    vec4 origin = camera.viewInverse * vec4(0, 0, 0, 1);
-    vec4 target = camera.projInverse * vec4(d.x, d.y, 1, 1);
-    vec4 direction = camera.viewInverse * vec4(normalize(target.xyz), 0);
+void main() {
+    uint rngState = initRNG(gl_LaunchIDEXT.xy, pc.resolution);
+
+    float pixelSamplesScale = 1.0 / float(pc.samplesPerPixel);
 
     uint rayFlags = gl_RayFlagsOpaqueEXT;
     float tMin = 0.001;
     float tMax = 10000.0;
 
-    // sbtRecordOffset, sbtRecordStride control how the hitGroupId (VkAccelerationStructureInstanceKHR::
-    // instanceShaderBindingTableRecordOffset) of each instance is used to look up a hit group in the 
-    // SBT's hit group array. Since we only have one hit group, both are set to 0.
-    //
-    // missIndex is the index, within the miss shader group array of the SBT to call if no intersection is found.
-    traceRayEXT(
-        topLevelAS,    // acceleration structure
-        rayFlags,      // rayFlags
-        0xFF,          // cullMask
-        0,             // sbtRecordOffset
-        0,             // sbtRecordStride
-        0,             // missIndex
-        origin.xyz,    // ray origin
-        tMin,          // ray min range
-        direction.xyz, // ray direction
-        tMax,          // ray max range
-        0);            // payload (location = 0)
+    vec3 colour = vec3(0.0);
+    for (int i = 0; i < pc.samplesPerPixel; ++i) {
+        const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
-    vec3 colour = linearTosRGB(rayPayload);
-    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(colour, 1.0));
+        const vec2 randomPixelCenter = pixelCenter + sampleSquare(rngState);
+
+        const vec2 screenUV = randomPixelCenter / vec2(gl_LaunchSizeEXT.xy);
+        vec2 d = screenUV * 2.0 - 1.0;
+
+        vec4 origin = camera.viewInverse * vec4(0, 0, 0, 1);
+        vec4 target = camera.projInverse * vec4(d.x, d.y, 1, 1);
+        vec4 direction = camera.viewInverse * vec4(normalize(target.xyz), 0);
+
+        // sbtRecordOffset, sbtRecordStride control how the hitGroupId (VkAccelerationStructureInstanceKHR::
+        // instanceShaderBindingTableRecordOffset) of each instance is used to look up a hit group in the 
+        // SBT's hit group array. Since we only have one hit group, both are set to 0.
+        //
+        // missIndex is the index, within the miss shader group array of the SBT to call if no intersection is found.
+        traceRayEXT(
+                topLevelAS,    // acceleration structure
+                rayFlags,      // rayFlags
+                0xFF,          // cullMask
+                0,             // sbtRecordOffset
+                0,             // sbtRecordStride
+                0,             // missIndex
+                origin.xyz,    // ray origin
+                tMin,          // ray min range
+                direction.xyz, // ray direction
+                tMax,          // ray max range
+                0);            // payload (location = 0)
+
+        colour += pixelSamplesScale * rayPayload;
+    }
+
+    imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(linearTosRGB(colour), 1.0));
 }

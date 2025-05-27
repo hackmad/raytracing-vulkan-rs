@@ -79,97 +79,80 @@ vec4 map(vec4 value, float fromMin, float fromMax, float toMin, float toMax) {
 
 
 // --------------------------------------------------------------------------------
-// Random number generator.
+// Square of a vector's length.
 
-// Tausworthe Generator.
-// S1, S2, S3, and M are all constants, and z is part of the
-// private per-thread generator state.
-uint tausStep(uint z, int S1, int S2, int S3, uint M) {
-    uint b = (((z << S1) ^ z) >> S2);
-    return (((z & M) << S3) ^ b);    
+float lengthSquared(vec2 v) {
+    return v.x * v.x + v.y * v.y;
+}
+float lengthSquared(vec3 v) {
+    return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
-// Linear Congruential Generator.
-// A and C are constants
-uint lcgStep(uint z, uint A, uint C) {
-    return (A * z + C);    
+// --------------------------------------------------------------------------------
+// Random number generator
+
+uint initRNG(uvec2 pixel, uvec2 resolution) {
+    return resolution.x * pixel.y + pixel.x;
 }
 
-// Hybrid Tausworthe + LCG Generator.
-float randomFloat(inout uvec4 state) {
-    state.x = tausStep(state.x, 13, 19, 12, 4294967294);
-    state.y = tausStep(state.y, 2, 25, 4, 4294967288);
-    state.z = tausStep(state.z, 3, 11, 17, 4294967280);
-    state.w = lcgStep(state.w, 1664525, 1013904223);
-    return 2.3283064365387e-10 * (state.x ^ state.y ^ state.z ^ state.w);
+// pcg32i_random_t with inc = 1.
+uint stepRNG(uint rngState) {
+    return rngState * 747796405 + 1;
 }
-vec2 randomVec2(inout uvec4 state) {
-    float v0 = randomFloat(state);
-    float v1 = randomFloat(state);
+float stepAndOutputRNGFloat(inout uint rngState) {
+    // Steps the RNG and returns a floating-point value between 0 and 1 inclusive.
+    // Condensed version of pcg_output_rxs_m_xs_32_32, with simple conversion to floating-point [0, 1].
+    rngState  = stepRNG(rngState);
+    uint word = ((rngState >> ((rngState >> 28) + 4)) ^ rngState) * 277803737;
+    word      = (word >> 22) ^ word;
+    return float(word) / 4294967295.0;
+}
+
+// Returns a random real in [0, 1).
+float randomFloat(inout uint rngState) {
+    return stepAndOutputRNGFloat(rngState);
+}
+vec2 randomVec2(inout uint rngState) {
+    float v0 = randomFloat(rngState);
+    float v1 = randomFloat(rngState);
     return vec2(v0, v1);
 }
-vec3 randomVec3(inout uvec4 state) {
-    float v0 = randomFloat(state);
-    float v1 = randomFloat(state);
-    float v2 = randomFloat(state);
+vec3 randomVec3(inout uint rngState) {
+    float v0 = randomFloat(rngState);
+    float v1 = randomFloat(rngState);
+    float v2 = randomFloat(rngState);
     return vec3(v0, v1, v2);
 }
 
-// Returns a random in the half open interval [min, max).
-float randomFloat(inout uvec4 state, float min, float max) {
-    float v = randomFloat(state);
-    return min + (max - min) * v;
+// Returns a random real in [min, max).
+float randomFloat(inout uint rngState, float min, float max) {
+    return min + (max - min) * randomFloat(rngState);
 }
-vec2 randomVec2(inout uvec4 state, float min, float max) {
-    vec2 v = randomVec2(state);
-    return min + (max - min) * v;
+vec2 randomVec2(inout uint rngState, float min, float max) {
+    float v0 = randomFloat(rngState, min, max);
+    float v1 = randomFloat(rngState, min, max);
+    return vec2(v0, v1);
 }
-vec3 randomVec3(inout uvec4 state, float min, float max) {
-    vec3 v = randomVec3(state);
-    return min + (max - min) * v;
+vec3 randomVec3(inout uint rngState, float min, float max) {
+    float v0 = randomFloat(rngState, min, max);
+    float v1 = randomFloat(rngState, min, max);
+    float v2 = randomFloat(rngState, min, max);
+    return vec3(v0, v1, v2);
 }
 
-vec2 randomUnitVec2(inout uvec4 state) {
+vec3 randomUnitVec3(inout uint rngState) {
     while (true) {
-        vec2 p = randomVec2(state, -1.0, 1.0);
-        float lensq = length(p);
-
-        if (lensq > 0.0 && lensq <= 1.0) {
-            return p / sqrt(lensq);
-        }
-    }
-}
-vec3 randomUnitVec3(inout uvec4 state) {
-    while (true) {
-        vec3 p = randomVec3(state, -1.0, 1.0);
-        float lensq = length(p);
-
-        if (lensq > 0.0 && lensq <= 1.0) {
+        vec3 p = randomVec3(rngState, -1.0, 1.0);
+        float lensq = lengthSquared(p);
+        if (1e-160 < lensq && lensq <= 1) {
             return p / sqrt(lensq);
         }
     }
 }
 
-vec3 randomOnHemisphere(inout uvec4 state, vec3 normal) {
-    vec3 onUnitSphere = randomUnitVec3(state);
-
-    if (dot(onUnitSphere, normal) < 0.0) { 
-        // Not in the same hemisphere as the normal.
-        return -onUnitSphere;
-    }
-
-    return onUnitSphere;
-}
-
-// Box-Muller Transform
-vec2 gaussianTransformVec2(inout uvec4 state) {
-  float u0 = randomFloat(state);
-  float u1 = randomFloat(state);
-
-  float r = sqrt(-2.0 * log(u0));
-  float theta = 2.0 * PI * u1;
-
-  return vec2(r * sin(theta), r * cos(theta));
+// Returns the vector to a random point in the [-.5, -.5] - [+.5, +.5] unit square.
+vec2 sampleSquare(inout uint rngState) {
+    return randomVec2(rngState) - vec2(0.5);
 }
 
 

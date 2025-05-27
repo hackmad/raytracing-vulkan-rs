@@ -46,13 +46,21 @@ struct SceneResources {
     /// Push constants for the closest hit shader.
     closest_hit_push_constants: closest_hit::PushConstantData,
 
+    /// Push constants for the ray generation shader.
+    ray_gen_push_constants: ray_gen::PushConstantData,
+
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
     _acceleration_structures: AccelerationStructures,
 }
 
 impl SceneResources {
     /// Create vulkano resources for rendering a new scene with given models.
-    fn new(vk: Arc<Vk>, models: &[Model], lights: &[LightPropertyData]) -> Result<Self> {
+    fn new(
+        vk: Arc<Vk>,
+        models: &[Model],
+        lights: &[LightPropertyData],
+        window_size: [f32; 2],
+    ) -> Result<Self> {
         // Load shader modules.
         let shader_modules = ShaderModules::load(vk.device.clone());
 
@@ -70,11 +78,15 @@ impl SceneResources {
         let closest_hit_push_constants = closest_hit::PushConstantData {
             textureCount: texture_count,
             materialColourCount: material_colour_count,
-            lightCount: lights.len() as _,
+            lightCount: (lights.len() as u32).into(),
         };
-
         let closest_hit_push_constants_bytes = size_of::<closest_hit::PushConstantData>() as u32;
-        //println!("closest_hit_push_constants_bytes = {closest_hit_push_constants_bytes}");
+
+        let ray_gen_push_constants = ray_gen::PushConstantData {
+            resolution: [window_size[0] as u32, window_size[1] as u32],
+            samplesPerPixel: 64,
+        };
+        let ray_gen_push_constants_bytes = size_of::<ray_gen::PushConstantData>() as u32;
 
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(
@@ -83,6 +95,7 @@ impl SceneResources {
             &shader_modules.groups,
             texture_count,
             closest_hit_push_constants_bytes,
+            ray_gen_push_constants_bytes,
         )?;
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
@@ -189,6 +202,7 @@ impl SceneResources {
             shader_binding_table,
             rt_pipeline,
             closest_hit_push_constants,
+            ray_gen_push_constants,
             _acceleration_structures: acceleration_structures,
         })
     }
@@ -216,6 +230,7 @@ impl Scene {
         models: &[Model],
         camera: Arc<RwLock<dyn Camera>>,
         lights: &[LightPropertyData],
+        window_size: [f32; 2],
     ) -> Result<Self> {
         if models.len() == 0 {
             Ok(Scene {
@@ -225,7 +240,7 @@ impl Scene {
                 lights: Vec::from(lights),
             })
         } else {
-            SceneResources::new(vk.clone(), models, lights).map(|resources| Scene {
+            SceneResources::new(vk.clone(), models, lights, window_size).map(|resources| Scene {
                 vk,
                 resources: Some(resources),
                 camera,
@@ -235,8 +250,8 @@ impl Scene {
     }
 
     /// Rebuilds the scene with new models.
-    pub fn rebuild(&mut self, models: &[Model]) -> Result<()> {
-        let resources = SceneResources::new(self.vk.clone(), models, &self.lights)?;
+    pub fn rebuild(&mut self, models: &[Model], window_size: [f32; 2]) -> Result<()> {
+        let resources = SceneResources::new(self.vk.clone(), models, &self.lights, window_size)?;
         self.resources = Some(resources);
         Ok(())
     }
@@ -329,6 +344,12 @@ impl Scene {
                     resources.rt_pipeline.get_layout(),
                     0,
                     resources.closest_hit_push_constants.clone(),
+                )
+                .unwrap()
+                .push_constants(
+                    resources.rt_pipeline.get_layout(),
+                    0,
+                    resources.ray_gen_push_constants.clone(),
                 )
                 .unwrap()
                 .bind_pipeline_ray_tracing(resources.rt_pipeline.get())
