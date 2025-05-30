@@ -43,8 +43,8 @@ impl RtPipeline {
     /// Sampler + Sampled Images
     pub const SAMPLERS_AND_TEXTURES_LAYOUT: usize = 4;
 
-    /// Storage buffer used for material color data.
-    pub const MATERIAL_COLORS_LAYOUT: usize = 5;
+    /// Storage buffer used for material colour data.
+    pub const MATERIAL_COLOURS_LAYOUT: usize = 5;
 
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
@@ -63,6 +63,7 @@ impl RtPipeline {
         groups: &[RayTracingShaderGroupCreateInfo],
         texture_count: u32,
         closest_hit_push_constants_bytes: u32,
+        ray_gen_push_constants_bytes: u32,
     ) -> Result<Self> {
         let pipeline_layout = PipelineLayout::new(
             device.clone(),
@@ -74,13 +75,20 @@ impl RtPipeline {
                     create_render_image_layout(device.clone()),
                     create_mesh_data_layout(device.clone()),
                     create_sample_and_textures_layout(device.clone(), texture_count),
-                    create_material_colors_layout(device.clone()),
+                    create_material_colours_layout(device.clone()),
                 ],
-                push_constant_ranges: vec![PushConstantRange {
-                    stages: ShaderStages::CLOSEST_HIT,
-                    offset: 0,
-                    size: closest_hit_push_constants_bytes,
-                }],
+                push_constant_ranges: vec![
+                    PushConstantRange {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        offset: 0,
+                        size: closest_hit_push_constants_bytes,
+                    },
+                    PushConstantRange {
+                        stages: ShaderStages::RAYGEN,
+                        offset: 0,
+                        size: ray_gen_push_constants_bytes,
+                    },
+                ],
                 ..Default::default()
             },
         )?;
@@ -219,8 +227,8 @@ fn create_sample_and_textures_layout(
     .unwrap()
 }
 
-/// Create a pipeline layout for material colors.
-fn create_material_colors_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+/// Create a pipeline layout for material colours.
+fn create_material_colours_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {

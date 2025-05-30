@@ -7,7 +7,7 @@ use super::{
     shaders::{ShaderModules, closest_hit, ray_gen},
     texture::Textures,
 };
-use crate::raytracer::MaterialColors;
+use crate::raytracer::MaterialColours;
 use anyhow::Result;
 use std::sync::{Arc, RwLock};
 use vulkano::{
@@ -35,7 +35,7 @@ struct SceneResources {
     textures_descriptor_set: Arc<DescriptorSet>,
 
     /// Descriptor set for binding material data.
-    material_colors_descriptor_set: Arc<DescriptorSet>,
+    material_colours_descriptor_set: Arc<DescriptorSet>,
 
     /// The shader binding table.
     shader_binding_table: ShaderBindingTable,
@@ -46,13 +46,16 @@ struct SceneResources {
     /// Push constants for the closest hit shader.
     closest_hit_push_constants: closest_hit::PushConstantData,
 
+    /// Push constants for the ray generation shader.
+    ray_gen_push_constants: ray_gen::PushConstantData,
+
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
     _acceleration_structures: AccelerationStructures,
 }
 
 impl SceneResources {
     /// Create vulkano resources for rendering a new scene with given models.
-    fn new(vk: Arc<Vk>, models: &[Model]) -> Result<Self> {
+    fn new(vk: Arc<Vk>, models: &[Model], window_size: [f32; 2]) -> Result<Self> {
         // Load shader modules.
         let shader_modules = ShaderModules::load(vk.device.clone());
 
@@ -61,19 +64,24 @@ impl SceneResources {
         let texture_count = textures.image_views.len() as u32;
         //println!("{textures:?}");
 
-        // Load material colors.
-        let material_colors = MaterialColors::load(models);
-        let material_color_count = material_colors.colors.len() as u32;
-        //println!("{material_colors:?}");
+        // Load material colours.
+        let material_colours = MaterialColours::load(models);
+        let material_colour_count = material_colours.colours.len() as u32;
+        //println!("{material_colours:?}");
 
         // Push constants.
         let closest_hit_push_constants = closest_hit::PushConstantData {
-            texture_count,
-            material_color_count,
+            textureCount: texture_count,
+            materialColourCount: material_colour_count,
         };
-
         let closest_hit_push_constants_bytes = size_of::<closest_hit::PushConstantData>() as u32;
-        //println!("closest_hit_push_constants_bytes = {closest_hit_push_constants_bytes}");
+
+        let ray_gen_push_constants = ray_gen::PushConstantData {
+            resolution: [window_size[0] as u32, window_size[1] as u32],
+            samplesPerPixel: 100,
+            maxRayDepth: 50,
+        };
+        let ray_gen_push_constants_bytes = size_of::<ray_gen::PushConstantData>() as u32;
 
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(
@@ -82,6 +90,7 @@ impl SceneResources {
             &shader_modules.groups,
             texture_count,
             closest_hit_push_constants_bytes,
+            ray_gen_push_constants_bytes,
         )?;
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
@@ -103,7 +112,7 @@ impl SceneResources {
         // Mesh data won't change either. We can create its descriptor set and clone it later
         // during render.
         let mesh_data =
-            create_mesh_storage_buffer(vk.clone(), models, &textures, &material_colors)?;
+            create_mesh_storage_buffer(vk.clone(), models, &textures, &material_colours)?;
 
         let mesh_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -142,15 +151,15 @@ impl SceneResources {
             [],
         )?;
 
-        // Material colors
-        let mat_colors = if material_color_count > 0 {
-            material_colors.colors
+        // Material colours
+        let mat_colours = if material_colour_count > 0 {
+            material_colours.colours
         } else {
-            // We cannot create buffer for empty array. Push constants will have material colors count which can
+            // We cannot create buffer for empty array. Push constants will have material colours count which can
             // be used in shaders to make sure out-of-bounds access can be checked.
             vec![[0.0, 0.0, 0.0]]
         };
-        let material_colors_buffer = Buffer::from_iter(
+        let material_colours_buffer = Buffer::from_iter(
             vk.memory_allocator.clone(),
             BufferCreateInfo {
                 usage: BufferUsage::STORAGE_BUFFER,
@@ -161,12 +170,12 @@ impl SceneResources {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            mat_colors,
+            mat_colours,
         )?;
-        let material_colors_descriptor_set = DescriptorSet::new(
+        let material_colours_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
-            layouts[RtPipeline::MATERIAL_COLORS_LAYOUT].clone(),
-            vec![WriteDescriptorSet::buffer(0, material_colors_buffer)],
+            layouts[RtPipeline::MATERIAL_COLOURS_LAYOUT].clone(),
+            vec![WriteDescriptorSet::buffer(0, material_colours_buffer)],
             [],
         )?;
 
@@ -178,10 +187,11 @@ impl SceneResources {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
-            material_colors_descriptor_set,
+            material_colours_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             closest_hit_push_constants,
+            ray_gen_push_constants,
             _acceleration_structures: acceleration_structures,
         })
     }
@@ -201,7 +211,12 @@ pub struct Scene {
 
 impl Scene {
     /// Create a new scene from the given models and camera.
-    pub fn new(vk: Arc<Vk>, models: &[Model], camera: Arc<RwLock<dyn Camera>>) -> Result<Self> {
+    pub fn new(
+        vk: Arc<Vk>,
+        models: &[Model],
+        camera: Arc<RwLock<dyn Camera>>,
+        window_size: [f32; 2],
+    ) -> Result<Self> {
         if models.len() == 0 {
             Ok(Scene {
                 vk,
@@ -209,7 +224,7 @@ impl Scene {
                 camera,
             })
         } else {
-            SceneResources::new(vk.clone(), models).map(|resources| Scene {
+            SceneResources::new(vk.clone(), models, window_size).map(|resources| Scene {
                 vk,
                 resources: Some(resources),
                 camera,
@@ -218,8 +233,8 @@ impl Scene {
     }
 
     /// Rebuilds the scene with new models.
-    pub fn rebuild(&mut self, models: &[Model]) -> Result<()> {
-        let resources = SceneResources::new(self.vk.clone(), models)?;
+    pub fn rebuild(&mut self, models: &[Model], window_size: [f32; 2]) -> Result<()> {
+        let resources = SceneResources::new(self.vk.clone(), models, window_size)?;
         self.resources = Some(resources);
         Ok(())
     }
@@ -304,7 +319,7 @@ impl Scene {
                         render_image_descriptor_set,
                         resources.mesh_data_descriptor_set.clone(),
                         resources.textures_descriptor_set.clone(),
-                        resources.material_colors_descriptor_set.clone(),
+                        resources.material_colours_descriptor_set.clone(),
                     ],
                 )
                 .unwrap()
@@ -312,6 +327,12 @@ impl Scene {
                     resources.rt_pipeline.get_layout(),
                     0,
                     resources.closest_hit_push_constants.clone(),
+                )
+                .unwrap()
+                .push_constants(
+                    resources.rt_pipeline.get_layout(),
+                    0,
+                    resources.ray_gen_push_constants.clone(),
                 )
                 .unwrap()
                 .bind_pipeline_ray_tracing(resources.rt_pipeline.get())

@@ -172,7 +172,7 @@ impl ApplicationHandler for App {
         )));
 
         // Create the raytracing pipeline
-        let scene = Scene::new(self.vk.clone(), &models, camera).unwrap();
+        let scene = Scene::new(self.vk.clone(), &models, camera, window_size).unwrap();
         self.scene = Some(scene);
     }
 
@@ -224,15 +224,20 @@ impl ApplicationHandler for App {
 
                         if self.current_file_path != selected_path {
                             match Model::load_obj(&selected_path) {
-                                Ok(models) => match scene.rebuild(&models) {
-                                    Ok(()) => {
-                                        self.current_file_path = selected_path;
+                                Ok(models) => {
+                                    match scene.rebuild(&models, renderer.window_size()) {
+                                        Ok(()) => {
+                                            self.current_file_path = selected_path;
+                                        }
+                                        Err(e) => {
+                                            println!(
+                                                "Unable to load file {}. {:?}",
+                                                selected_path, e
+                                            );
+                                            self.current_file_path = selected_path;
+                                        }
                                     }
-                                    Err(e) => {
-                                        println!("Unable to load file {}. {:?}", selected_path, e);
-                                        self.current_file_path = selected_path;
-                                    }
-                                },
+                                }
 
                                 Err(e) => {
                                     println!("Error loading file {}. {e:?}", selected_path);

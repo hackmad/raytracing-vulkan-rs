@@ -1,9 +1,10 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 
-layout(location = 0) rayPayloadInEXT vec3 rayPayload;
+#include "common.glsl"
+
+layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
 
 void main() {
-    // For now just use a dark blue solid background color.
-    rayPayload = vec3(0.0, 0.0, 0.2);
+    rayPayload.isMissed = true;
 }
