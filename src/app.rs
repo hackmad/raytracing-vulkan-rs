@@ -1,4 +1,4 @@
-use crate::raytracer::{Camera, LightPropertyData, Model, PerspectiveCamera, Scene, Vk};
+use crate::raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk};
 use glam::Vec3;
 use std::sync::{Arc, RwLock};
 use vulkano::{
@@ -171,14 +171,8 @@ impl ApplicationHandler for App {
             window_size[1] as u32,
         )));
 
-        // Create lights.
-        let lights = [
-            LightPropertyData::new_spot(4.0, [3.0, 3.0, 0.0]),
-            LightPropertyData::new_directional(1.0, [-3.0, 3.0, 0.0]),
-        ];
-
         // Create the raytracing pipeline
-        let scene = Scene::new(self.vk.clone(), &models, camera, &lights, window_size).unwrap();
+        let scene = Scene::new(self.vk.clone(), &models, camera, window_size).unwrap();
         self.scene = Some(scene);
     }
 
@@ -189,7 +183,6 @@ impl ApplicationHandler for App {
         event: WindowEvent,
     ) {
         let renderer = self.windows.get_renderer_mut(window_id).unwrap();
-        let window_size = renderer.window_size();
         let scene = self.scene.as_mut().unwrap();
 
         match event {
@@ -231,15 +224,20 @@ impl ApplicationHandler for App {
 
                         if self.current_file_path != selected_path {
                             match Model::load_obj(&selected_path) {
-                                Ok(models) => match scene.rebuild(&models, window_size) {
-                                    Ok(()) => {
-                                        self.current_file_path = selected_path;
+                                Ok(models) => {
+                                    match scene.rebuild(&models, renderer.window_size()) {
+                                        Ok(()) => {
+                                            self.current_file_path = selected_path;
+                                        }
+                                        Err(e) => {
+                                            println!(
+                                                "Unable to load file {}. {:?}",
+                                                selected_path, e
+                                            );
+                                            self.current_file_path = selected_path;
+                                        }
                                     }
-                                    Err(e) => {
-                                        println!("Unable to load file {}. {:?}", selected_path, e);
-                                        self.current_file_path = selected_path;
-                                    }
-                                },
+                                }
 
                                 Err(e) => {
                                     println!("Error loading file {}. {e:?}", selected_path);

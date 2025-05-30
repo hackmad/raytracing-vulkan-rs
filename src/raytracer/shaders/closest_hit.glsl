@@ -20,15 +20,11 @@ layout(set = 4, binding = 1) uniform texture2D textures[];
 
 layout(set = 5, binding = 0) buffer MaterialColours {
     vec3 values[];
-} material_colour;
-layout(set = 5, binding = 1, scalar) buffer Lights {
-    Light values[];
-} light;
+} materialColour;
 
 layout(push_constant) uniform PushConstantData {
-    uint  textureCount;
-    uint  materialColourCount;
-    uint  lightCount;
+    uint textureCount;
+    uint materialColourCount;
 } pc;
 
 MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
@@ -73,7 +69,7 @@ vec3 unpackInstanceMaterial(const int instanceId, const uint mat_prop_type, Mesh
     switch (mat.propValueType) {
         case MAT_PROP_VALUE_TYPE_RGB:
             if (mat.index >= 0 && mat.index < pc.materialColourCount) {
-                colour = material_colour.values[mat.index];
+                colour = materialColour.values[mat.index];
             }
             break;
 

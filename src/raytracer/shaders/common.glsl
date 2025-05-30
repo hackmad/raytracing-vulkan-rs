@@ -19,19 +19,7 @@ const uint MAT_PROP_VALUE_TYPE_TEXTURE = 2;
 struct Material {
     uint propType;
     uint propValueType;
-    int  index;
-};
-
-// --------------------------------------------------------------------------------
-// Lights.
-
-const uint LIGHT_PROP_TYPE_POSITION = 0;
-const uint LIGHT_PROP_TYPE_DIRECTIONAL = 1;
-
-struct Light {
-    uint  propType;
-    float intensity;
-    vec3  positionOrDirection;
+    int index;
 };
 
 // --------------------------------------------------------------------------------
@@ -56,8 +44,8 @@ layout(buffer_reference, scalar) buffer MeshMaterialsRef {
     Material values[];
 };
 struct Mesh {
-    MeshVertcesRef   verticesRef;
-    MeshIndicesRef   indicesRef;
+    MeshVertcesRef verticesRef;
+    MeshIndicesRef indicesRef;
     MeshMaterialsRef materialsRef;
 };
 
@@ -207,7 +195,8 @@ vec3 linearTosRGB(vec3 linearRGB)
     bvec3 cutoff = lessThan(linearRGB.rgb, vec3(0.0031308));
     vec3 higher = vec3(1.055) * pow(linearRGB.rgb, vec3(1.0 / 2.4)) - vec3(0.055);
     vec3 lower = linearRGB.rgb * vec3(12.92);
-    return mix(higher, lower, cutoff); }
+    return mix(higher, lower, cutoff);
+}
 vec4 linearTosRGB(vec4 linearRGB)
 {
     vec3 colour = linearTosRGB(linearRGB.rgb);

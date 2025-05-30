@@ -1,7 +1,7 @@
 use super::{
-    Camera, LightPropertyData, Vk,
+    Camera, Vk,
     acceleration::AccelerationStructures,
-    create_device_local_buffer, create_mesh_storage_buffer,
+    create_mesh_storage_buffer,
     model::Model,
     pipeline::RtPipeline,
     shaders::{ShaderModules, closest_hit, ray_gen},
@@ -11,7 +11,7 @@ use crate::raytracer::MaterialColours;
 use anyhow::Result;
 use std::sync::{Arc, RwLock};
 use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
+    buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage},
     descriptor_set::{DescriptorSet, WriteDescriptorSet},
     image::{
@@ -35,7 +35,7 @@ struct SceneResources {
     textures_descriptor_set: Arc<DescriptorSet>,
 
     /// Descriptor set for binding material data.
-    scene_data_descriptor_set: Arc<DescriptorSet>,
+    material_colours_descriptor_set: Arc<DescriptorSet>,
 
     /// The shader binding table.
     shader_binding_table: ShaderBindingTable,
@@ -55,12 +55,7 @@ struct SceneResources {
 
 impl SceneResources {
     /// Create vulkano resources for rendering a new scene with given models.
-    fn new(
-        vk: Arc<Vk>,
-        models: &[Model],
-        lights: &[LightPropertyData],
-        window_size: [f32; 2],
-    ) -> Result<Self> {
+    fn new(vk: Arc<Vk>, models: &[Model], window_size: [f32; 2]) -> Result<Self> {
         // Load shader modules.
         let shader_modules = ShaderModules::load(vk.device.clone());
 
@@ -78,7 +73,6 @@ impl SceneResources {
         let closest_hit_push_constants = closest_hit::PushConstantData {
             textureCount: texture_count,
             materialColourCount: material_colour_count,
-            lightCount: (lights.len() as u32).into(),
         };
         let closest_hit_push_constants_bytes = size_of::<closest_hit::PushConstantData>() as u32;
 
@@ -157,7 +151,7 @@ impl SceneResources {
             [],
         )?;
 
-        // Scene data.
+        // Material colours
         let mat_colours = if material_colour_count > 0 {
             material_colours.colours
         } else {
@@ -165,29 +159,23 @@ impl SceneResources {
             // be used in shaders to make sure out-of-bounds access can be checked.
             vec![[0.0, 0.0, 0.0]]
         };
-
-        let material_colours_buffer = create_device_local_buffer(
-            vk.clone(),
-            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
+        let material_colours_buffer = Buffer::from_iter(
+            vk.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::STORAGE_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
             mat_colours,
         )?;
-
-        let lights_buffer: Subbuffer<[closest_hit::Light]> = create_device_local_buffer(
-            vk.clone(),
-            BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS,
-            lights.iter().map(|light| light.into()),
-        )?;
-
-        let scene_data_descriptor_set = DescriptorSet::new(
+        let material_colours_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
-            layouts[RtPipeline::SCENE_DATA_LAYOUT].clone(),
-            vec![
-                WriteDescriptorSet::buffer(
-                    RtPipeline::MATERIAL_COLOURS_BINDING_INDEX,
-                    material_colours_buffer,
-                ),
-                WriteDescriptorSet::buffer(RtPipeline::LIGHTS_BINDING_INDEX, lights_buffer),
-            ],
+            layouts[RtPipeline::MATERIAL_COLOURS_LAYOUT].clone(),
+            vec![WriteDescriptorSet::buffer(0, material_colours_buffer)],
             [],
         )?;
 
@@ -199,7 +187,7 @@ impl SceneResources {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
-            scene_data_descriptor_set,
+            material_colours_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             closest_hit_push_constants,
@@ -217,9 +205,6 @@ pub struct Scene {
     /// Camera.
     camera: Arc<RwLock<dyn Camera>>,
 
-    /// Lights.
-    lights: Vec<LightPropertyData>,
-
     /// Vulkano resources specific to the rendering pipeline.
     resources: Option<SceneResources>,
 }
@@ -230,7 +215,6 @@ impl Scene {
         vk: Arc<Vk>,
         models: &[Model],
         camera: Arc<RwLock<dyn Camera>>,
-        lights: &[LightPropertyData],
         window_size: [f32; 2],
     ) -> Result<Self> {
         if models.len() == 0 {
@@ -238,21 +222,19 @@ impl Scene {
                 vk,
                 resources: None,
                 camera,
-                lights: Vec::from(lights),
             })
         } else {
-            SceneResources::new(vk.clone(), models, lights, window_size).map(|resources| Scene {
+            SceneResources::new(vk.clone(), models, window_size).map(|resources| Scene {
                 vk,
                 resources: Some(resources),
                 camera,
-                lights: Vec::from(lights),
             })
         }
     }
 
     /// Rebuilds the scene with new models.
     pub fn rebuild(&mut self, models: &[Model], window_size: [f32; 2]) -> Result<()> {
-        let resources = SceneResources::new(self.vk.clone(), models, &self.lights, window_size)?;
+        let resources = SceneResources::new(self.vk.clone(), models, window_size)?;
         self.resources = Some(resources);
         Ok(())
     }
@@ -337,7 +319,7 @@ impl Scene {
                         render_image_descriptor_set,
                         resources.mesh_data_descriptor_set.clone(),
                         resources.textures_descriptor_set.clone(),
-                        resources.scene_data_descriptor_set.clone(),
+                        resources.material_colours_descriptor_set.clone(),
                     ],
                 )
                 .unwrap()
