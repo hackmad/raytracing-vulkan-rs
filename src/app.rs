@@ -1,6 +1,9 @@
 use crate::raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk};
 use glam::Vec3;
-use std::sync::{Arc, RwLock};
+use std::{
+    path::PathBuf,
+    sync::{Arc, RwLock},
+};
 use vulkano::{
     Version,
     command_buffer::allocator::StandardCommandBufferAllocator,
@@ -212,11 +215,15 @@ impl ApplicationHandler for App {
                 }
                 Key::Character("o") => {
                     // Handle File > Open.
-                    let current_dir =
-                        std::env::current_dir().expect("Unable to get current directory.");
+                    let current_file_path_buf = PathBuf::from(&self.current_file_path);
+                    let current_dir_path = current_file_path_buf
+                        .parent()
+                        .expect("Unable to get current directory.");
+                    let absolute_path = std::fs::canonicalize(current_dir_path)
+                        .expect("Unable to get absolute path of current directory.");
 
                     let fd = rfd::FileDialog::new()
-                        .set_directory(current_dir)
+                        .set_directory(absolute_path)
                         .add_filter("Wavefront (.obj)", &["obj"]);
 
                     if let Some(path) = fd.pick_file() {
