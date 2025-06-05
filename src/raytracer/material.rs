@@ -1,6 +1,6 @@
 use super::{Model, shaders::closest_hit};
 use ordered_float::OrderedFloat;
-use std::{collections::HashMap, fmt, path::PathBuf};
+use std::{collections::HashMap, collections::hash_map::Entry, fmt, path::PathBuf};
 
 /// Material property types. These will correspond to `MAT_PROP_TYPE_*` constants in the shader source.
 #[derive(Clone, Copy, Debug)]
@@ -14,7 +14,7 @@ pub enum MaterialPropertyType {
 #[repr(u32)]
 pub enum MaterialPropertyValueType {
     None = 0,
-    RGB = 1,
+    Rgb = 1,
     Texture = 2,
 }
 
@@ -39,7 +39,7 @@ impl MaterialPropertyData {
     fn new_colour(prop_type: MaterialPropertyType, index: i32) -> Self {
         Self {
             prop_type: prop_type as _,
-            prop_value_type: MaterialPropertyValueType::RGB as _,
+            prop_value_type: MaterialPropertyValueType::Rgb as _,
             index,
         }
     }
@@ -72,30 +72,30 @@ impl MaterialPropertyData {
         match value {
             MaterialPropertyValue::None => Self::new_none(prop_type),
 
-            MaterialPropertyValue::RGB { colour } => {
+            MaterialPropertyValue::Rgb { colour } => {
                 let index = material_colour_indices
                     .get(&colour.into())
-                    .expect(format!("Material colour {colour:?} not found").as_ref());
+                    .unwrap_or_else(|| panic!("Material colour {colour:?} not found"));
                 Self::new_colour(prop_type, *index)
             }
 
             MaterialPropertyValue::Texture { path } => {
                 let index = texture_indices
                     .get(path)
-                    .expect(format!("Texture {path} not found").as_ref());
+                    .unwrap_or_else(|| panic!("Texture {path} not found"));
                 Self::new_texture_index(prop_type, *index)
             }
         }
     }
 }
 
-impl Into<closest_hit::Material> for MaterialPropertyData {
-    fn into(self) -> closest_hit::Material {
+impl From<MaterialPropertyData> for closest_hit::Material {
+    fn from(mat: MaterialPropertyData) -> Self {
         // Convert to the shader's `Material` struct.
-        closest_hit::Material {
-            propType: self.prop_type,
-            propValueType: self.prop_value_type,
-            index: self.index,
+        Self {
+            propType: mat.prop_type,
+            propValueType: mat.prop_value_type,
+            index: mat.index,
         }
     }
 }
@@ -107,7 +107,7 @@ pub enum MaterialPropertyValue {
     None,
 
     /// Solid RGB colour.
-    RGB { colour: [f32; 3] },
+    Rgb { colour: [f32; 3] },
 
     /// Texture image path.
     Texture { path: String },
@@ -121,7 +121,7 @@ impl MaterialPropertyValue {
         mut parent_path: PathBuf,
     ) -> Self {
         match colour {
-            Some(c) => MaterialPropertyValue::RGB { colour: c.clone() },
+            Some(c) => MaterialPropertyValue::Rgb { colour: *c },
 
             None => texture.clone().map_or(Self::None, |path| {
                 if PathBuf::from(&path).is_absolute() {
@@ -170,15 +170,12 @@ impl MaterialColours {
 
         for model in models.iter() {
             if let Some(material) = &model.material {
-                match material.diffuse {
-                    MaterialPropertyValue::RGB { colour } => {
-                        let rgb = RgbColour::from(colour);
-                        if !indices.contains_key(&rgb) {
-                            indices.insert(rgb, colours.len() as i32);
-                            colours.push(colour.clone());
-                        }
+                if let MaterialPropertyValue::Rgb {colour} = material.diffuse {
+                    let rgb = RgbColour::from(colour);
+                    if let Entry::Vacant(e) = indices.entry(rgb) {
+                        e.insert(colours.len() as i32);
+                        colours.push(colour);
                     }
-                    _ => {}
                 }
             }
         }
@@ -224,8 +221,8 @@ impl From<&[f32; 3]> for RgbColour {
     }
 }
 
-impl Into<[f32; 3]> for RgbColour {
-    fn into(self) -> [f32; 3] {
-        [self.r.0, self.g.0, self.b.0]
+impl From<RgbColour> for [f32; 3] {
+    fn from(c: RgbColour) -> Self {
+        [c.r.0, c.g.0, c.b.0]
     }
 }

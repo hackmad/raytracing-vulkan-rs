@@ -46,8 +46,7 @@ impl Model {
 
         let models: Vec<Self> = models
             .iter()
-            .enumerate()
-            .map(|(_i, model)| {
+            .map(|model| {
                 let mut vertices = vec![];
                 let mut indices = vec![];
 

@@ -217,7 +217,7 @@ impl Scene {
         camera: Arc<RwLock<dyn Camera>>,
         window_size: [f32; 2],
     ) -> Result<Self> {
-        if models.len() == 0 {
+        if models.is_empty() {
             Ok(Scene {
                 vk,
                 resources: None,
@@ -326,13 +326,13 @@ impl Scene {
                 .push_constants(
                     resources.rt_pipeline.get_layout(),
                     0,
-                    resources.closest_hit_push_constants.clone(),
+                    resources.closest_hit_push_constants,
                 )
                 .unwrap()
                 .push_constants(
                     resources.rt_pipeline.get_layout(),
                     0,
-                    resources.ray_gen_push_constants.clone(),
+                    resources.ray_gen_push_constants,
                 )
                 .unwrap()
                 .bind_pipeline_ray_tracing(resources.rt_pipeline.get())
