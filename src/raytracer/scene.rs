@@ -9,6 +9,7 @@ use super::{
 };
 use crate::raytracer::MaterialColours;
 use anyhow::Result;
+use log::debug;
 use std::sync::{Arc, RwLock};
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
@@ -62,12 +63,12 @@ impl SceneResources {
         // Load Textures.
         let textures = Textures::load(models, vk.clone())?;
         let texture_count = textures.image_views.len() as u32;
-        //println!("{textures:?}");
+        debug!("{textures:?}");
 
         // Load material colours.
         let material_colours = MaterialColours::load(models);
         let material_colour_count = material_colours.colours.len() as u32;
-        //println!("{material_colours:?}");
+        debug!("{material_colours:?}");
 
         // Push constants.
         let closest_hit_push_constants = closest_hit::PushConstantData {

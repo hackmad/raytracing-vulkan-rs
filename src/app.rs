@@ -1,5 +1,6 @@
 use crate::raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk};
 use glam::Vec3;
+use log::{debug, error, info};
 use std::{
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -155,7 +156,7 @@ impl ApplicationHandler for App {
             .get_primary_renderer_mut()
             .expect("Failed to get primary renderer");
 
-        println!("Swapchain image format: {:?}", renderer.swapchain_format());
+        info!("Swapchain image format: {:?}", renderer.swapchain_format());
 
         // Create storage image for rendering and display.
         let window_size = renderer.window_size();
@@ -210,7 +211,7 @@ impl ApplicationHandler for App {
                 ..
             } => match key.as_ref() {
                 Key::Named(NamedKey::Escape) => {
-                    println!("Escape key was pressed; stopping.");
+                    info!("Escape key was pressed; stopping.");
                     event_loop.exit();
                 }
                 Key::Character("o") => {
@@ -237,7 +238,7 @@ impl ApplicationHandler for App {
                                             self.current_file_path = selected_path;
                                         }
                                         Err(e) => {
-                                            println!(
+                                            error!(
                                                 "Unable to load file {}. {:?}",
                                                 selected_path, e
                                             );
@@ -247,7 +248,7 @@ impl ApplicationHandler for App {
                                 }
 
                                 Err(e) => {
-                                    println!("Error loading file {}. {e:?}", selected_path);
+                                    error!("Error loading file {}. {e:?}", selected_path);
                                 }
                             }
                         }
@@ -270,7 +271,7 @@ impl ApplicationHandler for App {
                         renderer.resize();
                     }
                     Err(e) => {
-                        println!("Failed to acquire swapchain future: {}", e);
+                        error!("Failed to acquire swapchain future: {}", e);
                         event_loop.exit();
                     }
                 };
@@ -314,7 +315,7 @@ fn setup_debug_callback(enable_debug_logging: bool) -> Option<DebugUtilsMessenge
                         panic!("no-impl");
                     };
 
-                    println!(
+                    debug!(
                         "{} {} {}: {}",
                         callback_data.message_id_name.unwrap_or("unknown"),
                         ty,

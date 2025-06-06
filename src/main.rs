@@ -5,6 +5,8 @@ mod app;
 mod raytracer;
 
 fn main() -> Result<(), EventLoopError> {
+    env_logger::init();
+
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new(&event_loop, false);
     event_loop.run_app(&mut app)

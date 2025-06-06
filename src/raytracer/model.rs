@@ -2,6 +2,7 @@ use crate::raytracer::{MaterialPropertyData, MaterialPropertyType};
 
 use super::{MaterialColours, MaterialPropertyValue, Vk, shaders::closest_hit, texture::Textures};
 use anyhow::{Context, Result, anyhow};
+use log::debug;
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use vulkano::{
     DeviceSize,
@@ -46,7 +47,8 @@ impl Model {
 
         let models: Vec<Self> = models
             .iter()
-            .map(|model| {
+            .enumerate()
+            .map(|(i, model)| {
                 let mut vertices = vec![];
                 let mut indices = vec![];
 
@@ -79,21 +81,19 @@ impl Model {
                     indices.push(vertex_index);
                 }
 
-                /*
-                println!(
+                debug!(
                     "Vertex count: {}, Indices count: {}",
                     vertices.len(),
                     indices.len()
                 );
 
                 for (i, v) in vertices.iter().enumerate() {
-                    println!(
+                    debug!(
                         "{i} {{position: {:?}, normal: {:?}, tex_coord: {:?}}}",
-                        v.position, v.normal, v.tex_coord,
+                        v.position, v.normal, v.texCoord,
                     );
                 }
-                println!("{indices:?}");
-                */
+                debug!("{indices:?}");
 
                 let material = mesh.material_id.map(|mat_id| {
                     let mat = &materials[mat_id];
@@ -179,7 +179,7 @@ impl Model {
         } else {
             MaterialPropertyData::new_none(MaterialPropertyType::Diffuse)
         };
-        // println!("{diffuse:?}");
+        debug!("{diffuse:?}");
 
         let materials = vec![diffuse.into()]; // Order should respect `MAT_PROP_TYPE_*` indices
 

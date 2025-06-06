@@ -1,5 +1,6 @@
 use anyhow::Result;
 use image::{GenericImageView, ImageReader};
+use log::info;
 use std::{collections::HashMap, fmt, sync::Arc};
 use vulkano::{
     DeviceSize,
@@ -70,12 +71,12 @@ fn load_texture(
     path: &str,
     builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
 ) -> Result<Arc<ImageView>> {
-    println!("Loading texture {path}...");
+    info!("Loading texture {path}...");
 
     let img = ImageReader::open(path)?.with_guessed_format()?.decode()?;
     let (width, height) = img.dimensions();
 
-    println!("Loaded texture {path}: {width} x {height}");
+    info!("Loaded texture {path}: {width} x {height}");
 
     let image = Image::new(
         vk.memory_allocator.clone(),

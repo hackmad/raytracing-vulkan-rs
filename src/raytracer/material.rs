@@ -1,4 +1,5 @@
 use super::{Model, shaders::closest_hit};
+use log::error;
 use ordered_float::OrderedFloat;
 use std::{collections::HashMap, collections::hash_map::Entry, fmt, path::PathBuf};
 
@@ -134,7 +135,7 @@ impl MaterialPropertyValue {
                             path: path.to_string(),
                         }
                     } else {
-                        println!("Invalid texture path {path}.");
+                        error!("Invalid texture path {path}.");
                         Self::None
                     }
                 }
@@ -170,7 +171,7 @@ impl MaterialColours {
 
         for model in models.iter() {
             if let Some(material) = &model.material {
-                if let MaterialPropertyValue::Rgb {colour} = material.diffuse {
+                if let MaterialPropertyValue::Rgb { colour } = material.diffuse {
                     let rgb = RgbColour::from(colour);
                     if let Entry::Vacant(e) = indices.entry(rgb) {
                         e.insert(colours.len() as i32);
