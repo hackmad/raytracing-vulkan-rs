@@ -61,9 +61,9 @@ MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
     return MeshVertex(worldSpacePosition, worldSpaceNormal, texCoord);
 }
 
-vec3 unpackInstanceMaterial(const int instanceId, const uint mat_prop_type, MeshVertex vertex) {
+vec3 unpackInstanceMaterial(const int instanceId, const uint matPropType, MeshVertex vertex) {
     Mesh mesh = mesh_data.values[instanceId];
-    Material mat = mesh.materialsRef.values[mat_prop_type];
+    MaterialPropertyValue mat = mesh.materialsRef.values[matPropType];
 
     vec3 colour = vec3(0.0);
     switch (mat.propValueType) {

@@ -16,7 +16,7 @@ const uint MAT_PROP_VALUE_TYPE_NONE = 0;
 const uint MAT_PROP_VALUE_TYPE_RGB = 1;
 const uint MAT_PROP_VALUE_TYPE_TEXTURE = 2;
 
-struct Material {
+struct MaterialPropertyValue {
     uint propType;
     uint propValueType;
     int index;
@@ -41,7 +41,7 @@ layout(buffer_reference, scalar) buffer MeshIndicesRef {
     uint values[];
 };
 layout(buffer_reference, scalar) buffer MeshMaterialsRef {
-    Material values[];
+    MaterialPropertyValue values[];
 };
 struct Mesh {
     MeshVertcesRef verticesRef;

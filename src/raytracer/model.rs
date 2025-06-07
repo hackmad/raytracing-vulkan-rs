@@ -167,7 +167,7 @@ impl Model {
         vk: Arc<Vk>,
         textures: &Textures,
         material_colours: &MaterialColours,
-    ) -> Result<Subbuffer<[closest_hit::Material]>> {
+    ) -> Result<Subbuffer<[closest_hit::MaterialPropertyValue]>> {
         let diffuse = if let Some(material) = &self.material {
             MaterialPropertyData::from_property_value(
                 MaterialPropertyType::Diffuse,

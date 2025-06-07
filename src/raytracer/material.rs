@@ -90,7 +90,7 @@ impl MaterialPropertyData {
     }
 }
 
-impl From<MaterialPropertyData> for closest_hit::Material {
+impl From<MaterialPropertyData> for closest_hit::MaterialPropertyValue {
     fn from(mat: MaterialPropertyData) -> Self {
         // Convert to the shader's `Material` struct.
         Self {
