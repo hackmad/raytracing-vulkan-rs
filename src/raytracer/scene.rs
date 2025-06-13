@@ -48,10 +48,10 @@ struct SceneResources {
     rt_pipeline: RtPipeline,
 
     /// Push constants for the closest hit shader.
-    closest_hit_push_constants: closest_hit::PushConstantData,
+    closest_hit_push_constants: closest_hit::ClosestHitPushConstants,
 
     /// Push constants for the ray generation shader.
-    ray_gen_push_constants: ray_gen::PushConstantData,
+    ray_gen_push_constants: ray_gen::RayGenPushConstants,
 
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
     _acceleration_structures: AccelerationStructures,
@@ -81,14 +81,15 @@ impl SceneResources {
         debug!("{materials:?}");
 
         // Push constants.
-        let closest_hit_push_constants = closest_hit::PushConstantData {
+        let closest_hit_push_constants = closest_hit::ClosestHitPushConstants {
             textureCount: texture_count as _,
             materialColourCount: material_colour_count as _,
             lambertianMaterialCount: materials.lambertian_materials.len() as _,
             metalMaterialCount: materials.metal_materials.len() as _,
+            dielectricMaterialCount: materials.dielectric_materials.len() as _,
         };
 
-        let ray_gen_push_constants = ray_gen::PushConstantData {
+        let ray_gen_push_constants = ray_gen::RayGenPushConstants {
             resolution: [window_size[0] as u32, window_size[1] as u32],
             samplesPerPixel: scene_file.render.samples_per_pixel,
             maxRayDepth: scene_file.render.max_ray_depth,
@@ -100,8 +101,8 @@ impl SceneResources {
             &shader_modules.stages,
             &shader_modules.groups,
             texture_count as _,
-            size_of::<closest_hit::PushConstantData>() as _,
-            size_of::<ray_gen::PushConstantData>() as _,
+            size_of::<closest_hit::ClosestHitPushConstants>() as _,
+            size_of::<ray_gen::RayGenPushConstants>() as _,
         )?;
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
@@ -198,6 +199,7 @@ impl SceneResources {
             vec![
                 WriteDescriptorSet::buffer(0, material_buffers.lambertian),
                 WriteDescriptorSet::buffer(1, material_buffers.metal),
+                WriteDescriptorSet::buffer(2, material_buffers.dielectric),
             ],
             [],
         )?;
@@ -354,7 +356,7 @@ impl Scene {
                 .unwrap()
                 .push_constants(
                     pipeline_layout.clone(),
-                    size_of::<closest_hit::PushConstantData>() as _,
+                    16,
                     resources.ray_gen_push_constants,
                 )
                 .unwrap()

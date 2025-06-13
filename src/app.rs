@@ -29,7 +29,7 @@ use winit::{
 
 use crate::raytracer::{Scene, SceneFile, Vk};
 
-const DEFAULT_ASSET_FILE_PATH: &str = "assets/metal-spheres.json";
+const DEFAULT_ASSET_FILE_PATH: &str = "assets/dielectric-spheres.json";
 const INITIAL_WIDTH: u32 = 1024;
 const INITIAL_HEIGHT: u32 = 576;
 

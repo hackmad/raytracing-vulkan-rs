@@ -13,6 +13,7 @@ const float PI = 3.14159265359;
 const uint MAT_TYPE_NONE = 0;
 const uint MAT_TYPE_LAMBERTIAN = 1;
 const uint MAT_TYPE_METAL = 2;
+const uint MAT_TYPE_DIELECTRIC = 3;
 
 const uint MAT_PROP_VALUE_TYPE_RGB = 0;
 const uint MAT_PROP_VALUE_TYPE_TEXTURE = 1;
@@ -29,6 +30,10 @@ struct LambertianMaterial {
 struct MetalMaterial {
     MaterialPropertyValue albedo;
     MaterialPropertyValue fuzz;
+};
+
+struct DielectricMaterial {
+    float refractionIndex;
 };
 
 // --------------------------------------------------------------------------------
@@ -53,6 +58,15 @@ struct Mesh {
     MeshIndicesRef indicesRef;
     uint materialType;
     uint materialIndex;
+};
+
+// --------------------------------------------------------------------------------
+// Hit record
+
+struct HitRecord {
+    MeshVertex meshVertex;
+    bool isFrontFace;
+    vec3 normal; // Points against the incident ray.
 };
 
 
@@ -111,6 +125,10 @@ float lengthSquared(vec3 v) {
 bool nearZero(vec3 v) {
     float s = 1e-8;
     return (abs(v.x) < s) && (abs(v.y) < s) && (abs(v.z) < s);
+}
+
+bool isFrontFace(vec3 rayDirection, vec3 outwardNormal) {
+    return dot(rayDirection, outwardNormal) < 0.0;
 }
 
 // --------------------------------------------------------------------------------

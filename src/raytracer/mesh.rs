@@ -8,8 +8,8 @@ use vulkano::{
 };
 
 use crate::raytracer::{
-    MAT_TYPE_LAMBERTIAN, MAT_TYPE_METAL, MAT_TYPE_NONE, Materials, ObjectType, Vk,
-    create_device_local_buffer, shaders::closest_hit,
+    MAT_TYPE_DIELECTRIC, MAT_TYPE_LAMBERTIAN, MAT_TYPE_METAL, MAT_TYPE_NONE, Materials, ObjectType,
+    Vk, create_device_local_buffer, shaders::closest_hit,
 };
 
 impl fmt::Debug for closest_hit::MeshVertex {
@@ -232,6 +232,8 @@ pub fn create_mesh_storage_buffer(
                 (MAT_TYPE_LAMBERTIAN, *index)
             } else if let Some(index) = materials.metal_material_indices.get(&mesh.material) {
                 (MAT_TYPE_METAL, *index)
+            } else if let Some(index) = materials.dielectric_material_indices.get(&mesh.material) {
+                (MAT_TYPE_DIELECTRIC, *index)
             } else {
                 warn!(
                     "Mesh '{}' material '{}' not found",

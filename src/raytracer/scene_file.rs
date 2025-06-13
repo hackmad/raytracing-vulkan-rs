@@ -127,6 +127,10 @@ pub enum MaterialType {
         albedo: MaterialPropertyValue,
         fuzz: MaterialPropertyValue,
     },
+    Dielectric {
+        name: String,
+        refraction_index: f32,
+    },
 }
 
 impl MaterialType {
@@ -136,6 +140,7 @@ impl MaterialType {
             Self::Metal { albedo, fuzz, .. } => {
                 vec![albedo.get_material_colour(), fuzz.get_material_colour()]
             }
+            Self::Dielectric { .. } => vec![],
         };
         rgb_colours.into_iter().flatten().collect()
     }
@@ -148,6 +153,7 @@ impl MaterialType {
             Self::Metal { albedo, fuzz, .. } => {
                 vec![albedo.get_texture_path(), fuzz.get_texture_path()]
             }
+            Self::Dielectric { .. } => vec![],
         };
         paths.into_iter().flatten().collect()
     }
@@ -161,6 +167,7 @@ impl MaterialType {
                 albedo.adjust_relative_path(relative_to);
                 fuzz.adjust_relative_path(relative_to);
             }
+            Self::Dielectric { .. } => {}
         }
     }
 }

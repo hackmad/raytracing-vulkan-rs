@@ -90,7 +90,7 @@ impl RtPipeline {
                     },
                     PushConstantRange {
                         stages: ShaderStages::RAYGEN,
-                        offset: closest_hit_push_constants_bytes_size,
+                        offset: 16, // From ray_gen.glsl layout offset of RayGenPushConstants.
                         size: ray_gen_push_constants_bytes_size,
                     },
                 ],
@@ -259,6 +259,7 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         DescriptorSetLayoutCreateInfo {
             bindings: [
                 (
+                    // Lambertian materials.
                     0,
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::CLOSEST_HIT,
@@ -266,7 +267,16 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
                     },
                 ),
                 (
+                    // Metal materials.
                     1,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                    },
+                ),
+                (
+                    // Dielectric materials.
+                    2,
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::CLOSEST_HIT,
                         ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
