@@ -3,9 +3,10 @@
     {
       "perspective": {
         "name": "default",
-        "eye": [0, 0, 0],
+        "eye": [-2, -2, 1],
         "look_at": [0, 0, -1],
         "up": [0, 1, 0],
+        "fov_y": 20,
         "z_near": 0.01,
         "z_far": 100
       }

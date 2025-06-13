@@ -1,5 +1,3 @@
-use std::f32::consts::FRAC_PI_2;
-
 use glam::{Mat4, Vec3};
 
 /// Camera interface.
@@ -25,6 +23,7 @@ pub struct PerspectiveCamera {
     eye: Vec3,
     look_at: Vec3,
     up: Vec3,
+    fov_y: f32, // Vertical FOV in radians.
     z_near: f32,
     z_far: f32,
     proj: Mat4,
@@ -37,18 +36,20 @@ impl PerspectiveCamera {
         eye: Vec3,
         look_at: Vec3,
         up: Vec3,
+        fov_y: f32,
         z_near: f32,
         z_far: f32,
         image_width: u32,
         image_height: u32,
     ) -> Self {
         let aspect = image_width as f32 / image_height as f32;
-        let proj = Mat4::perspective_rh(FRAC_PI_2, aspect, z_near, z_far);
+        let proj = Mat4::perspective_rh(fov_y, aspect, z_near, z_far);
         let view = Mat4::look_at_rh(eye, look_at, up);
         Self {
             eye,
             look_at,
             up,
+            fov_y,
             z_near,
             z_far,
             proj,
@@ -60,7 +61,7 @@ impl PerspectiveCamera {
 impl Camera for PerspectiveCamera {
     fn update_image_size(&mut self, image_width: u32, image_height: u32) {
         let aspect = image_width as f32 / image_height as f32;
-        self.proj = Mat4::perspective_rh(FRAC_PI_2, aspect, self.z_near, self.z_far);
+        self.proj = Mat4::perspective_rh(self.fov_y, aspect, self.z_near, self.z_far);
         self.view = Mat4::look_at_rh(self.eye, self.look_at, self.up);
     }
 

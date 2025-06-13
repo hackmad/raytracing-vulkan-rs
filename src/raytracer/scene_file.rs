@@ -21,6 +21,7 @@ pub enum CameraType {
         eye: [f32; 3],
         look_at: [f32; 3],
         up: [f32; 3],
+        fov_y: f32, // Vertical FOV in degrees.
         z_near: f32,
         z_far: f32,
     },
@@ -40,12 +41,14 @@ impl CameraType {
                 eye,
                 look_at,
                 up,
+                fov_y,
                 z_near,
                 z_far,
             } => Arc::new(RwLock::new(PerspectiveCamera::new(
                 Vec3::from_slice(eye),
                 Vec3::from_slice(look_at),
                 Vec3::from_slice(up),
+                fov_y.to_radians(),
                 *z_near,
                 *z_far,
                 image_width,
