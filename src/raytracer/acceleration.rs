@@ -1,6 +1,7 @@
 use std::{iter, mem::size_of, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
+use log::debug;
 use vulkano::{
     acceleration_structure::{
         AccelerationStructure, AccelerationStructureBuildGeometryInfo,
@@ -13,7 +14,7 @@ use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, IndexBuffer, Subbuffer},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBufferAbstract},
     format::Format,
-    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
+    memory::allocator::{AllocationCreateInfo, DeviceLayout, MemoryTypeFilter},
     sync::GpuFuture,
 };
 
@@ -92,17 +93,49 @@ fn build_acceleration_structure_common(
         &[primitive_count],
     )?;
 
+    // Create a memory layout so the scratch buffer address is aligned correctly for the
+    // acceleration structure.
+    let device_properties = vk.device.physical_device().properties();
+    let min_scratch_offset: u64 = device_properties
+        .min_acceleration_structure_scratch_offset_alignment
+        .context(
+            "Unable to get min_acceleration_structure_scratch_offset_alignment device property",
+        )?
+        .into();
+
+    let scratch_buffer_size = as_build_sizes_info.build_scratch_size;
+
+    let scratch_buffer_layout =
+        DeviceLayout::from_size_alignment(scratch_buffer_size, min_scratch_offset)
+            .context("Unable to create scratch buffer device layout")?;
+
+    debug!("Min scratch buffer size: {min_scratch_offset}");
+    debug!("Scratch buffer size: {}", scratch_buffer_size);
+    debug!("Scratch buffer layout: {:?}", scratch_buffer_layout);
+
     // We create a new scratch buffer for each acceleration structure for simplicity. You may want
     // to reuse scratch buffers if you need to build many acceleration structures.
-    let scratch_buffer = Buffer::new_slice::<u8>(
+    let scratch_buffer = Subbuffer::new(Buffer::new(
         vk.memory_allocator.clone(),
         BufferCreateInfo {
-            usage: BufferUsage::SHADER_DEVICE_ADDRESS | BufferUsage::STORAGE_BUFFER,
+            usage: BufferUsage::TRANSFER_SRC
+                | BufferUsage::SHADER_DEVICE_ADDRESS
+                | BufferUsage::STORAGE_BUFFER,
             ..Default::default()
         },
         AllocationCreateInfo::default(),
-        as_build_sizes_info.build_scratch_size,
-    )?;
+        scratch_buffer_layout,
+    )?);
+
+    let scratch_buffer_device_address: u64 = scratch_buffer.device_address().unwrap().into();
+    debug!(
+        "Scratch buffer device addr: {scratch_buffer_device_address} is {}",
+        if (scratch_buffer_device_address % min_scratch_offset) == 0 {
+            "aligned"
+        } else {
+            "NOT ALIGNED"
+        }
+    );
 
     let as_create_info = AccelerationStructureCreateInfo {
         ty,
