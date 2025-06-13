@@ -1,7 +1,8 @@
+use std::{collections::HashMap, fmt, sync::Arc};
+
 use anyhow::Result;
 use image::{GenericImageView, ImageReader};
 use log::info;
-use std::{collections::HashMap, fmt, sync::Arc};
 use vulkano::{
     DeviceSize,
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -14,15 +15,17 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use super::{Vk, model::Model};
+use crate::raytracer::{SceneFile, Vk};
 
-/// Stores texture image views that will be added to a `SampledImage` variable descriptor used by the shader.
+/// Stores texture image views that will be added to a `SampledImage` variable descriptor used by
+/// the shader.
 pub struct Textures {
-    /// The texture image views.
+    /// The texture image views used by the shaders.
     pub image_views: Vec<Arc<ImageView>>,
 
-    /// Maps unique texture paths to their index in `image_view`.
-    pub indices: HashMap<String, i32>, /* GLSL int => i32*/
+    /// Maps unique texture paths to their index in `image_view`. These indices are used in the
+    /// MaterialPropertyValue structure.
+    pub indices: HashMap<String, u32>,
 }
 
 impl fmt::Debug for Textures {
@@ -35,10 +38,10 @@ impl fmt::Debug for Textures {
 }
 
 impl Textures {
-    /// Load all unique texture paths from all models. Assumes images have alpha channel.
-    pub fn load(models: &[Model], vk: Arc<Vk>) -> Result<Self> {
+    /// Load all unique texture paths from all scene objects. Assumes images have alpha channel.
+    pub fn load(scene_file: &SceneFile, vk: Arc<Vk>) -> Result<Self> {
         let mut image_views = vec![];
-        let mut indices: HashMap<String, i32> = HashMap::new();
+        let mut indices: HashMap<String, u32> = HashMap::new();
 
         let mut builder = AutoCommandBufferBuilder::primary(
             vk.command_buffer_allocator.clone(),
@@ -46,13 +49,11 @@ impl Textures {
             CommandBufferUsage::OneTimeSubmit,
         )?;
 
-        for model in models.iter() {
-            for path in model.get_texture_paths() {
-                if !indices.contains_key(&path) {
-                    let texture = load_texture(vk.clone(), &path, &mut builder)?;
-                    indices.insert(path.clone(), image_views.len() as i32);
-                    image_views.push(texture);
-                }
+        for path in scene_file.get_texture_paths() {
+            if !indices.contains_key(&path) {
+                let texture = load_texture(vk.clone(), &path, &mut builder)?;
+                indices.insert(path.clone(), image_views.len() as _);
+                image_views.push(texture);
             }
         }
 

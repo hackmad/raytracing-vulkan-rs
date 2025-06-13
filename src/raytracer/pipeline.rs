@@ -1,5 +1,6 @@
-use anyhow::Result;
 use std::sync::Arc;
+
+use anyhow::Result;
 use vulkano::{
     descriptor_set::layout::{
         DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
@@ -32,7 +33,7 @@ impl RtPipeline {
     pub const TLAS_LAYOUT: usize = 0;
 
     /// Uniform buffer for the camera data.
-    pub const UNIFORM_BUFFER_LAYOUT: usize = 1;
+    pub const CAMERA_BUFFER_LAYOUT: usize = 1;
 
     /// Storage image used for rendering.
     pub const RENDER_IMAGE_LAYOUT: usize = 2;
@@ -45,6 +46,9 @@ impl RtPipeline {
 
     /// Storage buffer used for material colour data.
     pub const MATERIAL_COLOURS_LAYOUT: usize = 5;
+
+    /// Storage buffer used for materials.
+    pub const MATERIALS_LAYOUT: usize = 6;
 
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
@@ -62,8 +66,8 @@ impl RtPipeline {
         stages: &[PipelineShaderStageCreateInfo],
         groups: &[RayTracingShaderGroupCreateInfo],
         texture_count: u32,
-        closest_hit_push_constants_bytes: u32,
-        ray_gen_push_constants_bytes: u32,
+        closest_hit_push_constants_bytes_size: u32,
+        ray_gen_push_constants_bytes_size: u32,
     ) -> Result<Self> {
         let pipeline_layout = PipelineLayout::new(
             device.clone(),
@@ -71,22 +75,23 @@ impl RtPipeline {
                 set_layouts: vec![
                     // The order should match the `*_LAYOUT` constants.
                     create_tlas_layout(device.clone()),
-                    create_uniform_buffer_layout(device.clone()),
+                    create_camera_layout(device.clone()),
                     create_render_image_layout(device.clone()),
                     create_mesh_data_layout(device.clone()),
                     create_sample_and_textures_layout(device.clone(), texture_count),
                     create_material_colours_layout(device.clone()),
+                    create_materials_layout(device.clone()),
                 ],
                 push_constant_ranges: vec![
                     PushConstantRange {
                         stages: ShaderStages::CLOSEST_HIT,
                         offset: 0,
-                        size: closest_hit_push_constants_bytes,
+                        size: closest_hit_push_constants_bytes_size,
                     },
                     PushConstantRange {
                         stages: ShaderStages::RAYGEN,
-                        offset: 0,
-                        size: ray_gen_push_constants_bytes,
+                        offset: closest_hit_push_constants_bytes_size,
+                        size: ray_gen_push_constants_bytes_size,
                     },
                 ],
                 ..Default::default()
@@ -134,7 +139,7 @@ fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
 }
 
 /// Create a pipeline layout for uniform buffer containing camera matrices.
-fn create_uniform_buffer_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+fn create_camera_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device,
         DescriptorSetLayoutCreateInfo {
@@ -239,6 +244,35 @@ fn create_material_colours_layout(device: Arc<Device>) -> Arc<DescriptorSetLayou
                     ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
                 },
             )]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+/// Create a pipeline layout for material references storage buffer.
+fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        device.clone(),
+        DescriptorSetLayoutCreateInfo {
+            bindings: [
+                (
+                    0,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                    },
+                ),
+                (
+                    1,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                    },
+                ),
+            ]
             .into_iter()
             .collect(),
             ..Default::default()

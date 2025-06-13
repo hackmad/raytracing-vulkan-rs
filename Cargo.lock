@@ -2344,6 +2344,8 @@ dependencies = [
  "log",
  "ordered-float",
  "rfd",
+ "serde",
+ "serde_json",
  "tobj",
  "vulkano",
  "vulkano-shaders",

@@ -1,0 +1,55 @@
+{
+  "cameras": [
+    {
+      "perspective": {
+        "name": "default",
+        "eye": [0, 0, 0],
+        "look_at": [0, 0, -1],
+        "up": [0, 1, 0],
+        "z_near": 0.01,
+        "z_far": 100
+      }
+    }
+  ],
+  "materials": [
+    {
+      "lambertian": {
+        "name": "center",
+        "albedo": { "rgb": [0.1, 0.2, 0.5] }
+      }
+    },
+    {
+      "lambertian": {
+        "name": "ground",
+        "albedo": { "rgb": [0.8, 0.8, 0.0] }
+      }
+    }
+  ],
+  "objects": [
+    {
+      "uv_sphere": {
+        "name": "center sphere",
+        "center": [0.0, 0.0, -1.2],
+        "radius": 0.5,
+        "rings": 32,
+        "segments": 64,
+        "material": "center"
+      }
+    },
+    {
+      "uv_sphere": {
+        "name": "ground sphere",
+        "center": [0.0, 100.5, -1.0],
+        "rings": 64,
+        "segments": 128,
+        "radius": 100,
+        "material": "ground"
+      }
+    }
+  ],
+  "render": {
+    "camera": "default",
+    "samples_per_pixel": 10,
+    "max_ray_depth": 50
+  }
+}

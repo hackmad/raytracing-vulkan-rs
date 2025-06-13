@@ -18,13 +18,24 @@ layout(set = 3, binding = 0, scalar) buffer MeshData {
 layout(set = 4, binding = 0) uniform sampler textureSampler;
 layout(set = 4, binding = 1) uniform texture2D textures[];
 
-layout(set = 5, binding = 0) buffer MaterialColours {
+layout(set = 5, binding = 0, scalar) buffer MaterialColours {
     vec3 values[];
 } materialColour;
 
+layout(set = 6, binding = 0, scalar) buffer LambertianMaterials {
+    LambertianMaterial values[];
+} lambertianMaterial;
+layout(set = 6, binding = 1, scalar) buffer MetalMaterials {
+    MetalMaterial values[];
+} metalMaterial;
+
+// Note: If this changes, update ray_gen shader push constant offset and check RtPipeline and Scene in rust code
+// to ensure 4 byte alignment.
 layout(push_constant) uniform PushConstantData {
     uint textureCount;
     uint materialColourCount;
+    uint lambertianMaterialCount;
+    uint metalMaterialCount;
 } pc;
 
 MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
@@ -61,22 +72,20 @@ MeshVertex unpackInstanceVertex(const int instanceId, const int primitiveId) {
     return MeshVertex(worldSpacePosition, worldSpaceNormal, texCoord);
 }
 
-vec3 unpackInstanceMaterial(const int instanceId, const uint matPropType, MeshVertex vertex) {
-    Mesh mesh = mesh_data.values[instanceId];
-    MaterialPropertyValue mat = mesh.materialsRef.values[matPropType];
-
+vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex vertex) {
     vec3 colour = vec3(0.0);
-    switch (mat.propValueType) {
+
+    switch (matPropValue.propValueType) {
         case MAT_PROP_VALUE_TYPE_RGB:
-            if (mat.index >= 0 && mat.index < pc.materialColourCount) {
-                colour = materialColour.values[mat.index];
+            if (matPropValue.index >= 0 && matPropValue.index < pc.materialColourCount) {
+                colour = materialColour.values[matPropValue.index];
             }
             break;
 
         case MAT_PROP_VALUE_TYPE_TEXTURE:
-            if (mat.index >= 0 && mat.index < pc.textureCount) {
+            if (matPropValue.index >= 0 && matPropValue.index < pc.textureCount) {
                 colour = texture(
-                        nonuniformEXT(sampler2D(textures[mat.index], textureSampler)),
+                        nonuniformEXT(sampler2D(textures[matPropValue.index], textureSampler)),
                         vertex.texCoord
                         ).rgb; // Ignore alpha for now.
             }
@@ -86,21 +95,52 @@ vec3 unpackInstanceMaterial(const int instanceId, const uint matPropType, MeshVe
     return colour;
 }
 
+void unpackInstanceMaterialAndScatter(const int instanceId, MeshVertex vertex) {
+    Mesh mesh = mesh_data.values[instanceId];
+    uint materialType = mesh.materialType;
+    uint materialIndex = mesh.materialIndex;
+
+    switch (materialType) {
+        case MAT_TYPE_LAMBERTIAN:
+            if (materialIndex >= 0 && materialIndex < pc.lambertianMaterialCount) {
+                LambertianMaterial lambertianMaterial = lambertianMaterial.values[materialIndex];
+                vec3 albedo = getMaterialPropertyValue(lambertianMaterial.albedo, vertex);
+
+                vec3 scatterDirection = vertex.normal + randomUnitVec3(rayPayload.rngState);
+
+                // Catch degenerate scatter direction.
+                if (nearZero(scatterDirection)) {
+                    scatterDirection = vertex.normal;
+                }
+
+                rayPayload.attenuation = albedo;
+                rayPayload.isScattered = true;
+                rayPayload.scatteredRayDirection = scatterDirection;
+                rayPayload.scatteredRayOrigin = vertex.position;
+            }
+            break;
+        case MAT_TYPE_METAL:
+            if (materialIndex >= 0 && materialIndex < pc.metalMaterialCount) {
+                MetalMaterial metalMaterial = metalMaterial.values[materialIndex];
+                vec3 albedo = getMaterialPropertyValue(metalMaterial.albedo, vertex);
+                vec3 fuzz = getMaterialPropertyValue(metalMaterial.fuzz, vertex);
+
+                vec3 reflectedDirection = reflect(gl_WorldRayDirectionEXT, vertex.normal);
+
+                vec3 scatteredDirection = normalize(reflectedDirection) +
+                    (fuzz * randomUnitVec3(rayPayload.rngState));
+
+                rayPayload.attenuation = albedo;
+                rayPayload.isScattered = (dot(scatteredDirection, vertex.normal) > 0);
+                rayPayload.scatteredRayDirection = scatteredDirection;
+                rayPayload.scatteredRayOrigin = vertex.position;
+            }
+            break;
+    }
+}
+
 void main() {
     MeshVertex vertex = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
-
-    vec3 albedo = unpackInstanceMaterial(gl_InstanceID, MAT_PROP_TYPE_DIFFUSE, vertex);
-
-    vec3 scatterDirection = vertex.normal + randomUnitVec3(rayPayload.rngState);
-
-    // Catch degenerate scatter direction.
-    if (nearZero(scatterDirection)) {
-        scatterDirection = vertex.normal;
-    }
-
-    rayPayload.attenuation = albedo;
-    rayPayload.isScattered = true;
-    rayPayload.scatteredRayDirection = scatterDirection;
-    rayPayload.scatteredRayOrigin = vertex.position;
+    unpackInstanceMaterialAndScatter(gl_InstanceID, vertex);
 }
 
