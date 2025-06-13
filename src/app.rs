@@ -47,9 +47,11 @@ pub struct App {
     /// The scene to render.
     scene: Option<Scene>,
 
-    /// The current scene file being rendered. This will be used to track egui File > Open
-    /// will result in rebuilding a scene.
+    /// The current scene file being rendered.
     current_file_path: String,
+
+    /// This will be used to track egui File > Open will result in a new scene being loaded.
+    new_file_path: Option<String>,
 }
 
 impl App {
@@ -127,6 +129,7 @@ impl App {
             scene: None,
             vk,
             current_file_path: DEFAULT_ASSET_FILE_PATH.to_string(),
+            new_file_path: None,
         }
     }
 }
@@ -161,9 +164,7 @@ impl ApplicationHandler for App {
 
         // Load scene file.
         let scene_file = SceneFile::load_json(&self.current_file_path).unwrap();
-
-        // Create the raytracing pipeline
-        let scene = Scene::new(self.vk.clone(), &scene_file, window_size).unwrap();
+        let scene = Scene::new(self.vk.clone(), &scene_file, &window_size).unwrap();
         self.scene = Some(scene);
     }
 
@@ -175,6 +176,29 @@ impl ApplicationHandler for App {
     ) {
         let renderer = self.windows.get_renderer_mut(window_id).unwrap();
         let scene = self.scene.as_mut().unwrap();
+
+        // Handle loading a new scene before processing events.
+        if let Some(new_scene_path) = &self.new_file_path {
+            match SceneFile::load_json(new_scene_path) {
+                Ok(scene_file) => {
+                    match Scene::new(self.vk.clone(), &scene_file, &renderer.window_size()) {
+                        Ok(new_scene) => {
+                            *scene = new_scene;
+                            self.current_file_path = new_scene_path.clone();
+                            self.new_file_path = None;
+                        }
+                        Err(e) => {
+                            error!("Unable to load file {}. {:?}", new_scene_path, e);
+                            self.new_file_path = None;
+                        }
+                    }
+                }
+
+                Err(e) => {
+                    error!("Error loading file {}. {e:?}", new_scene_path);
+                }
+            }
+        }
 
         match event {
             WindowEvent::Resized(window_size) => {
@@ -218,26 +242,7 @@ impl ApplicationHandler for App {
                         let selected_path = path.display().to_string();
 
                         if self.current_file_path != selected_path {
-                            match SceneFile::load_json(&selected_path) {
-                                Ok(scene_file) => {
-                                    match scene.rebuild(&scene_file, renderer.window_size()) {
-                                        Ok(()) => {
-                                            self.current_file_path = selected_path;
-                                        }
-                                        Err(e) => {
-                                            error!(
-                                                "Unable to load file {}. {:?}",
-                                                selected_path, e
-                                            );
-                                            self.current_file_path = selected_path;
-                                        }
-                                    }
-                                }
-
-                                Err(e) => {
-                                    error!("Error loading file {}. {e:?}", selected_path);
-                                }
-                            }
+                            self.new_file_path = Some(selected_path);
                         }
                     }
                 }

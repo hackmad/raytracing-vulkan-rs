@@ -59,7 +59,7 @@ struct SceneResources {
 
 impl SceneResources {
     /// Create vulkano resources for rendering a new scene with given models.
-    fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: [f32; 2]) -> Result<Self> {
+    fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: &[f32; 2]) -> Result<Self> {
         // Load shader modules.
         let shader_modules = ShaderModules::load(vk.device.clone());
 
@@ -237,7 +237,7 @@ pub struct Scene {
 
 impl Scene {
     /// Create a new scene from the given models and camera.
-    pub fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: [f32; 2]) -> Result<Self> {
+    pub fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: &[f32; 2]) -> Result<Self> {
         let render_camera = &scene_file.render.camera;
 
         let camera_type = scene_file
@@ -254,13 +254,6 @@ impl Scene {
             resources: Some(resources),
             camera,
         })
-    }
-
-    /// Rebuilds the scene with new models.
-    pub fn rebuild(&mut self, scene_file: &SceneFile, window_size: [f32; 2]) -> Result<()> {
-        let resources = SceneResources::new(self.vk.clone(), scene_file, window_size)?;
-        self.resources = Some(resources);
-        Ok(())
     }
 
     /// Updates the camera image size to match a new window size.
