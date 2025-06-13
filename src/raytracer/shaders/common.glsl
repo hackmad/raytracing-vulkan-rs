@@ -10,20 +10,29 @@ const float PI = 3.14159265359;
 // --------------------------------------------------------------------------------
 // Materials.
 
-const uint MAT_PROP_TYPE_DIFFUSE = 0;
+const uint MAT_TYPE_NONE = 0;
+const uint MAT_TYPE_LAMBERTIAN = 1;
+const uint MAT_TYPE_METAL = 2;
 
-const uint MAT_PROP_VALUE_TYPE_NONE = 0;
-const uint MAT_PROP_VALUE_TYPE_RGB = 1;
-const uint MAT_PROP_VALUE_TYPE_TEXTURE = 2;
+const uint MAT_PROP_VALUE_TYPE_RGB = 0;
+const uint MAT_PROP_VALUE_TYPE_TEXTURE = 1;
 
 struct MaterialPropertyValue {
-    uint propType;
     uint propValueType;
-    int index;
+    uint index;
+};
+
+struct LambertianMaterial {
+    MaterialPropertyValue albedo;
+};
+
+struct MetalMaterial {
+    MaterialPropertyValue albedo;
+    MaterialPropertyValue fuzz;
 };
 
 // --------------------------------------------------------------------------------
-// Vertex data.
+// Mesh
 
 struct MeshVertex {
     vec3 position;
@@ -31,22 +40,19 @@ struct MeshVertex {
     vec2 texCoord;
 };
 
-// --------------------------------------------------------------------------------
-// Mesh
-
 layout(buffer_reference, scalar) buffer MeshVertcesRef {
     MeshVertex values[];
 };
+
 layout(buffer_reference, scalar) buffer MeshIndicesRef {
     uint values[];
 };
-layout(buffer_reference, scalar) buffer MeshMaterialsRef {
-    MaterialPropertyValue values[];
-};
+
 struct Mesh {
     MeshVertcesRef verticesRef;
     MeshIndicesRef indicesRef;
-    MeshMaterialsRef materialsRef;
+    uint materialType;
+    uint materialIndex;
 };
 
 
@@ -217,3 +223,16 @@ vec4 sRGBToLinear(vec4 sRGB)
     return vec4(colour, sRGB.a);
 }
 
+float linearToGamma(float v) {
+    if (v > 0) {
+        return sqrt(v);
+    }
+    return 0;
+}
+vec3 linearToGamma(vec3 linearRGB) {
+    return vec3(
+         clamp(linearToGamma(linearRGB.x), 0, 1),
+         clamp(linearToGamma(linearRGB.y), 0, 1),
+         clamp(linearToGamma(linearRGB.z), 0, 1)
+    ); 
+}

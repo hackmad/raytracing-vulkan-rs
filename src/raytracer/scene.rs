@@ -1,16 +1,7 @@
-use super::{
-    Camera, Vk,
-    acceleration::AccelerationStructures,
-    create_mesh_storage_buffer,
-    model::Model,
-    pipeline::RtPipeline,
-    shaders::{ShaderModules, closest_hit, ray_gen},
-    texture::Textures,
-};
-use crate::raytracer::MaterialColours;
-use anyhow::Result;
-use log::debug;
 use std::sync::{Arc, RwLock};
+
+use anyhow::{Context, Result};
+use log::debug;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage},
@@ -24,6 +15,15 @@ use vulkano::{
     sync::GpuFuture,
 };
 
+use crate::raytracer::{
+    Camera, MaterialColours, Materials, SceneFile, Vk,
+    acceleration::AccelerationStructures,
+    create_mesh_storage_buffer,
+    pipeline::RtPipeline,
+    shaders::{ShaderModules, closest_hit, ray_gen},
+    texture::Textures,
+};
+
 /// The vulkano resources specific to the rendering pipeline.
 struct SceneResources {
     /// Descriptor set for binding the top-level acceleration structure for the scene.
@@ -35,8 +35,11 @@ struct SceneResources {
     /// Descriptor set for binding textures.
     textures_descriptor_set: Arc<DescriptorSet>,
 
-    /// Descriptor set for binding material data.
+    /// Descriptor set for binding material colours.
     material_colours_descriptor_set: Arc<DescriptorSet>,
+
+    /// Descriptor set for binding materials.
+    materials_descriptor_set: Arc<DescriptorSet>,
 
     /// The shader binding table.
     shader_binding_table: ShaderBindingTable,
@@ -56,49 +59,56 @@ struct SceneResources {
 
 impl SceneResources {
     /// Create vulkano resources for rendering a new scene with given models.
-    fn new(vk: Arc<Vk>, models: &[Model], window_size: [f32; 2]) -> Result<Self> {
+    fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: [f32; 2]) -> Result<Self> {
         // Load shader modules.
         let shader_modules = ShaderModules::load(vk.device.clone());
 
         // Load Textures.
-        let textures = Textures::load(models, vk.clone())?;
-        let texture_count = textures.image_views.len() as u32;
+        let textures = Textures::load(scene_file, vk.clone())?;
+        let texture_count = textures.image_views.len();
         debug!("{textures:?}");
 
         // Load material colours.
-        let material_colours = MaterialColours::load(models);
-        let material_colour_count = material_colours.colours.len() as u32;
+        let material_colours = MaterialColours::new(&scene_file.materials);
+        let material_colour_count = material_colours.colours.len();
         debug!("{material_colours:?}");
+
+        // Get meshes.
+        let meshes = scene_file.get_meshes();
+
+        // Get materials.
+        let materials = Materials::new(&textures, &material_colours, &scene_file.materials);
+        debug!("{materials:?}");
 
         // Push constants.
         let closest_hit_push_constants = closest_hit::PushConstantData {
-            textureCount: texture_count,
-            materialColourCount: material_colour_count,
+            textureCount: texture_count as _,
+            materialColourCount: material_colour_count as _,
+            lambertianMaterialCount: materials.lambertian_materials.len() as _,
+            metalMaterialCount: materials.metal_materials.len() as _,
         };
-        let closest_hit_push_constants_bytes = size_of::<closest_hit::PushConstantData>() as u32;
 
         let ray_gen_push_constants = ray_gen::PushConstantData {
             resolution: [window_size[0] as u32, window_size[1] as u32],
-            samplesPerPixel: 100,
-            maxRayDepth: 50,
+            samplesPerPixel: scene_file.render.samples_per_pixel,
+            maxRayDepth: scene_file.render.max_ray_depth,
         };
-        let ray_gen_push_constants_bytes = size_of::<ray_gen::PushConstantData>() as u32;
 
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(
             vk.device.clone(),
             &shader_modules.stages,
             &shader_modules.groups,
-            texture_count,
-            closest_hit_push_constants_bytes,
-            ray_gen_push_constants_bytes,
+            texture_count as _,
+            size_of::<closest_hit::PushConstantData>() as _,
+            size_of::<ray_gen::PushConstantData>() as _,
         )?;
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
 
         // For now the acceleration structure is non-changing. We can create its descriptor set
         // and clone it later during render.
-        let acceleration_structures = AccelerationStructures::new(vk.clone(), models)?;
+        let acceleration_structures = AccelerationStructures::new(vk.clone(), &meshes)?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -112,13 +122,12 @@ impl SceneResources {
 
         // Mesh data won't change either. We can create its descriptor set and clone it later
         // during render.
-        let mesh_data =
-            create_mesh_storage_buffer(vk.clone(), models, &textures, &material_colours)?;
+        let mesh_buffer = create_mesh_storage_buffer(vk.clone(), &meshes, &materials)?;
 
         let mesh_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::MESH_DATA_LAYOUT].clone(),
-            [WriteDescriptorSet::buffer(0, mesh_data)],
+            [WriteDescriptorSet::buffer(0, mesh_buffer)],
             [],
         )?;
 
@@ -180,6 +189,19 @@ impl SceneResources {
             [],
         )?;
 
+        // Materials.
+        let material_buffers = materials.create_buffers(vk.clone())?;
+
+        let materials_descriptor_set = DescriptorSet::new(
+            vk.descriptor_set_allocator.clone(),
+            layouts[RtPipeline::MATERIALS_LAYOUT].clone(),
+            vec![
+                WriteDescriptorSet::buffer(0, material_buffers.lambertian),
+                WriteDescriptorSet::buffer(1, material_buffers.metal),
+            ],
+            [],
+        )?;
+
         // Create the shader binding table.
         let shader_binding_table =
             ShaderBindingTable::new(vk.memory_allocator.clone(), &rt_pipeline.get())?;
@@ -189,6 +211,7 @@ impl SceneResources {
             mesh_data_descriptor_set,
             textures_descriptor_set,
             material_colours_descriptor_set,
+            materials_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             closest_hit_push_constants,
@@ -212,30 +235,28 @@ pub struct Scene {
 
 impl Scene {
     /// Create a new scene from the given models and camera.
-    pub fn new(
-        vk: Arc<Vk>,
-        models: &[Model],
-        camera: Arc<RwLock<dyn Camera>>,
-        window_size: [f32; 2],
-    ) -> Result<Self> {
-        if models.is_empty() {
-            Ok(Scene {
-                vk,
-                resources: None,
-                camera,
-            })
-        } else {
-            SceneResources::new(vk.clone(), models, window_size).map(|resources| Scene {
-                vk,
-                resources: Some(resources),
-                camera,
-            })
-        }
+    pub fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: [f32; 2]) -> Result<Self> {
+        let render_camera = &scene_file.render.camera;
+
+        let camera_type = scene_file
+            .cameras
+            .iter()
+            .find(|&cam| cam.get_name() == render_camera)
+            .with_context(|| format!("Camera ${render_camera} is no specified in cameras"))?;
+        debug!("{camera_type:?}");
+
+        let camera = camera_type.to_camera(window_size[0] as u32, window_size[1] as u32);
+
+        SceneResources::new(vk.clone(), scene_file, window_size).map(|resources| Scene {
+            vk,
+            resources: Some(resources),
+            camera,
+        })
     }
 
     /// Rebuilds the scene with new models.
-    pub fn rebuild(&mut self, models: &[Model], window_size: [f32; 2]) -> Result<()> {
-        let resources = SceneResources::new(self.vk.clone(), models, window_size)?;
+    pub fn rebuild(&mut self, scene_file: &SceneFile, window_size: [f32; 2]) -> Result<()> {
+        let resources = SceneResources::new(self.vk.clone(), scene_file, window_size)?;
         self.resources = Some(resources);
         Ok(())
     }
@@ -261,7 +282,7 @@ impl Scene {
             // Create the uniform buffer for the camera.
             let camera = self.camera.read().unwrap();
 
-            let uniform_buffer = Buffer::from_data(
+            let camera_buffer = Buffer::from_data(
                 self.vk.memory_allocator.clone(),
                 BufferCreateInfo {
                     usage: BufferUsage::UNIFORM_BUFFER,
@@ -285,10 +306,10 @@ impl Scene {
             let pipeline_layout = resources.rt_pipeline.get_layout();
             let layouts = pipeline_layout.set_layouts();
 
-            let uniform_buffer_descriptor_set = DescriptorSet::new(
+            let camera_buffer_descriptor_set = DescriptorSet::new(
                 self.vk.descriptor_set_allocator.clone(),
-                layouts[RtPipeline::UNIFORM_BUFFER_LAYOUT].clone(),
-                [WriteDescriptorSet::buffer(0, uniform_buffer)],
+                layouts[RtPipeline::CAMERA_BUFFER_LAYOUT].clone(),
+                [WriteDescriptorSet::buffer(0, camera_buffer)],
                 [],
             )
             .unwrap();
@@ -312,27 +333,28 @@ impl Scene {
             builder
                 .bind_descriptor_sets(
                     PipelineBindPoint::RayTracing,
-                    resources.rt_pipeline.get_layout(),
+                    pipeline_layout.clone(),
                     0,
                     vec![
                         resources.tlas_descriptor_set.clone(),
-                        uniform_buffer_descriptor_set,
+                        camera_buffer_descriptor_set,
                         render_image_descriptor_set,
                         resources.mesh_data_descriptor_set.clone(),
                         resources.textures_descriptor_set.clone(),
                         resources.material_colours_descriptor_set.clone(),
+                        resources.materials_descriptor_set.clone(),
                     ],
                 )
                 .unwrap()
                 .push_constants(
-                    resources.rt_pipeline.get_layout(),
+                    pipeline_layout.clone(),
                     0,
                     resources.closest_hit_push_constants,
                 )
                 .unwrap()
                 .push_constants(
-                    resources.rt_pipeline.get_layout(),
-                    0,
+                    pipeline_layout.clone(),
+                    size_of::<closest_hit::PushConstantData>() as _,
                     resources.ray_gen_push_constants,
                 )
                 .unwrap()

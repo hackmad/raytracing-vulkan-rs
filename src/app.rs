@@ -1,10 +1,6 @@
-use crate::raytracer::{Camera, Model, PerspectiveCamera, Scene, Vk};
-use glam::Vec3;
+use std::{path::PathBuf, sync::Arc};
+
 use log::{debug, error, info};
-use std::{
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
 use vulkano::{
     Version,
     command_buffer::allocator::StandardCommandBufferAllocator,
@@ -31,7 +27,9 @@ use winit::{
     raw_window_handle::HasDisplayHandle,
 };
 
-const DEFAULT_ASSET_FILE_PATH: &str = "assets/obj/sphere-on-plane.obj";
+use crate::raytracer::{Scene, SceneFile, Vk};
+
+const DEFAULT_ASSET_FILE_PATH: &str = "assets/metal-spheres.json";
 const INITIAL_WIDTH: u32 = 1024;
 const INITIAL_HEIGHT: u32 = 576;
 
@@ -161,22 +159,11 @@ impl ApplicationHandler for App {
         // Create storage image for rendering and display.
         let window_size = renderer.window_size();
 
-        // Load models.
-        let models = Model::load_obj(&self.current_file_path).unwrap();
-
-        // Create camera.
-        let camera: Arc<RwLock<dyn Camera>> = Arc::new(RwLock::new(PerspectiveCamera::new(
-            Vec3::new(4.5, 3.0, -3.5),
-            Vec3::new(0.0, 0.0, 0.0),
-            Vec3::new(0.0, -1.0, 0.0),
-            0.01,
-            100.0,
-            window_size[0] as u32,
-            window_size[1] as u32,
-        )));
+        // Load scene file.
+        let scene_file = SceneFile::load_json(&self.current_file_path).unwrap();
 
         // Create the raytracing pipeline
-        let scene = Scene::new(self.vk.clone(), &models, camera, window_size).unwrap();
+        let scene = Scene::new(self.vk.clone(), &scene_file, window_size).unwrap();
         self.scene = Some(scene);
     }
 
@@ -225,15 +212,15 @@ impl ApplicationHandler for App {
 
                     let fd = rfd::FileDialog::new()
                         .set_directory(absolute_path)
-                        .add_filter("Wavefront (.obj)", &["obj"]);
+                        .add_filter("JSON (.json)", &["json"]);
 
                     if let Some(path) = fd.pick_file() {
                         let selected_path = path.display().to_string();
 
                         if self.current_file_path != selected_path {
-                            match Model::load_obj(&selected_path) {
-                                Ok(models) => {
-                                    match scene.rebuild(&models, renderer.window_size()) {
+                            match SceneFile::load_json(&selected_path) {
+                                Ok(scene_file) => {
+                                    match scene.rebuild(&scene_file, renderer.window_size()) {
                                         Ok(()) => {
                                             self.current_file_path = selected_path;
                                         }

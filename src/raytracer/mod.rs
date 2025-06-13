@@ -1,15 +1,17 @@
 mod acceleration;
 mod camera;
 mod material;
-mod model;
+mod mesh;
 mod pipeline;
 mod scene;
+mod scene_file;
 mod shaders;
 mod texture;
 mod vk;
 
 pub use camera::*;
 pub use material::*;
-pub use model::*;
+pub use mesh::*;
 pub use scene::*;
+pub use scene_file::*;
 pub use vk::*;

@@ -1,187 +1,60 @@
-use super::{Model, shaders::closest_hit};
-use log::error;
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    fmt,
+    sync::Arc,
+};
+
+use anyhow::Result;
 use ordered_float::OrderedFloat;
-use std::{collections::HashMap, collections::hash_map::Entry, fmt, path::PathBuf};
+use vulkano::buffer::{BufferUsage, Subbuffer};
 
-/// Material property types. These will correspond to `MAT_PROP_TYPE_*` constants in the shader source.
-#[derive(Clone, Copy, Debug)]
-#[repr(u32)]
-pub enum MaterialPropertyType {
-    Diffuse = 0,
-}
+use crate::raytracer::{
+    MaterialType, Vk, create_device_local_buffer, shaders::closest_hit, texture::Textures,
+};
 
-/// Material property value types. These will correspond to `MAT_PROP_VALUE_TYPE_*` constants in the shader source.
-#[derive(Clone, Copy, Debug)]
-#[repr(u32)]
-pub enum MaterialPropertyValueType {
-    None = 0,
-    Rgb = 1,
-    Texture = 2,
-}
+pub const MAT_TYPE_NONE: u32 = 0;
+pub const MAT_TYPE_LAMBERTIAN: u32 = 1;
+pub const MAT_TYPE_METAL: u32 = 2;
 
-/// Represents the `Material` struct in shader source.
-#[derive(Clone, Copy, Debug)]
-#[repr(C)]
-pub struct MaterialPropertyData {
-    /// The `MaterialPropertyType`.
-    pub prop_type: u32,
-
-    /// The `MaterialPropertyValueType`.
-    pub prop_value_type: u32,
-
-    /// Index into material colour or texture buffers. -1 => None.
-    /// This is done to reduce the overhead of storing both a colour value and texture index in
-    /// the shader's `Material` struct.
-    pub index: i32,
-}
-
-impl MaterialPropertyData {
-    /// Create material using a solid colour.
-    fn new_colour(prop_type: MaterialPropertyType, index: i32) -> Self {
-        Self {
-            prop_type: prop_type as _,
-            prop_value_type: MaterialPropertyValueType::Rgb as _,
-            index,
-        }
-    }
-
-    /// Create material using a texture for sampling colours.
-    fn new_texture_index(prop_type: MaterialPropertyType, index: i32) -> Self {
-        Self {
-            prop_type: prop_type as _,
-            prop_value_type: MaterialPropertyValueType::Texture as _,
-            index,
-        }
-    }
-
-    /// Create a material property with no value.
-    pub fn new_none(prop_type: MaterialPropertyType) -> Self {
-        Self {
-            prop_type: prop_type as _,
-            prop_value_type: MaterialPropertyValueType::None as _,
-            index: -1,
-        }
-    }
-
-    /// Create material for the given property type and value.
-    pub fn from_property_value(
-        prop_type: MaterialPropertyType,
-        value: &MaterialPropertyValue,
-        texture_indices: &HashMap<String, i32>,
-        material_colour_indices: &HashMap<RgbColour, i32>,
-    ) -> Self {
-        match value {
-            MaterialPropertyValue::None => Self::new_none(prop_type),
-
-            MaterialPropertyValue::Rgb { colour } => {
-                let index = material_colour_indices
-                    .get(&colour.into())
-                    .unwrap_or_else(|| panic!("Material colour {colour:?} not found"));
-                Self::new_colour(prop_type, *index)
-            }
-
-            MaterialPropertyValue::Texture { path } => {
-                let index = texture_indices
-                    .get(path)
-                    .unwrap_or_else(|| panic!("Texture {path} not found"));
-                Self::new_texture_index(prop_type, *index)
-            }
-        }
-    }
-}
-
-impl From<MaterialPropertyData> for closest_hit::MaterialPropertyValue {
-    fn from(mat: MaterialPropertyData) -> Self {
-        // Convert to the shader's `Material` struct.
-        Self {
-            propType: mat.prop_type,
-            propValueType: mat.prop_value_type,
-            index: mat.index,
-        }
-    }
-}
-
-/// Enumerates material property values.
-#[derive(Clone, Debug)]
-pub enum MaterialPropertyValue {
-    /// No value.
-    None,
-
-    /// Solid RGB colour.
-    Rgb { colour: [f32; 3] },
-
-    /// Texture image path.
-    Texture { path: String },
-}
-
-impl MaterialPropertyValue {
-    /// Create a new material property value.
-    pub fn new(
-        colour: &Option<[f32; 3]>,
-        texture: &Option<String>,
-        mut parent_path: PathBuf,
-    ) -> Self {
-        match colour {
-            Some(c) => MaterialPropertyValue::Rgb { colour: *c },
-
-            None => texture.clone().map_or(Self::None, |path| {
-                if PathBuf::from(&path).is_absolute() {
-                    Self::Texture { path }
-                } else {
-                    parent_path.push(&path);
-
-                    if let Some(path) = parent_path.to_str() {
-                        Self::Texture {
-                            path: path.to_string(),
-                        }
-                    } else {
-                        error!("Invalid texture path {path}.");
-                        Self::None
-                    }
-                }
-            }),
-        }
-    }
-}
+pub const MAT_PROP_VALUE_TYPE_RGB: u32 = 0;
+pub const MAT_PROP_VALUE_TYPE_TEXTURE: u32 = 1;
 
 /// Stores unique material RGB values which will be added to to a storage buffer used by the
 /// shader.
 pub struct MaterialColours {
-    /// The material colours.
+    /// The material colours. This will be used to create the storage buffers for shaders.
     pub colours: Vec<[f32; 3]>,
 
-    /// Maps unique colours to their index in `colours`.
-    pub indices: HashMap<RgbColour, i32>, /* GLSL int => i32*/
+    /// Maps unique colours to their index in `colours`. These indices are used in the
+    /// MaterialPropertyValue structure.
+    pub indices: HashMap<RgbColour, u32>,
+}
+
+impl MaterialColours {
+    /// Returns all unique colours from scene file.
+    pub fn new(materials: &[MaterialType]) -> MaterialColours {
+        let mut colours = vec![];
+        let mut indices = HashMap::new();
+
+        for material_type in materials.iter() {
+            for rgb in material_type.get_material_colours() {
+                if let Entry::Vacant(e) = indices.entry(rgb) {
+                    e.insert(colours.len() as _);
+                    colours.push(rgb.into());
+                }
+            }
+        }
+
+        MaterialColours { colours, indices }
+    }
 }
 
 impl fmt::Debug for MaterialColours {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MaterialColours")
-            .field("colours", &self.colours.len())
+            .field("colours", &self.colours)
             .field("indices", &self.indices)
             .finish()
-    }
-}
-
-impl MaterialColours {
-    /// Load all unique texture paths from all models. Assumes images have alpha channel.
-    pub fn load(models: &[Model]) -> Self {
-        let mut colours = vec![];
-        let mut indices = HashMap::new();
-
-        for model in models.iter() {
-            if let Some(material) = &model.material {
-                if let MaterialPropertyValue::Rgb { colour } = material.diffuse {
-                    let rgb = RgbColour::from(colour);
-                    if let Entry::Vacant(e) = indices.entry(rgb) {
-                        e.insert(colours.len() as i32);
-                        colours.push(colour);
-                    }
-                }
-            }
-        }
-
-        Self { colours, indices }
     }
 }
 
@@ -226,4 +99,154 @@ impl From<RgbColour> for [f32; 3] {
     fn from(c: RgbColour) -> Self {
         [c.r.0, c.g.0, c.b.0]
     }
+}
+
+impl fmt::Debug for closest_hit::PushConstantData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::PushConstantData")
+            .field("textureCount", &self.textureCount)
+            .field("materialColourCount", &self.materialColourCount)
+            .field("lambertianMaterialCount", &self.lambertianMaterialCount)
+            .field("metalMaterialCount", &self.metalMaterialCount)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::MaterialPropertyValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::MaterialPropertyValue")
+            .field("propValueType", &self.propValueType)
+            .field("index", &self.index)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::LambertianMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::LambertianMaterial")
+            .field("albedo", &self.albedo)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::MetalMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::MetalMaterial")
+            .field("albedo", &self.albedo)
+            .field("fuzz", &self.fuzz)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
+pub struct Materials {
+    /// The lambertian materials. This will be used to create the storage buffers for shaders.
+    pub lambertian_materials: Vec<closest_hit::LambertianMaterial>,
+
+    /// The lambertian materials. This will be used to create the storage buffers for shaders.
+    pub metal_materials: Vec<closest_hit::MetalMaterial>,
+
+    /// Maps unique lambertian materials to their index in `lambertian_materials`. These indices
+    /// are used in the Mesh structure to be referenced in the storage buffers.
+    pub lambertian_material_indices: HashMap<String, u32>,
+
+    /// Maps unique metal materials to their index in `metal_materials`. These indices
+    /// are used in the Mesh structure to be referenced in the storage buffers.
+    pub metal_material_indices: HashMap<String, u32>,
+}
+
+impl Materials {
+    pub fn new(
+        textures: &Textures,
+        material_colours: &MaterialColours,
+        materials: &[MaterialType],
+    ) -> Self {
+        let mut lambertian_materials = vec![];
+        let mut metal_materials = vec![];
+
+        let mut lambertian_material_indices = HashMap::new();
+        let mut metal_material_indices = HashMap::new();
+
+        for material in materials.iter() {
+            match material {
+                MaterialType::Lambertian { name, albedo } => {
+                    lambertian_material_indices
+                        .insert(name.clone(), lambertian_materials.len() as _);
+
+                    lambertian_materials.push(closest_hit::LambertianMaterial {
+                        albedo: albedo.to_shader(textures, material_colours),
+                    });
+                }
+                MaterialType::Metal { name, albedo, fuzz } => {
+                    metal_material_indices.insert(name.clone(), metal_materials.len() as _);
+
+                    metal_materials.push(closest_hit::MetalMaterial {
+                        albedo: albedo.to_shader(textures, material_colours),
+                        fuzz: fuzz.to_shader(textures, material_colours),
+                    });
+                }
+            }
+        }
+
+        Materials {
+            lambertian_materials,
+            metal_materials,
+            lambertian_material_indices,
+            metal_material_indices,
+        }
+    }
+
+    /// Create a storage buffers for accessing materials in shader code.
+    pub fn create_buffers(&self, vk: Arc<Vk>) -> Result<MaterialBuffers> {
+        let buffer_usage = BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS;
+
+        // Note: We can't create buffers from empty list. So use a default material and push
+        // constants will set the number of materials to 0 which the shader code checks for out of
+        // bounds.
+
+        let lambertian_materials_buffer = create_device_local_buffer(
+            vk.clone(),
+            buffer_usage,
+            if !self.lambertian_materials.is_empty() {
+                self.lambertian_materials.clone()
+            } else {
+                vec![closest_hit::LambertianMaterial {
+                    albedo: closest_hit::MaterialPropertyValue {
+                        propValueType: 0,
+                        index: 0,
+                    },
+                }]
+            },
+        )?;
+
+        let metal_materials_buffer = create_device_local_buffer(
+            vk,
+            buffer_usage,
+            if !self.metal_materials.is_empty() {
+                self.metal_materials.clone()
+            } else {
+                vec![closest_hit::MetalMaterial {
+                    albedo: closest_hit::MaterialPropertyValue {
+                        propValueType: 0,
+                        index: 0,
+                    },
+                    fuzz: closest_hit::MaterialPropertyValue {
+                        propValueType: 0,
+                        index: 0,
+                    },
+                }]
+            },
+        )?;
+
+        Ok(MaterialBuffers {
+            lambertian: lambertian_materials_buffer,
+            metal: metal_materials_buffer,
+        })
+    }
+}
+
+/// Holds the storage buffers for the different material types.
+pub struct MaterialBuffers {
+    pub lambertian: Subbuffer<[closest_hit::LambertianMaterial]>,
+    pub metal: Subbuffer<[closest_hit::MetalMaterial]>,
 }

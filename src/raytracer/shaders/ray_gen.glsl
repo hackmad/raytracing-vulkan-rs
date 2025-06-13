@@ -15,8 +15,10 @@ layout(set = 1, binding = 0) uniform Camera {
 
 layout(set = 2, binding = 0, rgba8) uniform image2D image;
 
+// Note offset depends on closest_hit shader push constant size. If either of these change then check RtPipeline and
+// Scene in rust code to ensure 4 byte alignment.
 layout(push_constant) uniform PushConstantData {
-    uvec2 resolution;
+    layout(offset = 16) uvec2 resolution;
     uint  samplesPerPixel;
     uint  maxRayDepth;
 } pc;

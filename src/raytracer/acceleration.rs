@@ -17,7 +17,7 @@ use vulkano::{
     sync::GpuFuture,
 };
 
-use super::{Model, Vk, shaders::closest_hit};
+use crate::raytracer::{Mesh, Vk, shaders::closest_hit};
 
 /// Stores the acceleration structures.
 pub struct AccelerationStructures {
@@ -31,13 +31,13 @@ pub struct AccelerationStructures {
 
 impl AccelerationStructures {
     /// Create new acceleration structures for the given model.
-    pub fn new(vk: Arc<Vk>, models: &[Model]) -> Result<Self> {
-        let vertex_buffers = models
+    pub fn new(vk: Arc<Vk>, meshes: &[Mesh]) -> Result<Self> {
+        let vertex_buffers = meshes
             .iter()
-            .map(|model| model.create_blas_vertex_buffer(vk.clone()))
+            .map(|mesh| mesh.create_blas_vertex_buffer(vk.clone()))
             .collect::<Result<Vec<_>>>()?;
 
-        let index_buffers = models
+        let index_buffers = meshes
             .iter()
             .map(|model| model.create_blas_index_buffer(vk.clone()))
             .collect::<Result<Vec<_>>>()?;
