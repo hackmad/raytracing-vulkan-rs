@@ -8,7 +8,9 @@
         "up": [0, 1, 0],
         "fov_y": 90,
         "z_near": 0.01,
-        "z_far": 100
+        "z_far": 100,
+        "focal_length": 1.0,
+        "aperture_size": 0.0
       }
     }
   ],

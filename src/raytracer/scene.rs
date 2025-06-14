@@ -293,6 +293,8 @@ impl Scene {
                         .to_cols_array_2d(),
                     viewInverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
                     projInverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
+                    focalLength: camera.get_focal_length(),
+                    apertureSize: camera.get_aperture_size(),
                 },
             )
             .unwrap();

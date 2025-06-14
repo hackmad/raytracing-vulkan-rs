@@ -16,6 +16,12 @@ pub trait Camera {
 
     /// Returns the inverse projection matrix.
     fn get_projection_inverse_matrix(&self) -> Mat4;
+
+    /// Returns the focal length of the lens.
+    fn get_focal_length(&self) -> f32;
+
+    /// Returns the aperture size of the lens.
+    fn get_aperture_size(&self) -> f32;
 }
 
 /// Perspective camera.
@@ -28,6 +34,8 @@ pub struct PerspectiveCamera {
     z_far: f32,
     proj: Mat4,
     view: Mat4,
+    focal_length: f32,
+    aperture_size: f32,
 }
 
 impl PerspectiveCamera {
@@ -39,6 +47,8 @@ impl PerspectiveCamera {
         fov_y: f32,
         z_near: f32,
         z_far: f32,
+        focal_length: f32,
+        aperture_size: f32,
         image_width: u32,
         image_height: u32,
     ) -> Self {
@@ -52,6 +62,8 @@ impl PerspectiveCamera {
             fov_y,
             z_near,
             z_far,
+            focal_length,
+            aperture_size,
             proj,
             view,
         }
@@ -79,5 +91,13 @@ impl Camera for PerspectiveCamera {
 
     fn get_projection_inverse_matrix(&self) -> Mat4 {
         self.proj.inverse()
+    }
+
+    fn get_focal_length(&self) -> f32 {
+        self.focal_length
+    }
+
+    fn get_aperture_size(&self) -> f32 {
+        self.aperture_size
     }
 }

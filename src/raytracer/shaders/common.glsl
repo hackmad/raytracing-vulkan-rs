@@ -6,6 +6,8 @@
 // Constants
 
 const float PI = 3.14159265359;
+const float PI_OVER_2 = PI / 2.0;
+const float PI_OVER_4 = PI / 4.0;
 
 // --------------------------------------------------------------------------------
 // Materials.
@@ -193,6 +195,16 @@ vec3 randomUnitVec3(inout uint rngState) {
     }
 }
 
+// Uses rejection sampling.
+vec2 randomVec2InUnitDisk(inout uint rngState) {
+    while (true) {
+        vec2 p = randomVec2(rngState, -1.0, 1.0);
+        if (lengthSquared(p) < 1.0) {
+            return p;
+        }
+    }
+}
+
 vec3 randomVec3OnHemisphere(inout uint rngState, vec3 normal) {
     vec3 onUnitSphere = randomUnitVec3(rngState);
 
@@ -207,6 +219,28 @@ vec3 randomVec3OnHemisphere(inout uint rngState, vec3 normal) {
 // Returns the vector to a random point in the [-.5, -.5] - [+.5, +.5] unit square.
 vec2 sampleSquare(inout uint rngState) {
     return randomVec2(rngState) - vec2(0.5);
+}
+
+vec2 sampleUniformDiskConcentric(inout uint rngState) {
+    vec2 u = randomVec2(rngState);
+
+    // Map u to and handle degeneracy at the origin.
+    vec2 uOffset = 2.0 * u - vec2(1.0);
+    if (uOffset.x == 0.0 && uOffset.y == 0.0) {
+        return vec2(0.0);
+    }
+
+    // Apply concentric mapping to point.
+    float theta;
+    float r;
+    if (abs(uOffset.x) > abs(uOffset.y)) {
+        r = uOffset.x;
+        theta = PI_OVER_4 * (uOffset.y / uOffset.x);
+    } else {
+        r = uOffset.y;
+        theta = PI_OVER_2 - PI_OVER_4 * (uOffset.x / uOffset.y);
+    }
+    return r * vec2(cos(theta), sin(theta));
 }
 
 

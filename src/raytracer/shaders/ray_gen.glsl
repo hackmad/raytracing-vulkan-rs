@@ -8,9 +8,11 @@ layout(location = 0) rayPayloadEXT RayPayload rayPayload;
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
 layout(set = 1, binding = 0) uniform Camera {
-    mat4 viewProj;    // Camera view * projection
-    mat4 viewInverse; // Camera inverse view matrix
-    mat4 projInverse; // Camera inverse projection matrix
+    mat4 viewProj;      // Camera view * projection
+    mat4 viewInverse;   // Camera inverse view matrix
+    mat4 projInverse;   // Camera inverse projection matrix
+    float focalLength;  // Focal length of lens.
+    float apertureSize; // Aperture size (diameter of lens).
 } camera;
 
 layout(set = 2, binding = 0, rgba8) uniform image2D image;
@@ -91,6 +93,15 @@ void main() {
         vec4 origin = camera.viewInverse * vec4(0.0, 0.0, 0.0, 1.0);
         vec4 target = camera.projInverse * vec4(d.x, d.y, 1.0, 1.0);
         vec4 direction = camera.viewInverse * vec4(normalize(target.xyz), 0.0);
+
+        if (camera.apertureSize > 0.0) {
+            vec4 focalPoint = vec4(camera.focalLength * normalize(target.xyz), 1.0);
+
+            vec2 randomLensPos = sampleUniformDiskConcentric(rngState) * camera.apertureSize;
+            origin.xy += vec2(randomLensPos.x * d.x, randomLensPos.y * d.y);
+
+            direction = vec4((normalize((camera.viewInverse * focalPoint) - origin).xyz), 0.0);
+        }
 
         vec3 attenuation = rayColour(rngState, origin, direction, tMin, tMax, rayFlags);
         pixelColour += pixelSampleScale * attenuation;
