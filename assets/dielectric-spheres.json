@@ -11,7 +11,6 @@
         "z_far": 100,
         "focal_length": 3.4,
         "aperture_size": 0.5
-
       }
     }
   ],
@@ -102,7 +101,8 @@
   ],
   "render": {
     "camera": "default",
-    "samples_per_pixel": 10,
+    "samples_per_pixel": 16,
+    "sample_batches": 1,
     "max_ray_depth": 50
   }
 }

@@ -89,9 +89,13 @@ impl SceneResources {
             dielectricMaterialCount: materials.dielectric_materials.len() as _,
         };
 
+        // sampleBatch will need to change in Scene::render() but we can store the push constant
+        // data we need for now.
         let ray_gen_push_constants = ray_gen::RayGenPushConstants {
             resolution: [window_size[0] as u32, window_size[1] as u32],
             samplesPerPixel: scene_file.render.samples_per_pixel,
+            sampleBatches: scene_file.render.sample_batches,
+            sampleBatch: 0,
             maxRayDepth: scene_file.render.max_ray_depth,
         };
 
@@ -277,108 +281,113 @@ impl Scene {
             // Create the uniform buffer for the camera.
             let camera = self.camera.read().unwrap();
 
-            let camera_buffer = Buffer::from_data(
-                self.vk.memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::UNIFORM_BUFFER,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                ray_gen::Camera {
-                    viewProj: (camera.get_projection_matrix() * camera.get_view_matrix())
-                        .to_cols_array_2d(),
-                    viewInverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
-                    projInverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
-                    focalLength: camera.get_focal_length(),
-                    apertureSize: camera.get_aperture_size(),
-                },
-            )
-            .unwrap();
-
             // Create the descriptor sets for the raytracing pipeline.
             let pipeline_layout = resources.rt_pipeline.get_layout();
             let layouts = pipeline_layout.set_layouts();
 
-            let camera_buffer_descriptor_set = DescriptorSet::new(
-                self.vk.descriptor_set_allocator.clone(),
-                layouts[RtPipeline::CAMERA_BUFFER_LAYOUT].clone(),
-                [WriteDescriptorSet::buffer(0, camera_buffer)],
-                [],
-            )
-            .unwrap();
+            let mut future = before_future;
 
-            let render_image_descriptor_set = DescriptorSet::new(
-                self.vk.descriptor_set_allocator.clone(),
-                layouts[RtPipeline::RENDER_IMAGE_LAYOUT].clone(),
-                [WriteDescriptorSet::image_view(0, image_view.clone())],
-                [],
-            )
-            .unwrap();
+            let sample_batches = resources.ray_gen_push_constants.sampleBatches;
+            for sample_batch in 0..sample_batches {
+                let mut ray_gen_push_constants = resources.ray_gen_push_constants;
+                ray_gen_push_constants.sampleBatch = sample_batch as _;
 
-            // Build a command buffer to bind resources and trace rays.
-            let mut builder = AutoCommandBufferBuilder::primary(
-                self.vk.command_buffer_allocator.clone(),
-                self.vk.queue.queue_family_index(),
-                CommandBufferUsage::OneTimeSubmit,
-            )
-            .unwrap();
-
-            builder
-                .bind_descriptor_sets(
-                    PipelineBindPoint::RayTracing,
-                    pipeline_layout.clone(),
-                    0,
-                    vec![
-                        resources.tlas_descriptor_set.clone(),
-                        camera_buffer_descriptor_set,
-                        render_image_descriptor_set,
-                        resources.mesh_data_descriptor_set.clone(),
-                        resources.textures_descriptor_set.clone(),
-                        resources.material_colours_descriptor_set.clone(),
-                        resources.materials_descriptor_set.clone(),
-                    ],
+                let camera_buffer = Buffer::from_data(
+                    self.vk.memory_allocator.clone(),
+                    BufferCreateInfo {
+                        usage: BufferUsage::UNIFORM_BUFFER,
+                        ..Default::default()
+                    },
+                    AllocationCreateInfo {
+                        memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                            | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                        ..Default::default()
+                    },
+                    ray_gen::Camera {
+                        viewProj: (camera.get_projection_matrix() * camera.get_view_matrix())
+                            .to_cols_array_2d(),
+                        viewInverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
+                        projInverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
+                        focalLength: camera.get_focal_length(),
+                        apertureSize: camera.get_aperture_size(),
+                    },
                 )
-                .unwrap()
-                .push_constants(
-                    pipeline_layout.clone(),
-                    0,
-                    resources.closest_hit_push_constants,
-                )
-                .unwrap()
-                .push_constants(
-                    pipeline_layout.clone(),
-                    16,
-                    resources.ray_gen_push_constants,
-                )
-                .unwrap()
-                .bind_pipeline_ray_tracing(resources.rt_pipeline.get())
                 .unwrap();
 
-            // https://docs.rs/vulkano/latest/vulkano/shader/index.html#safety
-            unsafe {
+                let camera_buffer_descriptor_set = DescriptorSet::new(
+                    self.vk.descriptor_set_allocator.clone(),
+                    layouts[RtPipeline::CAMERA_BUFFER_LAYOUT].clone(),
+                    [WriteDescriptorSet::buffer(0, camera_buffer)],
+                    [],
+                )
+                .unwrap();
+
+                let render_image_descriptor_set = DescriptorSet::new(
+                    self.vk.descriptor_set_allocator.clone(),
+                    layouts[RtPipeline::RENDER_IMAGE_LAYOUT].clone(),
+                    [WriteDescriptorSet::image_view(0, image_view.clone())],
+                    [],
+                )
+                .unwrap();
+
+                // Build a command buffer to bind resources and trace rays.
+                let mut builder = AutoCommandBufferBuilder::primary(
+                    self.vk.command_buffer_allocator.clone(),
+                    self.vk.queue.queue_family_index(),
+                    CommandBufferUsage::OneTimeSubmit,
+                )
+                .unwrap();
+
                 builder
-                    .trace_rays(
-                        resources.shader_binding_table.addresses().clone(),
-                        image_view.image().extent(),
+                    .bind_descriptor_sets(
+                        PipelineBindPoint::RayTracing,
+                        pipeline_layout.clone(),
+                        0,
+                        vec![
+                            resources.tlas_descriptor_set.clone(),
+                            camera_buffer_descriptor_set,
+                            render_image_descriptor_set,
+                            resources.mesh_data_descriptor_set.clone(),
+                            resources.textures_descriptor_set.clone(),
+                            resources.material_colours_descriptor_set.clone(),
+                            resources.materials_descriptor_set.clone(),
+                        ],
                     )
+                    .unwrap()
+                    .push_constants(
+                        pipeline_layout.clone(),
+                        0,
+                        resources.closest_hit_push_constants,
+                    )
+                    .unwrap()
+                    .push_constants(pipeline_layout.clone(), 16, ray_gen_push_constants)
+                    .unwrap()
+                    .bind_pipeline_ray_tracing(resources.rt_pipeline.get())
                     .unwrap();
+
+                // https://docs.rs/vulkano/latest/vulkano/shader/index.html#safety
+                unsafe {
+                    builder
+                        .trace_rays(
+                            resources.shader_binding_table.addresses().clone(),
+                            image_view.image().extent(),
+                        )
+                        .unwrap();
+                }
+
+                let command_buffer = builder.build().unwrap();
+
+                let next_future = future
+                    .then_execute(self.vk.queue.clone(), command_buffer)
+                    .unwrap();
+
+                future = next_future.boxed();
             }
 
-            let command_buffer = builder.build().unwrap();
-
-            let after_future = before_future
-                .then_execute(self.vk.queue.clone(), command_buffer)
-                .unwrap();
-
-            after_future.boxed()
+            future
         } else {
             // Do nothing.
-            let after_future = before_future;
-            after_future.boxed()
+            before_future
         }
     }
 }

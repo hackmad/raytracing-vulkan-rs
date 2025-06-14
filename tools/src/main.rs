@@ -33,6 +33,18 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+fn make_sphere_touch_ground(
+    sphere_center: &[f32; 3],
+    sphere_radius: f32,
+    ground_sphere_center: &[f32; 3],
+    ground_sphere_radius: f32,
+) -> [f32; 3] {
+    let g_center = Vec3::from_slice(ground_sphere_center);
+    let dir = Vec3::from_slice(sphere_center) - g_center;
+    const FUDGE: f32 = 0.035; // Pushes the sphere into the ground a little.
+    (dir.normalize() * (ground_sphere_radius + sphere_radius - FUDGE) + g_center).to_array()
+}
+
 fn generate_final_one_weekend_scene() -> Result<()> {
     println!("Generating Raytracing in One Weekend final scene file");
 
@@ -45,10 +57,13 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         albedo: MaterialPropertyValue::Rgb([0.5, 0.5, 0.5]),
     };
 
+    let ground_center = [0.0, 1000.0, 0.0];
+    let ground_radius = 1000.0;
+
     objects.push(ObjectType::UvSphere {
         name: "ground_sphere".to_string(),
-        center: [0.0, 1000.0, 0.0],
-        radius: 1000.0,
+        center: ground_center,
+        radius: ground_radius,
         rings: 128,
         segments: 256,
         material: ground_material.get_name().to_string(),
@@ -59,52 +74,50 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     for a in -11..11 {
         for b in -11..11 {
             let choose_mat: f32 = Random::sample();
-            let center = Vec3::from_array([
+
+            let radius = 0.2;
+            let mut center = [
                 a as f32 + 0.9 * Random::sample::<f32>(),
-                -0.2,
+                -radius,
                 b as f32 + 0.9 * Random::sample::<f32>(),
-            ]);
+            ];
+            center = make_sphere_touch_ground(&center, radius, &ground_center, ground_radius);
 
-            let p = Vec3::new(4.0, -0.2, 0.0);
-            if (center - p).length() > 0.9 {
-                let material = if choose_mat < 0.8 {
-                    // diffuse
-                    MaterialType::Lambertian {
-                        name: format!("diffuse_{a}_{b}"),
-                        albedo: MaterialPropertyValue::Rgb(
-                            (Random::vec3() * Random::vec3()).to_array(),
-                        ),
-                    }
-                } else if choose_mat < 0.95 {
-                    // metal
-                    let fuzz = Random::sample_in_range(0.0, 0.5);
+            let material = if choose_mat < 0.8 {
+                // diffuse
+                MaterialType::Lambertian {
+                    name: format!("diffuse_{a}_{b}"),
+                    albedo: MaterialPropertyValue::Rgb(
+                        (Random::vec3() * Random::vec3()).to_array(),
+                    ),
+                }
+            } else if choose_mat < 0.95 {
+                // metal
+                let fuzz = Random::sample_in_range(0.0, 0.5);
 
-                    MaterialType::Metal {
-                        name: format!("metal_{a}_{b}"),
-                        albedo: MaterialPropertyValue::Rgb(
-                            Random::vec3_in_range(0.5, 1.0).to_array(),
-                        ),
-                        fuzz: MaterialPropertyValue::Rgb([fuzz, fuzz, fuzz]),
-                    }
-                } else {
-                    // glass
-                    MaterialType::Dielectric {
-                        name: format!("dielectric_{a}_{b}"),
-                        refraction_index: 1.5,
-                    }
-                };
+                MaterialType::Metal {
+                    name: format!("metal_{a}_{b}"),
+                    albedo: MaterialPropertyValue::Rgb(Random::vec3_in_range(0.5, 1.0).to_array()),
+                    fuzz: MaterialPropertyValue::Rgb([fuzz, fuzz, fuzz]),
+                }
+            } else {
+                // glass
+                MaterialType::Dielectric {
+                    name: format!("dielectric_{a}_{b}"),
+                    refraction_index: 1.5,
+                }
+            };
 
-                objects.push(ObjectType::UvSphere {
-                    name: format!("sphere_{a}_{b}").to_string(),
-                    center: center.to_array(),
-                    radius: 0.2,
-                    rings: 32,
-                    segments: 64,
-                    material: material.get_name().to_string(),
-                });
+            objects.push(ObjectType::UvSphere {
+                name: format!("sphere_{a}_{b}").to_string(),
+                center,
+                radius,
+                rings: 32,
+                segments: 64,
+                material: material.get_name().to_string(),
+            });
 
-                materials.push(material);
-            }
+            materials.push(material);
         }
     }
 
@@ -122,19 +135,25 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     });
     materials.push(material1);
 
+    let mut center2 = [-4.0, -1.0, 0.0];
+    center2 = make_sphere_touch_ground(&center2, 1.0, &ground_center, ground_radius);
+
     let material2 = MaterialType::Lambertian {
         name: "material2".to_string(),
         albedo: MaterialPropertyValue::Rgb([0.4, 0.2, 0.1]),
     };
     objects.push(ObjectType::UvSphere {
         name: "sphere2".to_string(),
-        center: [-4.0, -1.0, 0.0],
+        center: center2,
         radius: 1.0,
         rings: 64,
         segments: 128,
         material: material2.get_name().to_string(),
     });
     materials.push(material2);
+
+    let mut center3 = [4.0, -1.0, 0.0];
+    center3 = make_sphere_touch_ground(&center3, 1.0, &ground_center, ground_radius);
 
     let material3 = MaterialType::Metal {
         name: "material3".to_string(),
@@ -143,7 +162,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     };
     objects.push(ObjectType::UvSphere {
         name: "sphere3".to_string(),
-        center: [4.0, -1.0, 0.0],
+        center: center3,
         radius: 1.0,
         rings: 64,
         segments: 128,
@@ -165,7 +184,8 @@ fn generate_final_one_weekend_scene() -> Result<()> {
 
     let render = Render {
         camera: cameras[0].get_name().to_string(),
-        samples_per_pixel: 200,
+        samples_per_pixel: 64,
+        sample_batches: 2,
         max_ray_depth: 50,
     };
 

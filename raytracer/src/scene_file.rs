@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use glam::Vec3;
+use log::info;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -206,7 +207,8 @@ pub enum ObjectType {
 #[serde(rename_all = "snake_case")]
 pub struct Render {
     pub camera: String,
-    pub samples_per_pixel: u32,
+    pub samples_per_pixel: u32, // See ray_gen.glsl. Don't exceed 64.
+    pub sample_batches: u32,    // See ray_gen.glsl. Don't exceed 32.
     pub max_ray_depth: u32,
 }
 
@@ -228,6 +230,7 @@ impl SceneFile {
         let path_buf = PathBuf::from(path);
         let relative_to = path_buf.parent().unwrap();
         deserialized.adjust_relative_paths(relative_to);
+        deserialized.enforce_render_limits();
 
         Ok(deserialized)
     }
@@ -241,6 +244,23 @@ impl SceneFile {
     fn adjust_relative_paths(&mut self, relative_to: &Path) {
         for material_type in self.materials.iter_mut() {
             material_type.adjust_relative_path(relative_to);
+        }
+    }
+
+    fn enforce_render_limits(&mut self) {
+        if self.render.samples_per_pixel > 64 {
+            info!(
+                "Samples per pixel {} too high. Limiting to 64.",
+                self.render.samples_per_pixel
+            );
+            self.render.samples_per_pixel = 64;
+        }
+        if self.render.sample_batches > 32 {
+            info!(
+                "Sample batches {} too high. Limiting to 32.",
+                self.render.sample_batches
+            );
+            self.render.sample_batches = 32;
         }
     }
 

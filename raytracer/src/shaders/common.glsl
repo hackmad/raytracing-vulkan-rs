@@ -136,8 +136,8 @@ bool isFrontFace(vec3 rayDirection, vec3 outwardNormal) {
 // --------------------------------------------------------------------------------
 // Random number generator
 
-uint initRNG(uvec2 pixel, uvec2 resolution) {
-    return resolution.x * pixel.y + pixel.x;
+uint initRNG(uint sampleBatch, uvec2 pixel, uvec2 resolution) {
+    return (sampleBatch * resolution.y + pixel.y) * resolution.x + pixel.x;
 }
 
 // pcg32i_random_t with inc = 1.
