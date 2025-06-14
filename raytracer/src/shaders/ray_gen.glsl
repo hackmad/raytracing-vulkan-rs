@@ -87,7 +87,7 @@ void main() {
 
     vec3 summedPixelColour = vec3(0.0);
     for (int i = 0; i < pc.samplesPerPixel; ++i) {
-        const vec2 randomPixelCenter = pixelCenter + sampleSquare(rngState);
+        const vec2 randomPixelCenter = pixelCenter + (0.375 * randomGaussian(rngState)); // + sampleSquare(rngState);
 
         const vec2 screenUV = randomPixelCenter / vec2(gl_LaunchSizeEXT.xy);
         vec2 d = screenUV * 2.0 - 1.0;

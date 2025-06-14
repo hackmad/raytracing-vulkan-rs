@@ -6,6 +6,7 @@
 // Constants
 
 const float PI = 3.14159265359;
+const float TWO_PI = 2.0 * PI;
 const float PI_OVER_2 = PI / 2.0;
 const float PI_OVER_4 = PI / 4.0;
 
@@ -153,6 +154,16 @@ float stepAndOutputRNGFloat(inout uint rngState) {
     return float(word) / 4294967295.0;
 }
 
+// Gaussian filter: https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#gaussianfilterantialiasing 
+vec2 randomGaussian(inout uint rngState) {
+    // Almost uniform in (0,1] - make sure the value is never 0:
+    const float u1    = max(1e-38, stepAndOutputRNGFloat(rngState));
+    const float u2    = stepAndOutputRNGFloat(rngState);  // In [0, 1]
+    const float r     = sqrt(-2.0 * log(u1));
+    const float theta = TWO_PI * u2;  // Random in [0, 2pi]
+    return r * vec2(cos(theta), sin(theta));
+}
+
 // Returns a random real in [0, 1).
 float randomFloat(inout uint rngState) {
     return stepAndOutputRNGFloat(rngState);
@@ -216,7 +227,7 @@ vec3 randomVec3OnHemisphere(inout uint rngState, vec3 normal) {
     return -onUnitSphere;
 }
 
-// Returns the vector to a random point in the [-.5, -.5] - [+.5, +.5] unit square.
+// Box filter. Returns the vector to a random point in the [-.5, -.5] - [+.5, +.5] unit square.
 vec2 sampleSquare(inout uint rngState) {
     return randomVec2(rngState) - vec2(0.5);
 }
