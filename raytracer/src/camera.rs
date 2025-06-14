@@ -40,6 +40,7 @@ pub struct PerspectiveCamera {
 
 impl PerspectiveCamera {
     /// Create a new perspective camera.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         eye: Vec3,
         look_at: Vec3,

@@ -143,6 +143,14 @@ pub enum MaterialType {
 }
 
 impl MaterialType {
+    pub fn get_name(&self) -> &str {
+        match self {
+            Self::Lambertian { name, .. } => name.as_ref(),
+            Self::Metal { name, .. } => name.as_ref(),
+            Self::Dielectric { name, .. } => name.as_ref(),
+        }
+    }
+
     pub fn get_material_colours(&self) -> Vec<RgbColour> {
         let rgb_colours = match self {
             Self::Lambertian { albedo, .. } => vec![albedo.get_material_colour()],
@@ -222,6 +230,12 @@ impl SceneFile {
         deserialized.adjust_relative_paths(relative_to);
 
         Ok(deserialized)
+    }
+
+    pub fn save_json(&self, path: &str) -> Result<()> {
+        let serialized = serde_json::to_string_pretty(self)?;
+        std::fs::write(path, serialized)?;
+        Ok(())
     }
 
     fn adjust_relative_paths(&mut self, relative_to: &Path) {
