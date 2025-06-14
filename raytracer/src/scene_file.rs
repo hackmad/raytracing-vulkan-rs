@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
 
-use crate::raytracer::{
+use crate::{
     Camera, MAT_PROP_VALUE_TYPE_RGB, MAT_PROP_VALUE_TYPE_TEXTURE, MaterialColours, Mesh,
     PerspectiveCamera, RgbColour, shaders::closest_hit, texture::Textures,
 };

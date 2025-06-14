@@ -18,7 +18,7 @@ use vulkano::{
     sync::GpuFuture,
 };
 
-use crate::raytracer::{Mesh, Vk, shaders::closest_hit};
+use crate::{Mesh, Vk, shaders::closest_hit};
 
 /// Stores the acceleration structures.
 pub struct AccelerationStructures {

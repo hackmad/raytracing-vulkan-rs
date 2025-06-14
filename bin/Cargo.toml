@@ -1,0 +1,17 @@
+[package]
+name = "raytracing-vulkan-rs"
+version = "0.1.0"
+authors = ["Ahmad Kabani <ahmadkabani@yahoo.com>"]
+edition = "2024"
+
+[dependencies]
+raytracer = { path = "../raytracer" }
+
+anyhow = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+rfd = { workspace = true }
+vulkano = { workspace = true }
+vulkano-util = { workspace = true }
+winit = { workspace = true }
+

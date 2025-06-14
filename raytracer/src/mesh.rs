@@ -7,7 +7,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::raytracer::{
+use crate::{
     MAT_TYPE_DIELECTRIC, MAT_TYPE_LAMBERTIAN, MAT_TYPE_METAL, MAT_TYPE_NONE, Materials, ObjectType,
     Vk, create_device_local_buffer, shaders::closest_hit,
 };

@@ -2,7 +2,6 @@ use app::App;
 use winit::{error::EventLoopError, event_loop::EventLoop};
 
 mod app;
-mod raytracer;
 
 fn main() -> Result<(), EventLoopError> {
     env_logger::init();

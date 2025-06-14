@@ -8,7 +8,7 @@ use vulkano::{
 pub mod ray_gen {
     vulkano_shaders::shader! {
         ty: "raygen",
-        path: "src/raytracer/shaders/ray_gen.glsl",
+        path: "src/shaders/ray_gen.glsl",
         vulkan_version: "1.3",
     }
 }
@@ -16,7 +16,7 @@ pub mod ray_gen {
 pub mod closest_hit {
     vulkano_shaders::shader! {
         ty: "closesthit",
-        path: "src/raytracer/shaders/closest_hit.glsl",
+        path: "src/shaders/closest_hit.glsl",
         vulkan_version: "1.3",
     }
 }
@@ -24,7 +24,7 @@ pub mod closest_hit {
 pub mod ray_miss {
     vulkano_shaders::shader! {
         ty: "miss",
-        path: "src/raytracer/shaders/ray_miss.glsl",
+        path: "src/shaders/ray_miss.glsl",
         vulkan_version: "1.3",
     }
 }
@@ -32,7 +32,7 @@ pub mod ray_miss {
 pub mod shadow_miss {
     vulkano_shaders::shader! {
         ty: "miss",
-        path: "src/raytracer/shaders/shadow_miss.glsl",
+        path: "src/shaders/shadow_miss.glsl",
         vulkan_version: "1.3",
     }
 }

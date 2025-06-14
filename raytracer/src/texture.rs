@@ -15,7 +15,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::raytracer::{SceneFile, Vk};
+use crate::{SceneFile, Vk};
 
 /// Stores texture image views that will be added to a `SampledImage` variable descriptor used by
 /// the shader.

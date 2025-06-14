@@ -27,7 +27,7 @@ use winit::{
     raw_window_handle::HasDisplayHandle,
 };
 
-use crate::raytracer::{Scene, SceneFile, Vk};
+use raytracer::{Scene, SceneFile, Vk};
 
 const DEFAULT_ASSET_FILE_PATH: &str = "assets/dielectric-spheres.json";
 const INITIAL_WIDTH: u32 = 1024;

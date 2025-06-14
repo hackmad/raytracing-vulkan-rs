@@ -15,7 +15,7 @@ use vulkano::{
     sync::GpuFuture,
 };
 
-use crate::raytracer::{
+use crate::{
     Camera, MaterialColours, Materials, SceneFile, Vk,
     acceleration::AccelerationStructures,
     create_mesh_storage_buffer,

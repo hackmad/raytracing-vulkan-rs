@@ -8,7 +8,7 @@ use anyhow::Result;
 use ordered_float::OrderedFloat;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
-use crate::raytracer::{
+use crate::{
     MaterialType, Vk, create_device_local_buffer, shaders::closest_hit, texture::Textures,
 };
 
