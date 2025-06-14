@@ -1,0 +1,13 @@
+[package]
+name = "tools"
+version = "0.1.0"
+authors = ["Ahmad Kabani <ahmadkabani@yahoo.com>"]
+edition = "2024"
+
+[dependencies]
+random = { path = "../random" }
+raytracer = { path = "../raytracer" }
+
+anyhow = { workspace = true }
+clap = { workspace = true }
+glam = { workspace = true }
