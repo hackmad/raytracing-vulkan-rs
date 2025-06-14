@@ -19,7 +19,7 @@ enum Commands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    Random::seed(1_250_000);
+    Random::seed(485_674_958_675_300);
 
     match &cli.command {
         Some(Commands::GenFinalOneWeekend) => {
@@ -49,8 +49,8 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         name: "ground_sphere".to_string(),
         center: [0.0, 1000.0, 0.0],
         radius: 1000.0,
-        rings: 256,
-        segments: 512,
+        rings: 128,
+        segments: 256,
         material: ground_material.get_name().to_string(),
     });
 
@@ -98,8 +98,8 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                     name: format!("sphere_{a}_{b}").to_string(),
                     center: center.to_array(),
                     radius: 0.2,
-                    rings: 64,
-                    segments: 128,
+                    rings: 32,
+                    segments: 64,
                     material: material.get_name().to_string(),
                 });
 
@@ -116,8 +116,8 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         name: "sphere1".to_string(),
         center: [0.0, -1.0, 0.0],
         radius: 1.0,
-        rings: 128,
-        segments: 256,
+        rings: 64,
+        segments: 128,
         material: material1.get_name().to_string(),
     });
     materials.push(material1);
@@ -130,8 +130,8 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         name: "sphere2".to_string(),
         center: [-4.0, -1.0, 0.0],
         radius: 1.0,
-        rings: 128,
-        segments: 256,
+        rings: 64,
+        segments: 128,
         material: material2.get_name().to_string(),
     });
     materials.push(material2);
@@ -145,8 +145,8 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         name: "sphere3".to_string(),
         center: [4.0, -1.0, 0.0],
         radius: 1.0,
-        rings: 128,
-        segments: 256,
+        rings: 64,
+        segments: 128,
         material: material3.get_name().to_string(),
     });
     materials.push(material3);
@@ -160,12 +160,12 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         z_near: 0.01,
         z_far: 100.0,
         focal_length: 10.0,
-        aperture_size: 0.1,
+        aperture_size: 0.2,
     });
 
     let render = Render {
         camera: cameras[0].get_name().to_string(),
-        samples_per_pixel: 100,
+        samples_per_pixel: 200,
         max_ray_depth: 50,
     };
 
