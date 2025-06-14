@@ -97,7 +97,7 @@ void main() {
         if (camera.apertureSize > 0.0) {
             vec4 focalPoint = vec4(camera.focalLength * normalize(target.xyz), 1.0);
 
-            vec2 randomLensPos = sampleUniformDiskConcentric(rngState) * camera.apertureSize;
+            vec2 randomLensPos = sampleUniformDiskConcentric(rngState) * camera.apertureSize / 2.0;
             origin.xy += vec2(randomLensPos.x * d.x, randomLensPos.y * d.y);
 
             direction = vec4((normalize((camera.viewInverse * focalPoint) - origin).xyz), 0.0);
