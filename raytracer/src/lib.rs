@@ -5,6 +5,7 @@ mod mesh;
 mod pipeline;
 mod scene;
 mod scene_file;
+mod scene_resources;
 mod shaders;
 mod texture;
 mod vk;
