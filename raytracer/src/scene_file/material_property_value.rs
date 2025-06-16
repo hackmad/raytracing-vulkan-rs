@@ -12,7 +12,7 @@ use crate::{
 #[serde(rename_all = "snake_case")]
 pub enum MaterialPropertyValue {
     Rgb([f32; 3]),
-    TextureFile(String),
+    Image(String),
 }
 
 impl MaterialPropertyValue {
@@ -25,7 +25,7 @@ impl MaterialPropertyValue {
 
     pub fn get_texture_path(&self) -> Option<String> {
         match self {
-            MaterialPropertyValue::TextureFile(path) => Some(path.clone()),
+            MaterialPropertyValue::Image(path) => Some(path.clone()),
             _ => None,
         }
     }
@@ -45,7 +45,7 @@ impl MaterialPropertyValue {
                 })
                 .unwrap(),
 
-            MaterialPropertyValue::TextureFile(path) => image_textures
+            MaterialPropertyValue::Image(path) => image_textures
                 .indices
                 .get(path)
                 .map(|index| closest_hit::MaterialPropertyValue {
@@ -57,7 +57,7 @@ impl MaterialPropertyValue {
     }
 
     pub fn adjust_relative_path(&mut self, relative_to: &Path) {
-        if let MaterialPropertyValue::TextureFile(path) = self {
+        if let MaterialPropertyValue::Image(path) = self {
             let path_buf = Path::new(path).to_path_buf();
             if path_buf.is_relative() {
                 let mut new_path_buf = relative_to.to_path_buf();
