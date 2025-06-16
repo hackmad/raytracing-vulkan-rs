@@ -19,7 +19,7 @@ const uint MAT_TYPE_METAL = 2;
 const uint MAT_TYPE_DIELECTRIC = 3;
 
 const uint MAT_PROP_VALUE_TYPE_RGB = 0;
-const uint MAT_PROP_VALUE_TYPE_TEXTURE = 1;
+const uint MAT_PROP_VALUE_TYPE_IMAGE = 1;
 
 struct MaterialPropertyValue {
     uint propValueType;

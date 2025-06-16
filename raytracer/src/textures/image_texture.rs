@@ -19,7 +19,7 @@ use crate::{SceneFile, Vk};
 
 /// Stores texture image views that will be added to a `SampledImage` variable descriptor used by
 /// the shader.
-pub struct Textures {
+pub struct ImageTextures {
     /// The texture image views used by the shaders.
     pub image_views: Vec<Arc<ImageView>>,
 
@@ -28,16 +28,16 @@ pub struct Textures {
     pub indices: HashMap<String, u32>,
 }
 
-impl fmt::Debug for Textures {
+impl fmt::Debug for ImageTextures {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Textures")
+        f.debug_struct("ImageTextures")
             .field("image_views", &self.image_views.len())
             .field("indices", &self.indices)
             .finish()
     }
 }
 
-impl Textures {
+impl ImageTextures {
     /// Load all unique texture paths from all scene objects. Assumes images have alpha channel.
     pub fn load(scene_file: &SceneFile, vk: Arc<Vk>) -> Result<Self> {
         let mut image_views = vec![];

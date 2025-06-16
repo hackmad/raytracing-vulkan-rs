@@ -15,12 +15,12 @@ layout(set = 3, binding = 0, scalar) buffer MeshData {
     Mesh values[];
 } mesh_data;
 
-layout(set = 4, binding = 0) uniform sampler textureSampler;
-layout(set = 4, binding = 1) uniform texture2D textures[];
+layout(set = 4, binding = 0) uniform sampler imageTextureSampler;
+layout(set = 4, binding = 1) uniform texture2D imageTextures[];
 
-layout(set = 5, binding = 0, scalar) buffer MaterialColours {
+layout(set = 5, binding = 0, scalar) buffer ConstantColours {
     vec3 values[];
-} materialColour;
+} constantColour;
 
 layout(set = 6, binding = 0, scalar) buffer LambertianMaterials {
     LambertianMaterial values[];
@@ -33,8 +33,8 @@ layout(set = 6, binding = 2, scalar) buffer DielectricMaterials {
 } dielectricMaterial;
 
 layout(push_constant) uniform ClosestHitPushConstants {
-    uint textureCount;
-    uint materialColourCount;
+    uint imageTextureCount;
+    uint constantColourCount;
     uint lambertianMaterialCount;
     uint metalMaterialCount;
     uint dielectricMaterialCount;
@@ -86,15 +86,15 @@ vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex ver
 
     switch (matPropValue.propValueType) {
         case MAT_PROP_VALUE_TYPE_RGB:
-            if (matPropValue.index >= 0 && matPropValue.index < pc.materialColourCount) {
-                colour = materialColour.values[matPropValue.index];
+            if (matPropValue.index >= 0 && matPropValue.index < pc.constantColourCount) {
+                colour = constantColour.values[matPropValue.index];
             }
             break;
 
-        case MAT_PROP_VALUE_TYPE_TEXTURE:
-            if (matPropValue.index >= 0 && matPropValue.index < pc.textureCount) {
+        case MAT_PROP_VALUE_TYPE_IMAGE:
+            if (matPropValue.index >= 0 && matPropValue.index < pc.imageTextureCount) {
                 colour = texture(
-                        nonuniformEXT(sampler2D(textures[matPropValue.index], textureSampler)),
+                        nonuniformEXT(sampler2D(imageTextures[matPropValue.index], imageTextureSampler)),
                         vertex.texCoord
                         ).rgb; // Ignore alpha for now.
             }

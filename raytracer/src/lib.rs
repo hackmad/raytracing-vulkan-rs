@@ -7,7 +7,7 @@ mod scene;
 mod scene_file;
 mod scene_resources;
 mod shaders;
-mod texture;
+mod textures;
 mod vk;
 
 pub use camera::*;

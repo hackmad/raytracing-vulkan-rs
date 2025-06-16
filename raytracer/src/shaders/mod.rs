@@ -91,8 +91,8 @@ impl ShaderModules {
 impl fmt::Debug for closest_hit::ClosestHitPushConstants {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("closest_hit::ClosestHitPushConstants")
-            .field("textureCount", &self.textureCount)
-            .field("materialColourCount", &self.materialColourCount)
+            .field("imageTextureCount", &self.imageTextureCount)
+            .field("constantColourCount", &self.constantColourCount)
             .field("lambertianMaterialCount", &self.lambertianMaterialCount)
             .field("metalMaterialCount", &self.metalMaterialCount)
             .field("dielectricMaterialCount", &self.dielectricMaterialCount)

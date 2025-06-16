@@ -16,12 +16,12 @@ use vulkano::{
 };
 
 use crate::{
-    Camera, MaterialColours, Materials, SceneFile, Vk,
+    Camera, Materials, SceneFile, Vk,
     acceleration::AccelerationStructures,
     create_mesh_storage_buffer,
     pipeline::RtPipeline,
     shaders::{ShaderModules, closest_hit, ray_gen},
-    texture::Textures,
+    textures::{ConstantColourTextures, ImageTextures},
 };
 
 /// The vulkano resources specific to the rendering pipeline.
@@ -36,7 +36,7 @@ pub struct SceneResources {
     textures_descriptor_set: Arc<DescriptorSet>,
 
     /// Descriptor set for binding material colours.
-    material_colours_descriptor_set: Arc<DescriptorSet>,
+    constant_colour_textures_descriptor_set: Arc<DescriptorSet>,
 
     /// Descriptor set for binding materials.
     materials_descriptor_set: Arc<DescriptorSet>,
@@ -64,26 +64,30 @@ impl SceneResources {
         let shader_modules = ShaderModules::load(vk.device.clone());
 
         // Load Textures.
-        let textures = Textures::load(scene_file, vk.clone())?;
-        let texture_count = textures.image_views.len();
-        debug!("{textures:?}");
+        let image_textures = ImageTextures::load(scene_file, vk.clone())?;
+        let image_texture_count = image_textures.image_views.len();
+        debug!("{image_textures:?}");
 
         // Load material colours.
-        let material_colours = MaterialColours::new(&scene_file.materials);
-        let material_colour_count = material_colours.colours.len();
-        debug!("{material_colours:?}");
+        let constant_colour_textures = ConstantColourTextures::new(&scene_file.materials);
+        let constant_colour_count = constant_colour_textures.colours.len();
+        debug!("{constant_colour_textures:?}");
 
         // Get meshes.
         let meshes = scene_file.get_meshes();
 
         // Get materials.
-        let materials = Materials::new(&textures, &material_colours, &scene_file.materials);
+        let materials = Materials::new(
+            &image_textures,
+            &constant_colour_textures,
+            &scene_file.materials,
+        );
         debug!("{materials:?}");
 
         // Push constants.
         let closest_hit_push_constants = closest_hit::ClosestHitPushConstants {
-            textureCount: texture_count as _,
-            materialColourCount: material_colour_count as _,
+            imageTextureCount: image_texture_count as _,
+            constantColourCount: constant_colour_count as _,
             lambertianMaterialCount: materials.lambertian_materials.len() as _,
             metalMaterialCount: materials.metal_materials.len() as _,
             dielectricMaterialCount: materials.dielectric_materials.len() as _,
@@ -104,7 +108,7 @@ impl SceneResources {
             vk.device.clone(),
             &shader_modules.stages,
             &shader_modules.groups,
-            texture_count as _,
+            image_texture_count as _,
             size_of::<closest_hit::ClosestHitPushConstants>() as _,
             size_of::<ray_gen::RayGenPushConstants>() as _,
         )?;
@@ -148,33 +152,33 @@ impl SceneResources {
         )?;
 
         let mut texture_descriptor_writes = vec![WriteDescriptorSet::sampler(0, sampler.clone())];
-        if texture_count > 0 {
+        if image_texture_count > 0 {
             // We cannot create descriptor set for empty array. Push constants will have texture count which can
             // be used in shaders to make sure out-of-bounds access can be checked.
             texture_descriptor_writes.push(WriteDescriptorSet::image_view_array(
                 1,
                 0,
-                textures.image_views,
+                image_textures.image_views,
             ));
         }
 
         let textures_descriptor_set = DescriptorSet::new_variable(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
-            texture_count as _,
+            image_texture_count as _,
             texture_descriptor_writes,
             [],
         )?;
 
         // Material colours
-        let mat_colours = if material_colour_count > 0 {
-            material_colours.colours
+        let mat_colours = if constant_colour_count > 0 {
+            constant_colour_textures.colours
         } else {
             // We cannot create buffer for empty array. Push constants will have material colours count which can
             // be used in shaders to make sure out-of-bounds access can be checked.
             vec![[0.0, 0.0, 0.0]]
         };
-        let material_colours_buffer = Buffer::from_iter(
+        let constant_colour_textures_buffer = Buffer::from_iter(
             vk.memory_allocator.clone(),
             BufferCreateInfo {
                 usage: BufferUsage::STORAGE_BUFFER,
@@ -187,10 +191,13 @@ impl SceneResources {
             },
             mat_colours,
         )?;
-        let material_colours_descriptor_set = DescriptorSet::new(
+        let constant_colour_textures_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::MATERIAL_COLOURS_LAYOUT].clone(),
-            vec![WriteDescriptorSet::buffer(0, material_colours_buffer)],
+            vec![WriteDescriptorSet::buffer(
+                0,
+                constant_colour_textures_buffer,
+            )],
             [],
         )?;
 
@@ -216,7 +223,7 @@ impl SceneResources {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
-            material_colours_descriptor_set,
+            constant_colour_textures_descriptor_set,
             materials_descriptor_set,
             shader_binding_table,
             rt_pipeline,
@@ -310,7 +317,7 @@ impl SceneResources {
                         render_image_descriptor_set,
                         self.mesh_data_descriptor_set.clone(),
                         self.textures_descriptor_set.clone(),
-                        self.material_colours_descriptor_set.clone(),
+                        self.constant_colour_textures_descriptor_set.clone(),
                         self.materials_descriptor_set.clone(),
                     ],
                 )

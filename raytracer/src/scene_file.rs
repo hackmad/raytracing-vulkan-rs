@@ -10,8 +10,9 @@ use log::info;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Camera, MAT_PROP_VALUE_TYPE_RGB, MAT_PROP_VALUE_TYPE_TEXTURE, MaterialColours, Mesh,
-    PerspectiveCamera, RgbColour, shaders::closest_hit, texture::Textures,
+    Camera, MAT_PROP_VALUE_TYPE_IMAGE, MAT_PROP_VALUE_TYPE_RGB, Mesh, PerspectiveCamera,
+    shaders::closest_hit,
+    textures::{ConstantColourTextures, ImageTextures, RgbColour},
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -89,11 +90,11 @@ impl MaterialPropertyValue {
 
     pub fn to_shader(
         &self,
-        textures: &Textures,
-        material_colours: &MaterialColours,
+        image_textures: &ImageTextures,
+        constant_colour_textures: &ConstantColourTextures,
     ) -> closest_hit::MaterialPropertyValue {
         match self {
-            MaterialPropertyValue::Rgb(colour) => material_colours
+            MaterialPropertyValue::Rgb(colour) => constant_colour_textures
                 .indices
                 .get(&colour.into())
                 .map(|index| closest_hit::MaterialPropertyValue {
@@ -102,11 +103,11 @@ impl MaterialPropertyValue {
                 })
                 .unwrap(),
 
-            MaterialPropertyValue::TextureFile(path) => textures
+            MaterialPropertyValue::TextureFile(path) => image_textures
                 .indices
                 .get(path)
                 .map(|index| closest_hit::MaterialPropertyValue {
-                    propValueType: MAT_PROP_VALUE_TYPE_TEXTURE,
+                    propValueType: MAT_PROP_VALUE_TYPE_IMAGE,
                     index: *index,
                 })
                 .unwrap(),

@@ -1,15 +1,12 @@
-use std::{
-    collections::{HashMap, hash_map::Entry},
-    fmt,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt, sync::Arc};
 
 use anyhow::Result;
-use ordered_float::OrderedFloat;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
 use crate::{
-    MaterialType, Vk, create_device_local_buffer, shaders::closest_hit, texture::Textures,
+    MaterialType, Vk, create_device_local_buffer,
+    shaders::closest_hit,
+    textures::{ConstantColourTextures, ImageTextures},
 };
 
 pub const MAT_TYPE_NONE: u32 = 0;
@@ -18,89 +15,7 @@ pub const MAT_TYPE_METAL: u32 = 2;
 pub const MAT_TYPE_DIELECTRIC: u32 = 3;
 
 pub const MAT_PROP_VALUE_TYPE_RGB: u32 = 0;
-pub const MAT_PROP_VALUE_TYPE_TEXTURE: u32 = 1;
-
-/// Stores unique material RGB values which will be added to to a storage buffer used by the
-/// shader.
-pub struct MaterialColours {
-    /// The material colours. This will be used to create the storage buffers for shaders.
-    pub colours: Vec<[f32; 3]>,
-
-    /// Maps unique colours to their index in `colours`. These indices are used in the
-    /// MaterialPropertyValue structure.
-    pub indices: HashMap<RgbColour, u32>,
-}
-
-impl MaterialColours {
-    /// Returns all unique colours from scene file.
-    pub fn new(materials: &[MaterialType]) -> MaterialColours {
-        let mut colours = vec![];
-        let mut indices = HashMap::new();
-
-        for material_type in materials.iter() {
-            for rgb in material_type.get_material_colours() {
-                if let Entry::Vacant(e) = indices.entry(rgb) {
-                    e.insert(colours.len() as _);
-                    colours.push(rgb.into());
-                }
-            }
-        }
-
-        MaterialColours { colours, indices }
-    }
-}
-
-impl fmt::Debug for MaterialColours {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MaterialColours")
-            .field("colours", &self.colours)
-            .field("indices", &self.indices)
-            .finish()
-    }
-}
-
-#[derive(Clone, Copy, Hash, Eq, PartialEq)]
-pub struct RgbColour {
-    pub r: OrderedFloat<f32>,
-    pub g: OrderedFloat<f32>,
-    pub b: OrderedFloat<f32>,
-}
-
-impl fmt::Debug for RgbColour {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("RgbColour")
-            .field("r", &self.r.0)
-            .field("g", &self.g.0)
-            .field("b", &self.b.0)
-            .finish()
-    }
-}
-
-impl From<[f32; 3]> for RgbColour {
-    fn from(value: [f32; 3]) -> Self {
-        Self {
-            r: value[0].into(),
-            g: value[1].into(),
-            b: value[2].into(),
-        }
-    }
-}
-
-impl From<&[f32; 3]> for RgbColour {
-    fn from(value: &[f32; 3]) -> Self {
-        Self {
-            r: value[0].into(),
-            g: value[1].into(),
-            b: value[2].into(),
-        }
-    }
-}
-
-impl From<RgbColour> for [f32; 3] {
-    fn from(c: RgbColour) -> Self {
-        [c.r.0, c.g.0, c.b.0]
-    }
-}
+pub const MAT_PROP_VALUE_TYPE_IMAGE: u32 = 1;
 
 impl fmt::Debug for closest_hit::MaterialPropertyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -162,8 +77,8 @@ pub struct Materials {
 
 impl Materials {
     pub fn new(
-        textures: &Textures,
-        material_colours: &MaterialColours,
+        image_textures: &ImageTextures,
+        constant_colour_textures: &ConstantColourTextures,
         materials: &[MaterialType],
     ) -> Self {
         let mut lambertian_materials = vec![];
@@ -181,15 +96,15 @@ impl Materials {
                         .insert(name.clone(), lambertian_materials.len() as _);
 
                     lambertian_materials.push(closest_hit::LambertianMaterial {
-                        albedo: albedo.to_shader(textures, material_colours),
+                        albedo: albedo.to_shader(image_textures, constant_colour_textures),
                     });
                 }
                 MaterialType::Metal { name, albedo, fuzz } => {
                     metal_material_indices.insert(name.clone(), metal_materials.len() as _);
 
                     metal_materials.push(closest_hit::MetalMaterial {
-                        albedo: albedo.to_shader(textures, material_colours),
-                        fuzz: fuzz.to_shader(textures, material_colours),
+                        albedo: albedo.to_shader(image_textures, constant_colour_textures),
+                        fuzz: fuzz.to_shader(image_textures, constant_colour_textures),
                     });
                 }
                 MaterialType::Dielectric {

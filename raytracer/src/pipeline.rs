@@ -65,7 +65,7 @@ impl RtPipeline {
         device: Arc<Device>,
         stages: &[PipelineShaderStageCreateInfo],
         groups: &[RayTracingShaderGroupCreateInfo],
-        texture_count: u32,
+        image_texture_count: u32,
         closest_hit_push_constants_bytes_size: u32,
         ray_gen_push_constants_bytes_size: u32,
     ) -> Result<Self> {
@@ -78,8 +78,8 @@ impl RtPipeline {
                     create_camera_layout(device.clone()),
                     create_render_image_layout(device.clone()),
                     create_mesh_data_layout(device.clone()),
-                    create_sample_and_textures_layout(device.clone(), texture_count),
-                    create_material_colours_layout(device.clone()),
+                    create_sample_and_image_textures_layout(device.clone(), image_texture_count),
+                    create_constant_colour_textures_layout(device.clone()),
                     create_materials_layout(device.clone()),
                 ],
                 push_constant_ranges: vec![
@@ -198,10 +198,10 @@ fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     .unwrap()
 }
 
-/// Create a pipeline layout for sampler and textures.
-fn create_sample_and_textures_layout(
+/// Create a pipeline layout for sampler and image textures.
+fn create_sample_and_image_textures_layout(
     device: Arc<Device>,
-    texture_count: u32,
+    image_texture_count: u32,
 ) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
@@ -219,7 +219,7 @@ fn create_sample_and_textures_layout(
                     DescriptorSetLayoutBinding {
                         stages: ShaderStages::CLOSEST_HIT,
                         binding_flags: DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT,
-                        descriptor_count: texture_count,
+                        descriptor_count: image_texture_count,
                         ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::SampledImage)
                     },
                 ),
@@ -232,8 +232,8 @@ fn create_sample_and_textures_layout(
     .unwrap()
 }
 
-/// Create a pipeline layout for material colours.
-fn create_material_colours_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+/// Create a pipeline layout for constant colour textures (this is just unique colour values).
+fn create_constant_colour_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
