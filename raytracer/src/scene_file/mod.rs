@@ -1,22 +1,22 @@
 mod camera_type;
-mod material_property_value;
 mod material_type;
 mod object_type;
 mod render;
+mod texture_type;
 
 pub use camera_type::*;
-pub use material_property_value::*;
 pub use material_type::*;
 pub use object_type::*;
 pub use render::*;
+pub use texture_type::*;
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, hash_map::Entry},
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result};
-use log::info;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
 use crate::Mesh;
@@ -25,6 +25,7 @@ use crate::Mesh;
 #[serde(rename_all = "snake_case")]
 pub struct SceneFile {
     pub cameras: Vec<CameraType>,
+    pub textures: Vec<TextureType>,
     pub materials: Vec<MaterialType>,
     pub objects: Vec<ObjectType>,
     pub render: Render,
@@ -51,8 +52,8 @@ impl SceneFile {
     }
 
     fn adjust_relative_paths(&mut self, relative_to: &Path) {
-        for material_type in self.materials.iter_mut() {
-            material_type.adjust_relative_path(relative_to);
+        for texture in self.textures.iter_mut() {
+            texture.adjust_relative_path(relative_to);
         }
     }
 
@@ -73,17 +74,20 @@ impl SceneFile {
         }
     }
 
-    /// Returns all unique texture paths from scene file.
-    pub fn get_texture_paths(&self) -> HashSet<String> {
-        let mut texture_paths = HashSet::new();
+    // Note: Texture names will be unique across all texture types.
+    pub fn get_textures(&self) -> HashMap<String, TextureType> {
+        let mut textures: HashMap<String, TextureType> = HashMap::new();
 
-        for material_type in self.materials.iter() {
-            for path in material_type.get_texture_paths() {
-                texture_paths.insert(path);
+        for texture in self.textures.iter() {
+            let name = texture.get_name();
+            if let Entry::Vacant(e) = textures.entry(name.to_string()) {
+                e.insert(texture.clone());
+            } else {
+                warn!("Texture name '{name}' is used multiple times");
             }
         }
 
-        texture_paths
+        textures
     }
 
     /// Return all meshes.

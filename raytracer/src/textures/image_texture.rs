@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    fmt,
+    sync::Arc,
+};
 
 use anyhow::Result;
 use image::{GenericImageView, ImageReader};
@@ -15,7 +19,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::{SceneFile, Vk};
+use crate::{MAT_PROP_VALUE_TYPE_IMAGE, TextureType, Vk, shaders::closest_hit};
 
 /// Stores texture image views that will be added to a `SampledImage` variable descriptor used by
 /// the shader.
@@ -39,9 +43,9 @@ impl fmt::Debug for ImageTextures {
 
 impl ImageTextures {
     /// Load all unique texture paths from all scene objects. Assumes images have alpha channel.
-    pub fn load(scene_file: &SceneFile, vk: Arc<Vk>) -> Result<Self> {
+    pub fn load(vk: Arc<Vk>, textures: &HashMap<String, TextureType>) -> Result<Self> {
         let mut image_views = vec![];
-        let mut indices: HashMap<String, u32> = HashMap::new();
+        let mut indices = HashMap::new();
 
         let mut builder = AutoCommandBufferBuilder::primary(
             vk.command_buffer_allocator.clone(),
@@ -49,11 +53,16 @@ impl ImageTextures {
             CommandBufferUsage::OneTimeSubmit,
         )?;
 
-        for path in scene_file.get_texture_paths() {
-            if !indices.contains_key(&path) {
-                let texture = load_texture(vk.clone(), &path, &mut builder)?;
-                indices.insert(path.clone(), image_views.len() as _);
-                image_views.push(texture);
+        for texture in textures.values() {
+            match texture {
+                TextureType::Image { name, path } => {
+                    if let Entry::Vacant(e) = indices.entry(name.clone()) {
+                        let texture = load_texture(vk.clone(), path, &mut builder)?;
+                        e.insert(image_views.len() as u32);
+                        image_views.push(texture);
+                    }
+                }
+                TextureType::Constant { .. } => {}
             }
         }
 
@@ -63,6 +72,15 @@ impl ImageTextures {
             image_views,
             indices,
         })
+    }
+
+    pub fn to_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
+        self.indices
+            .get(name)
+            .map(|i| closest_hit::MaterialPropertyValue {
+                propValueType: MAT_PROP_VALUE_TYPE_IMAGE,
+                index: *i,
+            })
     }
 }
 
