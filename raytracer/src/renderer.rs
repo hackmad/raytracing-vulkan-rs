@@ -21,7 +21,7 @@ use crate::{
     create_mesh_storage_buffer,
     pipeline::RtPipeline,
     shaders::{ShaderModules, closest_hit, ray_gen},
-    textures::{ConstantColourTextures, ImageTextures},
+    textures::Textures,
 };
 
 /// Stores resources specific to the rendering pipeline and renders a frame.
@@ -64,24 +64,17 @@ impl Renderer {
         let shader_modules = ShaderModules::load(vk.device.clone());
 
         // Load Textures.
-        let image_textures = ImageTextures::load(scene_file, vk.clone())?;
-        let image_texture_count = image_textures.image_views.len();
-        debug!("{image_textures:?}");
+        let textures = Textures::new(vk.clone(), scene_file)?;
+        let image_texture_count = textures.image_textures.image_views.len();
 
         // Load material colours.
-        let constant_colour_textures = ConstantColourTextures::new(&scene_file.materials);
-        let constant_colour_count = constant_colour_textures.colours.len();
-        debug!("{constant_colour_textures:?}");
+        let constant_colour_count = textures.constant_colour_textures.colours.len();
 
         // Get meshes.
         let meshes = scene_file.get_meshes();
 
         // Get materials.
-        let materials = Materials::new(
-            &image_textures,
-            &constant_colour_textures,
-            &scene_file.materials,
-        );
+        let materials = Materials::new(&scene_file.materials, &textures);
         debug!("{materials:?}");
 
         // Push constants.
@@ -158,7 +151,7 @@ impl Renderer {
             texture_descriptor_writes.push(WriteDescriptorSet::image_view_array(
                 1,
                 0,
-                image_textures.image_views,
+                textures.image_textures.image_views,
             ));
         }
 
@@ -172,7 +165,7 @@ impl Renderer {
 
         // Material colours
         let mat_colours = if constant_colour_count > 0 {
-            constant_colour_textures.colours
+            textures.constant_colour_textures.colours
         } else {
             // We cannot create buffer for empty array. Push constants will have material colours count which can
             // be used in shaders to make sure out-of-bounds access can be checked.

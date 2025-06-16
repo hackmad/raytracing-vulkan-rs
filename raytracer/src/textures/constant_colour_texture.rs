@@ -3,7 +3,7 @@ use std::collections::{HashMap, hash_map::Entry};
 
 use ordered_float::OrderedFloat;
 
-use crate::MaterialType;
+use crate::{MAT_PROP_VALUE_TYPE_RGB, TextureType, shaders::closest_hit};
 
 /// Stores unique material RGB values which will be added to to a storage buffer used by the
 /// shader.
@@ -13,25 +13,37 @@ pub struct ConstantColourTextures {
 
     /// Maps unique colours to their index in `colours`. These indices are used in the
     /// MaterialPropertyValue structure.
-    pub indices: HashMap<RgbColour, u32>,
+    pub indices: HashMap<String, u32>,
 }
 
 impl ConstantColourTextures {
     /// Returns all unique colours from scene file.
-    pub fn new(materials: &[MaterialType]) -> ConstantColourTextures {
+    pub fn new(textures: &HashMap<String, TextureType>) -> ConstantColourTextures {
         let mut colours = vec![];
         let mut indices = HashMap::new();
 
-        for material_type in materials.iter() {
-            for rgb in material_type.get_material_colours() {
-                if let Entry::Vacant(e) = indices.entry(rgb) {
-                    e.insert(colours.len() as _);
-                    colours.push(rgb.into());
+        for texture in textures.values() {
+            match texture {
+                TextureType::Constant { name, rgb } => {
+                    if let Entry::Vacant(e) = indices.entry(name.clone()) {
+                        e.insert(colours.len() as _);
+                        colours.push(*rgb);
+                    }
                 }
+                TextureType::Image { .. } => {}
             }
         }
 
         ConstantColourTextures { colours, indices }
+    }
+
+    pub fn to_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
+        self.indices
+            .get(name)
+            .map(|i| closest_hit::MaterialPropertyValue {
+                propValueType: MAT_PROP_VALUE_TYPE_RGB,
+                index: *i,
+            })
     }
 }
 

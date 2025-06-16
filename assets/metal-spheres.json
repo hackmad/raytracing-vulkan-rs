@@ -14,33 +14,19 @@
       }
     }
   ],
+  "textures": [
+    { "constant": { "name": "blue", "rgb": [0.1, 0.2, 0.5] } },
+    { "constant": { "name": "yellow", "rgb": [0.8, 0.8, 0.0] } },
+    { "constant": { "name": "silver", "rgb": [0.8, 0.8, 0.8] } },
+    { "constant": { "name": "gray", "rgb": [0.3, 0.3, 0.3] } },
+    { "constant": { "name": "white", "rgb": [1.0, 1.0, 1.0] } },
+    { "constant": { "name": "gold", "rgb": [0.8, 0.6, 0.2] } }
+  ],
   "materials": [
-    {
-      "lambertian": {
-        "name": "center",
-        "albedo": { "rgb": [0.1, 0.2, 0.5] }
-      }
-    },
-    {
-      "metal": {
-        "name": "left",
-        "albedo": { "rgb": [0.8, 0.8, 0.8] },
-        "fuzz": { "rgb": [0.3, 0.3, 0.3] }
-      }
-    },
-    {
-      "metal": {
-        "name": "right",
-        "albedo": { "rgb": [0.8, 0.6, 0.2] },
-        "fuzz": { "rgb": [1.0, 1.0, 1.0] }
-      }
-    },
-    {
-      "lambertian": {
-        "name": "ground",
-        "albedo": { "rgb": [0.8, 0.8, 0.0] }
-      }
-    }
+    { "lambertian": { "name": "center", "albedo": "blue" } },
+    { "metal": { "name": "left", "albedo": "silver", "fuzz": "gray" } },
+    { "metal": { "name": "right", "albedo": "gold", "fuzz": "white" } },
+    { "lambertian": { "name": "ground", "albedo": "yellow" } }
   ],
   "objects": [
     {

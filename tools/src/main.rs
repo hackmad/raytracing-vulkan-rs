@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use glam::Vec3;
 use random::Random;
-use raytracer::{CameraType, MaterialPropertyValue, MaterialType, ObjectType, Render, SceneFile};
+use raytracer::{CameraType, MaterialType, ObjectType, Render, SceneFile, TextureType};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -19,7 +19,7 @@ enum Commands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    Random::seed(485_674_958_675_300);
+    Random::seed(485_674_845_675_491);
 
     match &cli.command {
         Some(Commands::GenFinalOneWeekend) => {
@@ -49,12 +49,18 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     println!("Generating Raytracing in One Weekend final scene file");
 
     let mut objects = vec![];
+    let mut textures = vec![];
     let mut materials = vec![];
     let mut cameras = vec![];
 
+    let gray_texture = TextureType::Constant {
+        name: "gray".to_string(),
+        rgb: [0.5, 0.5, 0.5],
+    };
+
     let ground_material = MaterialType::Lambertian {
         name: "ground".to_string(),
-        albedo: MaterialPropertyValue::Rgb([0.5, 0.5, 0.5]),
+        albedo: gray_texture.get_name().to_string(),
     };
 
     let ground_center = [0.0, 1000.0, 0.0];
@@ -69,43 +75,86 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         material: ground_material.get_name().to_string(),
     });
 
+    textures.push(gray_texture);
     materials.push(ground_material);
+
+    let center_sphere_1 = Vec3::new(0.0, -1.0, 0.0);
+    let center_sphere_2 = Vec3::from_array(make_sphere_touch_ground(
+        &[-4.0, -1.0, 0.0],
+        1.0,
+        &ground_center,
+        ground_radius,
+    ));
+    let center_sphere_3 = Vec3::from_array(make_sphere_touch_ground(
+        &[4.0, -1.0, 0.0],
+        1.0,
+        &ground_center,
+        ground_radius,
+    ));
+
+    let center_spheres_radius = 1.0;
 
     for a in -11..11 {
         for b in -11..11 {
             let choose_mat: f32 = Random::sample();
 
             let radius = 0.2;
-            let mut center = [
-                a as f32 + 0.9 * Random::sample::<f32>(),
-                -radius,
-                b as f32 + 0.9 * Random::sample::<f32>(),
-            ];
-            center = make_sphere_touch_ground(&center, radius, &ground_center, ground_radius);
+            let mut center: [f32; 3];
+            loop {
+                center = [
+                    a as f32 + 0.9 * Random::sample::<f32>(),
+                    -radius,
+                    b as f32 + 0.9 * Random::sample::<f32>(),
+                ];
+                center = make_sphere_touch_ground(&center, radius, &ground_center, ground_radius);
 
-            let material = if choose_mat < 0.8 {
-                // diffuse
-                MaterialType::Lambertian {
-                    name: format!("diffuse_{a}_{b}"),
-                    albedo: MaterialPropertyValue::Rgb(
-                        (Random::vec3() * Random::vec3()).to_array(),
-                    ),
+                let p_center = Vec3::from_slice(&center);
+
+                let total_radius = center_spheres_radius + radius;
+                if (p_center - center_sphere_1).length() > total_radius
+                    && (p_center - center_sphere_2).length() > total_radius
+                    && (p_center - center_sphere_3).length() > total_radius
+                {
+                    break;
                 }
+            }
+
+            let (tex, material) = if choose_mat < 0.8 {
+                // diffuse
+                let name = format!("diffuse_{a}_{b}");
+                let t_albedo = TextureType::Constant {
+                    name: format!("tex_albedo_{name}"),
+                    rgb: (Random::vec3() * Random::vec3()).to_array(),
+                };
+                let mat = MaterialType::Lambertian {
+                    name: format!("mat_{name}"),
+                    albedo: t_albedo.get_name().to_string(),
+                };
+                (vec![t_albedo], mat)
             } else if choose_mat < 0.95 {
                 // metal
-                let fuzz = Random::sample_in_range(0.0, 0.5);
-
-                MaterialType::Metal {
-                    name: format!("metal_{a}_{b}"),
-                    albedo: MaterialPropertyValue::Rgb(Random::vec3_in_range(0.5, 1.0).to_array()),
-                    fuzz: MaterialPropertyValue::Rgb([fuzz, fuzz, fuzz]),
-                }
+                let name = format!("metal_{a}_{b}");
+                let t_albedo = TextureType::Constant {
+                    name: format!("tex_albedo_{name}"),
+                    rgb: Random::vec3_in_range(0.5, 1.0).to_array(),
+                };
+                let t_fuzz = TextureType::Constant {
+                    name: format!("tex_fuzz_{name}"),
+                    rgb: Random::vec3_in_range(0.0, 0.5).to_array(),
+                };
+                let mat = MaterialType::Metal {
+                    name: format!("mat_metal_{a}_{b}"),
+                    albedo: t_albedo.get_name().to_string(),
+                    fuzz: t_fuzz.get_name().to_string(),
+                };
+                (vec![t_albedo, t_fuzz], mat)
             } else {
                 // glass
-                MaterialType::Dielectric {
-                    name: format!("dielectric_{a}_{b}"),
+                let mat = MaterialType::Dielectric {
+                    name: format!("mat_dielectric_{a}_{b}"),
                     refraction_index: 1.5,
-                }
+                };
+                (vec![], mat)
             };
 
             objects.push(ObjectType::UvSphere {
@@ -117,6 +166,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                 material: material.get_name().to_string(),
             });
 
+            textures.extend_from_slice(&tex);
             materials.push(material);
         }
     }
@@ -127,47 +177,56 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     };
     objects.push(ObjectType::UvSphere {
         name: "sphere1".to_string(),
-        center: [0.0, -1.0, 0.0],
-        radius: 1.0,
+        center: center_sphere_1.to_array(),
+        radius: center_spheres_radius,
         rings: 64,
         segments: 128,
         material: material1.get_name().to_string(),
     });
     materials.push(material1);
 
-    let mut center2 = [-4.0, -1.0, 0.0];
-    center2 = make_sphere_touch_ground(&center2, 1.0, &ground_center, ground_radius);
-
+    let texture2 = TextureType::Constant {
+        name: "texture2".to_string(),
+        rgb: [0.4, 0.2, 0.1],
+    };
     let material2 = MaterialType::Lambertian {
         name: "material2".to_string(),
-        albedo: MaterialPropertyValue::Rgb([0.4, 0.2, 0.1]),
+        albedo: texture2.get_name().to_string(),
     };
     objects.push(ObjectType::UvSphere {
         name: "sphere2".to_string(),
-        center: center2,
-        radius: 1.0,
+        center: center_sphere_2.to_array(),
+        radius: center_spheres_radius,
         rings: 64,
         segments: 128,
         material: material2.get_name().to_string(),
     });
+    textures.push(texture2);
     materials.push(material2);
 
-    let mut center3 = [4.0, -1.0, 0.0];
-    center3 = make_sphere_touch_ground(&center3, 1.0, &ground_center, ground_radius);
-
+    let texture3 = TextureType::Constant {
+        name: "texture3".to_string(),
+        rgb: [0.7, 0.6, 0.5],
+    };
+    let texture4 = TextureType::Constant {
+        name: "texture4".to_string(),
+        rgb: [0.0, 0.0, 0.0],
+    };
     let material3 = MaterialType::Metal {
         name: "material3".to_string(),
-        albedo: MaterialPropertyValue::Rgb([0.7, 0.6, 0.5]),
-        fuzz: MaterialPropertyValue::Rgb([0.0, 0.0, 0.0]),
+        albedo: texture3.get_name().to_string(),
+        fuzz: texture4.get_name().to_string(),
     };
     objects.push(ObjectType::UvSphere {
         name: "sphere3".to_string(),
-        center: center3,
-        radius: 1.0,
+        center: center_sphere_3.to_array(),
+        radius: center_spheres_radius,
         rings: 64,
         segments: 128,
         material: material3.get_name().to_string(),
     });
+    textures.push(texture3);
+    textures.push(texture4);
     materials.push(material3);
 
     cameras.push(CameraType::Perspective {
@@ -191,6 +250,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
 
     let scene_file = SceneFile {
         cameras,
+        textures,
         materials,
         objects,
         render,

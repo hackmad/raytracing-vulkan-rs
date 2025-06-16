@@ -4,9 +4,7 @@ use anyhow::Result;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
 use crate::{
-    MaterialType, Vk, create_device_local_buffer,
-    shaders::closest_hit,
-    textures::{ConstantColourTextures, ImageTextures},
+    MaterialType, Vk, create_device_local_buffer, shaders::closest_hit, textures::Textures,
 };
 
 pub const MAT_TYPE_NONE: u32 = 0;
@@ -76,11 +74,7 @@ pub struct Materials {
 }
 
 impl Materials {
-    pub fn new(
-        image_textures: &ImageTextures,
-        constant_colour_textures: &ConstantColourTextures,
-        materials: &[MaterialType],
-    ) -> Self {
+    pub fn new(materials: &[MaterialType], textures: &Textures) -> Self {
         let mut lambertian_materials = vec![];
         let mut metal_materials = vec![];
         let mut dielectric_materials = vec![];
@@ -96,15 +90,15 @@ impl Materials {
                         .insert(name.clone(), lambertian_materials.len() as _);
 
                     lambertian_materials.push(closest_hit::LambertianMaterial {
-                        albedo: albedo.to_shader(image_textures, constant_colour_textures),
+                        albedo: textures.to_shader(albedo).unwrap(),
                     });
                 }
                 MaterialType::Metal { name, albedo, fuzz } => {
                     metal_material_indices.insert(name.clone(), metal_materials.len() as _);
 
                     metal_materials.push(closest_hit::MetalMaterial {
-                        albedo: albedo.to_shader(image_textures, constant_colour_textures),
-                        fuzz: fuzz.to_shader(image_textures, constant_colour_textures),
+                        albedo: textures.to_shader(albedo).unwrap(),
+                        fuzz: textures.to_shader(fuzz).unwrap(),
                     });
                 }
                 MaterialType::Dielectric {
