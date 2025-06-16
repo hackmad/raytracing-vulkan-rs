@@ -24,8 +24,8 @@ use crate::{
     textures::{ConstantColourTextures, ImageTextures},
 };
 
-/// The vulkano resources specific to the rendering pipeline.
-pub struct SceneResources {
+/// Stores resources specific to the rendering pipeline and renders a frame.
+pub struct Renderer {
     /// Descriptor set for binding the top-level acceleration structure for the scene.
     tlas_descriptor_set: Arc<DescriptorSet>,
 
@@ -57,7 +57,7 @@ pub struct SceneResources {
     _acceleration_structures: AccelerationStructures,
 }
 
-impl SceneResources {
+impl Renderer {
     /// Create vulkano resources for rendering a new scene with given models.
     pub fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: &[f32; 2]) -> Result<Self> {
         // Load shader modules.
@@ -219,7 +219,7 @@ impl SceneResources {
         let shader_binding_table =
             ShaderBindingTable::new(vk.memory_allocator.clone(), &rt_pipeline.get())?;
 
-        Ok(SceneResources {
+        Ok(Renderer {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             textures_descriptor_set,
