@@ -50,6 +50,9 @@ impl RtPipeline {
     /// Storage buffer used for materials.
     pub const MATERIALS_LAYOUT: usize = 6;
 
+    /// Storage buffer used for checker textures.
+    pub const CHECKER_TEXTURES_LAYOUT: usize = 7;
+
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
         self.pipeline.clone()
@@ -78,9 +81,10 @@ impl RtPipeline {
                     create_camera_layout(device.clone()),
                     create_render_image_layout(device.clone()),
                     create_mesh_data_layout(device.clone()),
-                    create_sample_and_image_textures_layout(device.clone(), image_texture_count),
+                    create_sampler_and_image_textures_layout(device.clone(), image_texture_count),
                     create_constant_colour_textures_layout(device.clone()),
                     create_materials_layout(device.clone()),
+                    create_checker_textures_layout(device.clone()),
                 ],
                 push_constant_ranges: vec![
                     PushConstantRange {
@@ -199,7 +203,7 @@ fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
 }
 
 /// Create a pipeline layout for sampler and image textures.
-fn create_sample_and_image_textures_layout(
+fn create_sampler_and_image_textures_layout(
     device: Arc<Device>,
     image_texture_count: u32,
 ) -> Arc<DescriptorSetLayout> {
@@ -283,6 +287,26 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
                     },
                 ),
             ]
+            .into_iter()
+            .collect(),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+/// Create a pipeline layout for checker textures.
+fn create_checker_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        device.clone(),
+        DescriptorSetLayoutCreateInfo {
+            bindings: [(
+                0,
+                DescriptorSetLayoutBinding {
+                    stages: ShaderStages::CLOSEST_HIT,
+                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                },
+            )]
             .into_iter()
             .collect(),
             ..Default::default()

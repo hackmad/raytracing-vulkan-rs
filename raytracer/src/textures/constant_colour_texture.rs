@@ -31,6 +31,7 @@ impl ConstantColourTextures {
                     }
                 }
                 TextureType::Image { .. } => {}
+                TextureType::Checker { .. } => {}
             }
         }
 

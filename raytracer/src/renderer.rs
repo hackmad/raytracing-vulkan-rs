@@ -32,11 +32,14 @@ pub struct Renderer {
     /// Descriptor set for binding mesh data.
     mesh_data_descriptor_set: Arc<DescriptorSet>,
 
-    /// Descriptor set for binding textures.
-    textures_descriptor_set: Arc<DescriptorSet>,
+    /// Descriptor set for binding image textures.
+    image_textures_descriptor_set: Arc<DescriptorSet>,
 
-    /// Descriptor set for binding material colours.
+    /// Descriptor set for binding constant colour textures.
     constant_colour_textures_descriptor_set: Arc<DescriptorSet>,
+
+    /// Descriptor set for binding checker textures.
+    checker_textures_descriptor_set: Arc<DescriptorSet>,
 
     /// Descriptor set for binding materials.
     materials_descriptor_set: Arc<DescriptorSet>,
@@ -66,9 +69,8 @@ impl Renderer {
         // Load Textures.
         let textures = Textures::new(vk.clone(), scene_file)?;
         let image_texture_count = textures.image_textures.image_views.len();
-
-        // Load material colours.
         let constant_colour_count = textures.constant_colour_textures.colours.len();
+        let checker_texture_count = textures.checker_textures.textures.len();
 
         // Get meshes.
         let meshes = scene_file.get_meshes();
@@ -81,6 +83,7 @@ impl Renderer {
         let closest_hit_push_constants = closest_hit::ClosestHitPushConstants {
             imageTextureCount: image_texture_count as _,
             constantColourCount: constant_colour_count as _,
+            checkerTextureCount: checker_texture_count as _,
             lambertianMaterialCount: materials.lambertian_materials.len() as _,
             metalMaterialCount: materials.metal_materials.len() as _,
             dielectricMaterialCount: materials.dielectric_materials.len() as _,
@@ -144,33 +147,35 @@ impl Renderer {
             },
         )?;
 
-        let mut texture_descriptor_writes = vec![WriteDescriptorSet::sampler(0, sampler.clone())];
+        let mut image_texture_descriptor_writes =
+            vec![WriteDescriptorSet::sampler(0, sampler.clone())];
         if image_texture_count > 0 {
             // We cannot create descriptor set for empty array. Push constants will have texture count which can
             // be used in shaders to make sure out-of-bounds access can be checked.
-            texture_descriptor_writes.push(WriteDescriptorSet::image_view_array(
+            image_texture_descriptor_writes.push(WriteDescriptorSet::image_view_array(
                 1,
                 0,
-                textures.image_textures.image_views,
+                textures.image_textures.image_views.clone(),
             ));
         }
 
-        let textures_descriptor_set = DescriptorSet::new_variable(
+        let image_textures_descriptor_set = DescriptorSet::new_variable(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT].clone(),
             image_texture_count as _,
-            texture_descriptor_writes,
+            image_texture_descriptor_writes,
             [],
         )?;
 
         // Material colours
         let mat_colours = if constant_colour_count > 0 {
-            textures.constant_colour_textures.colours
+            textures.constant_colour_textures.colours.clone()
         } else {
             // We cannot create buffer for empty array. Push constants will have material colours count which can
             // be used in shaders to make sure out-of-bounds access can be checked.
             vec![[0.0, 0.0, 0.0]]
         };
+
         let constant_colour_textures_buffer = Buffer::from_iter(
             vk.memory_allocator.clone(),
             BufferCreateInfo {
@@ -184,6 +189,7 @@ impl Renderer {
             },
             mat_colours,
         )?;
+
         let constant_colour_textures_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::MATERIAL_COLOURS_LAYOUT].clone(),
@@ -208,6 +214,16 @@ impl Renderer {
             [],
         )?;
 
+        // Check textures.
+        let texture_buffers = textures.create_buffers(vk.clone())?;
+
+        let checker_textures_descriptor_set = DescriptorSet::new(
+            vk.descriptor_set_allocator.clone(),
+            layouts[RtPipeline::CHECKER_TEXTURES_LAYOUT].clone(),
+            vec![WriteDescriptorSet::buffer(0, texture_buffers.checker)],
+            [],
+        )?;
+
         // Create the shader binding table.
         let shader_binding_table =
             ShaderBindingTable::new(vk.memory_allocator.clone(), &rt_pipeline.get())?;
@@ -215,8 +231,9 @@ impl Renderer {
         Ok(Renderer {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
-            textures_descriptor_set,
+            image_textures_descriptor_set,
             constant_colour_textures_descriptor_set,
+            checker_textures_descriptor_set,
             materials_descriptor_set,
             shader_binding_table,
             rt_pipeline,
@@ -309,9 +326,10 @@ impl Renderer {
                         camera_buffer_descriptor_set,
                         render_image_descriptor_set,
                         self.mesh_data_descriptor_set.clone(),
-                        self.textures_descriptor_set.clone(),
+                        self.image_textures_descriptor_set.clone(),
                         self.constant_colour_textures_descriptor_set.clone(),
                         self.materials_descriptor_set.clone(),
+                        self.checker_textures_descriptor_set.clone(),
                     ],
                 )
                 .unwrap()

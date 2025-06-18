@@ -32,9 +32,14 @@ layout(set = 6, binding = 2, scalar) buffer DielectricMaterials {
     DielectricMaterial values[];
 } dielectricMaterial;
 
+layout(set = 7, binding = 0, scalar) buffer CheckerTextures {
+    CheckerTexture values[];
+} checkerTexture;
+
 layout(push_constant) uniform ClosestHitPushConstants {
     uint imageTextureCount;
     uint constantColourCount;
+    uint checkerTextureCount;
     uint lambertianMaterialCount;
     uint metalMaterialCount;
     uint dielectricMaterialCount;
@@ -81,7 +86,9 @@ HitRecord unpackInstanceVertex(const int instanceId, const int primitiveId) {
     );
 }
 
-vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex vertex) {
+// This only handles constant colour and image textures. Other textures like checker texture can reference
+// these "basic" textures for their own properties.
+vec3 getBasicTextureValue(MaterialPropertyValue matPropValue, MeshVertex vertex) {
     vec3 colour = vec3(0.0);
 
     switch (matPropValue.propValueType) {
@@ -97,6 +104,40 @@ vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex ver
                         nonuniformEXT(sampler2D(imageTextures[matPropValue.index], imageTextureSampler)),
                         vertex.texCoord
                         ).rgb; // Ignore alpha for now.
+            }
+            break;
+    }
+
+    return colour;
+}
+
+vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex vertex) {
+    vec3 colour = vec3(0.0);
+
+    switch (matPropValue.propValueType) {
+        case MAT_PROP_VALUE_TYPE_RGB:
+            colour = getBasicTextureValue(matPropValue, vertex);
+            break;
+
+        case MAT_PROP_VALUE_TYPE_IMAGE:
+            colour = getBasicTextureValue(matPropValue, vertex);
+            break;
+
+        case MAT_PROP_VALUE_TYPE_CHECKER:
+            if (matPropValue.index >= 0 && matPropValue.index < pc.checkerTextureCount) {
+                CheckerTexture texture = checkerTexture.values[matPropValue.index];
+
+                float invScale = 1.0 / texture.scale;
+                int xInteger = int(floor(invScale * vertex.position.x));
+                int yInteger = int(floor(invScale * vertex.position.y));
+                int zInteger = int(floor(invScale * vertex.position.z));
+
+                bool isEven = (xInteger + yInteger + zInteger) % 2 == 0;
+
+                colour = isEven 
+                    ? getBasicTextureValue(texture.even, vertex)
+                    : getBasicTextureValue(texture.odd, vertex);
+                
             }
             break;
     }
