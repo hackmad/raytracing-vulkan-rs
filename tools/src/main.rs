@@ -53,14 +53,24 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     let mut materials = vec![];
     let mut cameras = vec![];
 
-    let gray_texture = TextureType::Constant {
-        name: "gray".to_string(),
-        rgb: [0.5, 0.5, 0.5],
+    let green_texture = TextureType::Constant {
+        name: "green".to_string(),
+        rgb: [0.2, 0.3, 0.1],
+    };
+    let white_texture = TextureType::Constant {
+        name: "pale-white".to_string(),
+        rgb: [0.9, 0.9, 0.9],
+    };
+    let green_and_white_checker_texture = TextureType::Checker {
+        name: "green-and-white-checker".to_string(),
+        scale: 0.32,
+        even: green_texture.get_name().to_string(),
+        odd: white_texture.get_name().to_string(),
     };
 
     let ground_material = MaterialType::Lambertian {
         name: "ground".to_string(),
-        albedo: gray_texture.get_name().to_string(),
+        albedo: green_and_white_checker_texture.get_name().to_string(),
     };
 
     let ground_center = [0.0, 1000.0, 0.0];
@@ -75,7 +85,9 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         material: ground_material.get_name().to_string(),
     });
 
-    textures.push(gray_texture);
+    textures.push(green_texture);
+    textures.push(white_texture);
+    textures.push(green_and_white_checker_texture);
     materials.push(ground_material);
 
     let center_sphere_1 = Vec3::new(0.0, -1.0, 0.0);

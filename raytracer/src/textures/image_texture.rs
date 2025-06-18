@@ -63,6 +63,7 @@ impl ImageTextures {
                     }
                 }
                 TextureType::Constant { .. } => {}
+                TextureType::Checker { .. } => {}
             }
         }
 
