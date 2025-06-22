@@ -29,7 +29,7 @@ use winit::{
 
 use raytracer::{Scene, SceneFile, Vk};
 
-const DEFAULT_ASSET_FILE_PATH: &str = "assets/earth.json";
+const DEFAULT_ASSET_FILE_PATH: &str = "assets/checkered-spheres.json";
 const INITIAL_WIDTH: u32 = 1024;
 const INITIAL_HEIGHT: u32 = 576;
 
