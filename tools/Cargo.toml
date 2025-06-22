@@ -11,3 +11,4 @@ raytracer = { path = "../raytracer" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 glam = { workspace = true }
+tobj = { workspace = true }
