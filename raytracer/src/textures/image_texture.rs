@@ -8,7 +8,6 @@ use anyhow::Result;
 use image::{GenericImageView, ImageReader};
 use log::info;
 use vulkano::{
-    DeviceSize,
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
         AutoCommandBufferBuilder, CommandBufferUsage, CopyBufferToImageInfo,
@@ -95,8 +94,11 @@ fn load_texture(
 
     let img = ImageReader::open(path)?.with_guessed_format()?.decode()?;
     let (width, height) = img.dimensions();
+    let colour_type = img.color();
+    let channels = colour_type.channel_count();
+    let rgab_image = img.to_rgba8();
 
-    info!("Loaded texture {path}: {width} x {height}");
+    info!("Loaded texture {path}: {width} x {height} x {channels}");
 
     let image = Image::new(
         vk.memory_allocator.clone(),
@@ -122,12 +124,12 @@ fn load_texture(
                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         },
-        (width * height * 4) as DeviceSize, // RGBA = 4
+        rgab_image.len() as _,
     )?;
 
     {
         let mut writer = buffer.write()?;
-        writer.copy_from_slice(img.as_bytes());
+        writer.copy_from_slice(&rgab_image);
     }
 
     builder.copy_buffer_to_image(CopyBufferToImageInfo::buffer_image(buffer, image.clone()))?;

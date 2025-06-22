@@ -115,7 +115,11 @@ fn uv_sphere_vertex(
     let theta = 2.0 * PI * u;
     let phi = PI * v;
 
-    let n = Vec3::new(phi.sin() * theta.cos(), -phi.cos(), phi.sin() * theta.sin());
+    let n = Vec3::new(
+        -phi.sin() * theta.cos(),
+        -phi.cos(),
+        phi.sin() * theta.sin(),
+    );
     let p = center + radius * n;
 
     Vertex::new(p.into(), n.into(), [u, v])
