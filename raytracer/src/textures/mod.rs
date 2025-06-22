@@ -87,6 +87,8 @@ impl Textures {
                 },
             }]
         };
+
+        debug!("Creating checker texture storage buffer");
         let checker_buffer =
             create_device_local_buffer(vk.clone(), buffer_usage, checker_textures)?;
 

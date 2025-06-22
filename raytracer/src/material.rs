@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt, sync::Arc};
 
 use anyhow::Result;
+use log::debug;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
 use crate::{
@@ -134,6 +135,7 @@ impl Materials {
         // constants will set the number of materials to 0 which the shader code checks for out of
         // bounds.
 
+        debug!("Creating Lambertian materials buffer");
         let lambertian_materials_buffer = create_device_local_buffer(
             vk.clone(),
             buffer_usage,
@@ -149,6 +151,7 @@ impl Materials {
             },
         )?;
 
+        debug!("Creating metal materials buffer");
         let metal_materials_buffer = create_device_local_buffer(
             vk.clone(),
             buffer_usage,
@@ -168,6 +171,7 @@ impl Materials {
             },
         )?;
 
+        debug!("Creating dielectric materials buffer");
         let dielectric_materials_buffer = create_device_local_buffer(
             vk.clone(),
             buffer_usage,
