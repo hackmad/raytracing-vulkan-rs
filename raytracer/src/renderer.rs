@@ -7,7 +7,7 @@ use vulkano::{
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage},
     descriptor_set::{DescriptorSet, WriteDescriptorSet},
     image::{
-        sampler::{Filter, Sampler, SamplerAddressMode, SamplerCreateInfo},
+        sampler::{Sampler, SamplerAddressMode, SamplerCreateInfo},
         view::ImageView,
     },
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
@@ -18,7 +18,7 @@ use vulkano::{
 use crate::{
     Camera, Materials, SceneFile, Vk,
     acceleration::AccelerationStructures,
-    create_mesh_storage_buffer,
+    create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
     pipeline::RtPipeline,
     shaders::{ShaderModules, closest_hit, ray_gen},
     textures::Textures,
@@ -81,6 +81,7 @@ impl Renderer {
 
         // Push constants.
         let closest_hit_push_constants = closest_hit::ClosestHitPushConstants {
+            meshCount: meshes.len() as _,
             imageTextureCount: image_texture_count as _,
             constantColourCount: constant_colour_count as _,
             checkerTextureCount: checker_texture_count as _,
@@ -111,8 +112,9 @@ impl Renderer {
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
 
-        // For now the acceleration structure is non-changing. We can create its descriptor set
-        // and clone it later during render.
+        // Create descriptor sets for non-changing data.
+
+        // Acceleration structures.
         let acceleration_structures = AccelerationStructures::new(vk.clone(), &meshes)?;
 
         let tlas_descriptor_set = DescriptorSet::new(
@@ -125,30 +127,33 @@ impl Renderer {
             [],
         )?;
 
-        // Mesh data won't change either. We can create its descriptor set and clone it later
-        // during render.
+        // Mesh data.
+        let vertex_buffer = create_mesh_vertex_buffer(vk.clone(), &meshes)?;
+        let index_buffer = create_mesh_index_buffer(vk.clone(), &meshes)?;
         let mesh_buffer = create_mesh_storage_buffer(vk.clone(), &meshes, &materials)?;
 
         let mesh_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::MESH_DATA_LAYOUT].clone(),
-            [WriteDescriptorSet::buffer(0, mesh_buffer)],
+            [
+                WriteDescriptorSet::buffer(0, vertex_buffer),
+                WriteDescriptorSet::buffer(1, index_buffer),
+                WriteDescriptorSet::buffer(2, mesh_buffer),
+            ],
             [],
         )?;
 
-        // Textures + Sampler
+        // Sampler + Textures.
         let sampler = Sampler::new(
             vk.device.clone(),
             SamplerCreateInfo {
-                mag_filter: Filter::Linear,
-                min_filter: Filter::Linear,
                 address_mode: [SamplerAddressMode::Repeat; 3],
                 ..Default::default()
             },
         )?;
 
-        let mut image_texture_descriptor_writes =
-            vec![WriteDescriptorSet::sampler(0, sampler.clone())];
+        let mut image_texture_descriptor_writes = vec![WriteDescriptorSet::sampler(0, sampler)];
+
         if image_texture_count > 0 {
             // We cannot create descriptor set for empty array. Push constants will have texture count which can
             // be used in shaders to make sure out-of-bounds access can be checked.
@@ -167,8 +172,8 @@ impl Renderer {
             [],
         )?;
 
-        // Material colours
-        let mat_colours = if constant_colour_count > 0 {
+        // Constant colour textures.
+        let constant_colours = if constant_colour_count > 0 {
             textures.constant_colour_textures.colours.clone()
         } else {
             // We cannot create buffer for empty array. Push constants will have material colours count which can
@@ -187,7 +192,7 @@ impl Renderer {
                     | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
                 ..Default::default()
             },
-            mat_colours,
+            constant_colours,
         )?;
 
         let constant_colour_textures_descriptor_set = DescriptorSet::new(

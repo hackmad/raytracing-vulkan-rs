@@ -1,5 +1,4 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : enable
-#extension GL_EXT_buffer_reference2 : enable
 #extension GL_EXT_scalar_block_layout: enable
 
 // --------------------------------------------------------------------------------
@@ -49,23 +48,19 @@ struct CheckerTexture {
 // --------------------------------------------------------------------------------
 // Mesh
 
+// NOTE: The order of fields below will ensure data is aligned/packed correctly and
+// we can avoid having to use padding fields.
 struct MeshVertex {
-    vec3 position;
-    vec3 normal;
-    vec2 texCoord;
+    vec3 p;  // position
+    float u; // u- texture coordinate
+    vec3 n;  // normal
+    float v; // v- texture coordinate
 };
 
-layout(buffer_reference, scalar) buffer MeshVertcesRef {
-    MeshVertex values[];
-};
-
-layout(buffer_reference, scalar) buffer MeshIndicesRef {
-    uint values[];
-};
 
 struct Mesh {
-    MeshVertcesRef verticesRef;
-    MeshIndicesRef indicesRef;
+    uint vertexBufferSize;
+    uint indexBufferSize;
     uint materialType;
     uint materialIndex;
 };

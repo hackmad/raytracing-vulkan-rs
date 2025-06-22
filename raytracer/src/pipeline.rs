@@ -187,13 +187,32 @@ fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::CLOSEST_HIT,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                },
-            )]
+            bindings: [
+                (
+                    // Vertex buffer.
+                    0,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                    },
+                ),
+                (
+                    // Index buffer.
+                    1,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                    },
+                ),
+                (
+                    // Meshes.
+                    2,
+                    DescriptorSetLayoutBinding {
+                        stages: ShaderStages::CLOSEST_HIT,
+                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+                    },
+                ),
+            ]
             .into_iter()
             .collect(),
             ..Default::default()

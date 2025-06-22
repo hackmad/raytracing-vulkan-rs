@@ -11,9 +11,17 @@ layout(location = 1) rayPayloadEXT bool isShadowed;
 
 layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
-layout(set = 3, binding = 0, scalar) buffer MeshData {
+layout(set = 3, binding = 0, scalar) buffer MeshVertices {
+    MeshVertex values[];
+} meshVertexData;
+
+layout(set = 3, binding = 1, scalar) buffer MeshIndices {
+    uint values[];
+} meshIndexData;
+
+layout(set = 3, binding = 2, scalar) buffer Meshes {
     Mesh values[];
-} mesh_data;
+} meshData;
 
 layout(set = 4, binding = 0) uniform sampler imageTextureSampler;
 layout(set = 4, binding = 1) uniform texture2D imageTextures[];
@@ -37,6 +45,7 @@ layout(set = 7, binding = 0, scalar) buffer CheckerTextures {
 } checkerTexture;
 
 layout(push_constant) uniform ClosestHitPushConstants {
+    uint meshCount;
     uint imageTextureCount;
     uint constantColourCount;
     uint checkerTextureCount;
@@ -45,34 +54,47 @@ layout(push_constant) uniform ClosestHitPushConstants {
     uint dielectricMaterialCount;
 } pc;
 
-HitRecord unpackInstanceVertex(const int instanceId, const int primitiveId) {
+HitRecord unpackInstanceVertex(const int meshInstanceId, const int primitiveId) {
     vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
 
-    Mesh mesh = mesh_data.values[instanceId];
+    Mesh mesh = meshData.values[meshInstanceId];
 
-    uint i = primitiveId * 3;
-    uint i0 = mesh.indicesRef.values[i];
-    uint i1 = mesh.indicesRef.values[i + 1];
-    uint i2 = mesh.indicesRef.values[i + 2];
+    // Note if we got here meshInstanceId >= 1 and pc.meshCount >= 1 because there was an intersection.
+    uint indexBufferOffset = 0;
+    uint vertexBufferOffset = 0;
+    for (uint id = 0; id < meshInstanceId && id < pc.meshCount; id++) {
+        indexBufferOffset += meshData.values[id].indexBufferSize;
+        vertexBufferOffset += meshData.values[id].vertexBufferSize;
+    }
 
-    MeshVertex v0 = mesh.verticesRef.values[i0];
-    MeshVertex v1 = mesh.verticesRef.values[i1];
-    MeshVertex v2 = mesh.verticesRef.values[i2];
+    uint i = indexBufferOffset + primitiveId * 3;
+    uint i0 = meshIndexData.values[i];
+    uint i1 = meshIndexData.values[i + 1];
+    uint i2 = meshIndexData.values[i + 2];
+
+    MeshVertex v0 = meshVertexData.values[vertexBufferOffset + i0];
+    MeshVertex v1 = meshVertexData.values[vertexBufferOffset + i1];
+    MeshVertex v2 = meshVertexData.values[vertexBufferOffset + i2];
 
     const vec3 position =
-        v0.position * barycentricCoords.x +
-        v1.position * barycentricCoords.y +
-        v2.position * barycentricCoords.z;
+        v0.p * barycentricCoords.x +
+        v1.p * barycentricCoords.y +
+        v2.p * barycentricCoords.z;
 
     const vec3 normal =
-        v0.normal * barycentricCoords.x +
-        v1.normal * barycentricCoords.y +
-        v2.normal * barycentricCoords.z;
+        v0.n * barycentricCoords.x +
+        v1.n * barycentricCoords.y +
+        v2.n * barycentricCoords.z;
 
-    const vec2 texCoord = 
-        v0.texCoord * barycentricCoords.x +
-        v1.texCoord * barycentricCoords.y +
-        v2.texCoord * barycentricCoords.z;
+    const float u = 
+        v0.u * barycentricCoords.x +
+        v1.u * barycentricCoords.y +
+        v2.u * barycentricCoords.z;
+
+    const float v = 
+        v0.v * barycentricCoords.x +
+        v1.v * barycentricCoords.y +
+        v2.v * barycentricCoords.z;
 
     const vec3 worldSpacePosition = vec3(gl_ObjectToWorldEXT * vec4(position, 1.0));
     const vec3 worldSpaceNormal = normalize(vec3(normal * gl_WorldToObjectEXT));
@@ -80,7 +102,7 @@ HitRecord unpackInstanceVertex(const int instanceId, const int primitiveId) {
     bool frontFace = isFrontFace(gl_WorldRayDirectionEXT, worldSpaceNormal);
 
     return HitRecord(
-            MeshVertex(worldSpacePosition, worldSpaceNormal, texCoord),
+            MeshVertex(worldSpacePosition, u, worldSpaceNormal, v),
             frontFace,
             frontFace ? worldSpaceNormal : -worldSpaceNormal
     );
@@ -102,7 +124,7 @@ vec3 getBasicTextureValue(MaterialPropertyValue matPropValue, MeshVertex vertex)
             if (matPropValue.index >= 0 && matPropValue.index < pc.imageTextureCount) {
                 colour = texture(
                         nonuniformEXT(sampler2D(imageTextures[matPropValue.index], imageTextureSampler)),
-                        vertex.texCoord
+                        vec2(vertex.u, vertex.v)
                         ).rgb; // Ignore alpha for now.
             }
             break;
@@ -128,9 +150,9 @@ vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex ver
                 CheckerTexture texture = checkerTexture.values[matPropValue.index];
 
                 float invScale = 1.0 / texture.scale;
-                int xInteger = int(floor(invScale * vertex.position.x));
-                int yInteger = int(floor(invScale * vertex.position.y));
-                int zInteger = int(floor(invScale * vertex.position.z));
+                int xInteger = int(floor(invScale * vertex.p.x));
+                int yInteger = int(floor(invScale * vertex.p.y));
+                int zInteger = int(floor(invScale * vertex.p.z));
 
                 bool isEven = (xInteger + yInteger + zInteger) % 2 == 0;
 
@@ -167,7 +189,7 @@ void scatterLambertianMaterial(uint materialIndex, HitRecord rec) {
         rayPayload.attenuation = albedo;
         rayPayload.isScattered = true;
         rayPayload.scatteredRayDirection = scatterDirection;
-        rayPayload.scatteredRayOrigin = rec.meshVertex.position;
+        rayPayload.scatteredRayOrigin = rec.meshVertex.p;
     }
 }
 
@@ -185,7 +207,7 @@ void scatterMetalMaterial(uint materialIndex, HitRecord rec) {
         rayPayload.attenuation = albedo;
         rayPayload.isScattered = (dot(scatteredDirection, rec.normal) > 0);
         rayPayload.scatteredRayDirection = scatteredDirection;
-        rayPayload.scatteredRayOrigin = rec.meshVertex.position;
+        rayPayload.scatteredRayOrigin = rec.meshVertex.p;
     }
 }
 
@@ -213,12 +235,12 @@ void scatterDielectricMaterial(uint materialIndex, HitRecord rec) {
         rayPayload.attenuation = attenuation;
         rayPayload.isScattered = true;
         rayPayload.scatteredRayDirection = refractedDirection;
-        rayPayload.scatteredRayOrigin = rec.meshVertex.position;
+        rayPayload.scatteredRayOrigin = rec.meshVertex.p;
     }
 }
 
-void unpackInstanceMaterialAndScatter(const int instanceId, HitRecord rec) {
-    Mesh mesh = mesh_data.values[instanceId];
+void unpackInstanceMaterialAndScatter(const int meshInstanceId, HitRecord rec) {
+    Mesh mesh = meshData.values[meshInstanceId];
     uint materialType = mesh.materialType;
     uint materialIndex = mesh.materialIndex;
 

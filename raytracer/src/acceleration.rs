@@ -18,7 +18,7 @@ use vulkano::{
     sync::GpuFuture,
 };
 
-use crate::{Mesh, Vk, shaders::closest_hit};
+use crate::{Mesh, Vk, shaders::closest_hit::MeshVertex};
 
 /// Stores the acceleration structures.
 pub struct AccelerationStructures {
@@ -96,7 +96,7 @@ fn build_acceleration_structure_common(
     // Create a memory layout so the scratch buffer address is aligned correctly for the
     // acceleration structure.
     let device_properties = vk.device.physical_device().properties();
-    let min_scratch_offset: u64 = device_properties
+    let min_scratch_offset = device_properties
         .min_acceleration_structure_scratch_offset_alignment
         .context(
             "Unable to get min_acceleration_structure_scratch_offset_alignment device property",
@@ -109,9 +109,9 @@ fn build_acceleration_structure_common(
         DeviceLayout::from_size_alignment(scratch_buffer_size, min_scratch_offset)
             .context("Unable to create scratch buffer device layout")?;
 
-    debug!("Min scratch buffer size: {min_scratch_offset}");
-    debug!("Scratch buffer size: {}", scratch_buffer_size);
-    debug!("Scratch buffer layout: {:?}", scratch_buffer_layout);
+    debug!("AS min_acceleration_structure_scratch_offset_alignment: {min_scratch_offset}");
+    debug!("AS scratch buffer size: {}", scratch_buffer_size);
+    debug!("AS scratch buffer layout: {:?}", scratch_buffer_layout);
 
     // We create a new scratch buffer for each acceleration structure for simplicity. You may want
     // to reuse scratch buffers if you need to build many acceleration structures.
@@ -129,7 +129,7 @@ fn build_acceleration_structure_common(
 
     let scratch_buffer_device_address: u64 = scratch_buffer.device_address().unwrap().into();
     debug!(
-        "Scratch buffer device addr: {scratch_buffer_device_address} is {}",
+        "AS scratch buffer device addr: {scratch_buffer_device_address} is {}",
         if (scratch_buffer_device_address % min_scratch_offset) == 0 {
             "aligned"
         } else {
@@ -188,7 +188,7 @@ fn build_acceleration_structure_common(
 /// Builds a bottom level accerlation strucuture for a set of triangles.
 fn build_acceleration_structure_triangles(
     vk: Arc<Vk>,
-    vertex_buffer: Subbuffer<[closest_hit::MeshVertex]>,
+    vertex_buffer: Subbuffer<[MeshVertex]>,
     index_buffer: Subbuffer<[u32]>,
 ) -> Result<Arc<AccelerationStructure>> {
     let primitive_count = (index_buffer.len() / 3) as u32;
@@ -197,7 +197,7 @@ fn build_acceleration_structure_triangles(
         max_vertex: vertex_buffer.len() as _,
         vertex_data: Some(vertex_buffer.into_bytes()),
         index_data: Some(IndexBuffer::U32(index_buffer)),
-        vertex_stride: size_of::<closest_hit::MeshVertex>() as _,
+        vertex_stride: size_of::<MeshVertex>() as _,
         ..AccelerationStructureGeometryTrianglesData::new(Format::R32G32B32_SFLOAT)
     };
 

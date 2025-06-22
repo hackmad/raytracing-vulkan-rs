@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
+use log::debug;
 use vulkano::{
     DeviceSize,
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -10,7 +11,7 @@ use vulkano::{
     },
     descriptor_set::allocator::DescriptorSetAllocator,
     device::{Device, Queue},
-    memory::allocator::{AllocationCreateInfo, MemoryAllocator, MemoryTypeFilter},
+    memory::allocator::{AllocationCreateInfo, DeviceLayout, MemoryAllocator, MemoryTypeFilter},
     sync::GpuFuture,
 };
 
@@ -36,16 +37,27 @@ where
     I::IntoIter: ExactSizeIterator,
 {
     let iter = data.into_iter();
-    let size = iter.len() as DeviceSize;
+    let size = iter.len();
+    let size_bytes = (size * size_of::<T>()) as DeviceSize;
 
     if size == 0 {
         return Err(anyhow!("Cannot create device local buffer with empty data"));
     }
 
-    let temporary_accessible_buffer = Buffer::from_iter(
+    // Create a memory layout so the scratch buffer address is aligned correctly for the storage buffer.
+    let device_properties = vk.device.physical_device().properties();
+    let min_scratch_offset = device_properties.min_storage_buffer_offset_alignment.into();
+    let buffer_layout = DeviceLayout::from_size_alignment(size_bytes, min_scratch_offset)
+        .context("Unable to create buffer device layout")?;
+
+    debug!("Storage buffer min_storage_buffer_offset_alignment: {min_scratch_offset}");
+    debug!("Storage buffer size: {size} ({size_bytes} bytes)");
+    debug!("Storage buffer layout: {:?}", buffer_layout);
+
+    let scratch_buffer = Subbuffer::new(Buffer::new(
         vk.memory_allocator.clone(),
         BufferCreateInfo {
-            usage: BufferUsage::TRANSFER_SRC,
+            usage: BufferUsage::TRANSFER_SRC | BufferUsage::SHADER_DEVICE_ADDRESS,
             ..Default::default()
         },
         AllocationCreateInfo {
@@ -53,10 +65,28 @@ where
                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         },
-        iter,
-    )?;
+        buffer_layout,
+    )?)
+    .reinterpret::<[T]>();
 
-    let device_local_buffer = Buffer::new_slice::<T>(
+    {
+        let mut write_guard = scratch_buffer.write()?;
+        for (o, i) in write_guard.iter_mut().zip(iter) {
+            *o = i;
+        }
+    }
+
+    let scratch_buffer_address: u64 = scratch_buffer.device_address()?.into();
+    debug!(
+        "Scratch buffer device addr: {scratch_buffer_address} is {}",
+        if (scratch_buffer_address % min_scratch_offset) == 0 {
+            "aligned"
+        } else {
+            "NOT ALIGNED"
+        }
+    );
+
+    let device_local_buffer = Subbuffer::new(Buffer::new(
         vk.memory_allocator.clone(),
         BufferCreateInfo {
             usage: usage | BufferUsage::TRANSFER_DST,
@@ -66,8 +96,19 @@ where
             memory_type_filter: MemoryTypeFilter::PREFER_DEVICE,
             ..Default::default()
         },
-        size,
-    )?;
+        buffer_layout,
+    )?)
+    .reinterpret::<[T]>();
+
+    let device_local_buffer_address: u64 = device_local_buffer.device_address()?.into();
+    debug!(
+        "Device local buffer device addr: {device_local_buffer_address} is {}",
+        if (device_local_buffer_address % min_scratch_offset) == 0 {
+            "aligned"
+        } else {
+            "NOT ALIGNED"
+        }
+    );
 
     let mut builder = AutoCommandBufferBuilder::primary(
         vk.command_buffer_allocator.clone(),
@@ -76,7 +117,7 @@ where
     )?;
 
     builder.copy_buffer(CopyBufferInfo::buffers(
-        temporary_accessible_buffer,
+        scratch_buffer,
         device_local_buffer.clone(),
     ))?;
 
