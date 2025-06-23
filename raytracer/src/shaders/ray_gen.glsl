@@ -18,11 +18,11 @@ layout(set = 1, binding = 0) uniform Camera {
 layout(set = 2, binding = 0, rgba8) uniform image2D image;
 
 layout(push_constant) uniform RayGenPushConstants {
-    layout(offset = 16) uvec2 resolution;
-    uint samplesPerPixel; // Don't exceed 64. See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
-    uint sampleBatches;   // Don't exceed 32.
-    uint sampleBatch;
-    uint maxRayDepth;
+    layout(offset = 32) uvec2 resolution;
+    layout(offset = 40) uint samplesPerPixel; // Don't exceed 64. See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
+    layout(offset = 44) uint sampleBatches;   // Don't exceed 32.
+    layout(offset = 48) uint sampleBatch;
+    layout(offset = 52) uint maxRayDepth;
 } pc;
 
 vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, float tMax, uint rayFlags) {

@@ -20,6 +20,7 @@ const uint MAT_TYPE_DIELECTRIC = 3;
 const uint MAT_PROP_VALUE_TYPE_RGB = 0;
 const uint MAT_PROP_VALUE_TYPE_IMAGE = 1;
 const uint MAT_PROP_VALUE_TYPE_CHECKER = 2;
+const uint MAT_PROP_VALUE_TYPE_NOISE = 3;
 
 struct MaterialPropertyValue {
     uint propValueType;
@@ -43,6 +44,10 @@ struct CheckerTexture {
     float scale;
     MaterialPropertyValue odd;
     MaterialPropertyValue even;
+};
+
+struct NoiseTexture {
+    float scale;
 };
 
 // --------------------------------------------------------------------------------

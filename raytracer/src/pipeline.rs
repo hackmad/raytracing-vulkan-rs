@@ -17,6 +17,8 @@ use vulkano::{
     shader::ShaderStages,
 };
 
+use crate::shaders::{closest_hit, ray_gen};
+
 /// The raytracing pipeline.
 pub struct RtPipeline {
     /// The pipeline.
@@ -69,8 +71,6 @@ impl RtPipeline {
         stages: &[PipelineShaderStageCreateInfo],
         groups: &[RayTracingShaderGroupCreateInfo],
         image_texture_count: u32,
-        closest_hit_push_constants_bytes_size: u32,
-        ray_gen_push_constants_bytes_size: u32,
     ) -> Result<Self> {
         let pipeline_layout = PipelineLayout::new(
             device.clone(),
@@ -90,12 +90,12 @@ impl RtPipeline {
                     PushConstantRange {
                         stages: ShaderStages::CLOSEST_HIT,
                         offset: 0,
-                        size: closest_hit_push_constants_bytes_size,
+                        size: size_of::<closest_hit::ClosestHitPushConstants>() as _,
                     },
                     PushConstantRange {
                         stages: ShaderStages::RAYGEN,
-                        offset: 16, // From ray_gen.glsl layout offset of RayGenPushConstants.
-                        size: ray_gen_push_constants_bytes_size,
+                        offset: size_of::<closest_hit::ClosestHitPushConstants>() as _,
+                        size: size_of::<ray_gen::RayGenPushConstants>() as _,
                     },
                 ],
                 ..Default::default()
@@ -239,9 +239,12 @@ fn create_other_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout>
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
-                .into_iter()
-                .collect(),
+            bindings: [
+                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Checker textures.
+                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Noise textures.
+            ]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     )

@@ -17,21 +17,17 @@ pub struct ConstantColourTextures {
 }
 
 impl ConstantColourTextures {
-    /// Returns all unique colours from scene file.
+    /// Loads all unique colours from scene file.
     pub fn new(textures: &HashMap<String, TextureType>) -> ConstantColourTextures {
         let mut colours = vec![];
         let mut indices = HashMap::new();
 
         for texture in textures.values() {
-            match texture {
-                TextureType::Constant { name, rgb } => {
-                    if let Entry::Vacant(e) = indices.entry(name.clone()) {
-                        e.insert(colours.len() as _);
-                        colours.push(*rgb);
-                    }
+            if let TextureType::Constant { name, rgb } = texture {
+                if let Entry::Vacant(e) = indices.entry(name.clone()) {
+                    e.insert(colours.len() as _);
+                    colours.push(*rgb);
                 }
-                TextureType::Image { .. } => {}
-                TextureType::Checker { .. } => {}
             }
         }
 
