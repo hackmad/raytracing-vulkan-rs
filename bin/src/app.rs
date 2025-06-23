@@ -29,7 +29,6 @@ use winit::{
 
 use raytracer::{Scene, SceneFile, Vk};
 
-const DEFAULT_ASSET_FILE_PATH: &str = "assets/perlin-spheres.json";
 const INITIAL_WIDTH: u32 = 1024;
 const INITIAL_HEIGHT: u32 = 576;
 
@@ -55,7 +54,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(event_loop: &impl HasDisplayHandle, enable_debug_logging: bool) -> Self {
+    pub fn new(
+        event_loop: &impl HasDisplayHandle,
+        enable_debug_logging: bool,
+        initial_file_path: &str,
+    ) -> Self {
         // Use extension supporting the winit event loop.
         let required_extensions = Surface::required_extensions(event_loop)
             .expect("Failed to get required extensions to create a surface");
@@ -128,7 +131,7 @@ impl App {
             windows,
             scene: None,
             vk,
-            current_file_path: DEFAULT_ASSET_FILE_PATH.to_string(),
+            current_file_path: initial_file_path.to_string(),
             new_file_path: None,
         }
     }
