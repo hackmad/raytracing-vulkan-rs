@@ -38,8 +38,8 @@ pub struct Renderer {
     /// Descriptor set for binding constant colour textures.
     constant_colour_textures_descriptor_set: Arc<DescriptorSet>,
 
-    /// Descriptor set for binding checker textures.
-    checker_textures_descriptor_set: Arc<DescriptorSet>,
+    /// Descriptor set for binding other textures besides image and constant colour.
+    other_textures_descriptor_set: Arc<DescriptorSet>,
 
     /// Descriptor set for binding materials.
     materials_descriptor_set: Arc<DescriptorSet>,
@@ -222,9 +222,9 @@ impl Renderer {
         // Check textures.
         let texture_buffers = textures.create_buffers(vk.clone())?;
 
-        let checker_textures_descriptor_set = DescriptorSet::new(
+        let other_textures_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
-            layouts[RtPipeline::CHECKER_TEXTURES_LAYOUT].clone(),
+            layouts[RtPipeline::OTHER_TEXTURES_LAYOUT].clone(),
             vec![WriteDescriptorSet::buffer(0, texture_buffers.checker)],
             [],
         )?;
@@ -238,7 +238,7 @@ impl Renderer {
             mesh_data_descriptor_set,
             image_textures_descriptor_set,
             constant_colour_textures_descriptor_set,
-            checker_textures_descriptor_set,
+            other_textures_descriptor_set,
             materials_descriptor_set,
             shader_binding_table,
             rt_pipeline,
@@ -334,7 +334,7 @@ impl Renderer {
                         self.image_textures_descriptor_set.clone(),
                         self.constant_colour_textures_descriptor_set.clone(),
                         self.materials_descriptor_set.clone(),
-                        self.checker_textures_descriptor_set.clone(),
+                        self.other_textures_descriptor_set.clone(),
                     ],
                 )
                 .unwrap()

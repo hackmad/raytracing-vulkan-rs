@@ -50,8 +50,8 @@ impl RtPipeline {
     /// Storage buffer used for materials.
     pub const MATERIALS_LAYOUT: usize = 6;
 
-    /// Storage buffer used for checker textures.
-    pub const CHECKER_TEXTURES_LAYOUT: usize = 7;
+    /// Storage buffer used for other textures besides image and constant colour.
+    pub const OTHER_TEXTURES_LAYOUT: usize = 7;
 
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
@@ -84,7 +84,7 @@ impl RtPipeline {
                     create_sampler_and_image_textures_layout(device.clone(), image_texture_count),
                     create_constant_colour_textures_layout(device.clone()),
                     create_materials_layout(device.clone()),
-                    create_checker_textures_layout(device.clone()),
+                    create_other_textures_layout(device.clone()),
                 ],
                 push_constant_ranges: vec![
                     PushConstantRange {
@@ -125,17 +125,10 @@ fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device,
         DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::RAYGEN | ShaderStages::CLOSEST_HIT,
-                    ..DescriptorSetLayoutBinding::descriptor_type(
-                        DescriptorType::AccelerationStructure,
-                    )
-                },
-            )]
-            .into_iter()
-            .collect(),
+            #[rustfmt::skip]
+            bindings: [(0, as_binding(ShaderStages::RAYGEN | ShaderStages::CLOSEST_HIT))]
+                .into_iter()
+                .collect(),
             ..Default::default()
         },
     )
@@ -147,15 +140,9 @@ fn create_camera_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device,
         DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::RAYGEN,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer)
-                },
-            )]
-            .into_iter()
-            .collect(),
+            bindings: [(0, uniform_buffer_binding(ShaderStages::RAYGEN))]
+                .into_iter()
+                .collect(),
             ..Default::default()
         },
     )
@@ -167,15 +154,9 @@ fn create_render_image_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::RAYGEN,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageImage)
-                },
-            )]
-            .into_iter()
-            .collect(),
+            bindings: [(0, storage_image_binding(ShaderStages::RAYGEN))]
+                .into_iter()
+                .collect(),
             ..Default::default()
         },
     )
@@ -188,30 +169,9 @@ fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (
-                    // Vertex buffer.
-                    0,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                    },
-                ),
-                (
-                    // Index buffer.
-                    1,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                    },
-                ),
-                (
-                    // Meshes.
-                    2,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                    },
-                ),
+                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Vertex buffer.
+                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Index buffer.
+                (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Meshes.
             ]
             .into_iter()
             .collect(),
@@ -229,23 +189,10 @@ fn create_sampler_and_image_textures_layout(
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
+            #[rustfmt::skip]
             bindings: [
-                (
-                    0,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::Sampler)
-                    },
-                ),
-                (
-                    1,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        binding_flags: DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT,
-                        descriptor_count: image_texture_count,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::SampledImage)
-                    },
-                ),
+                (0, sampler_binding(ShaderStages::CLOSEST_HIT)),
+                (1, variable_sampled_image_binding(ShaderStages::CLOSEST_HIT, image_texture_count)),
             ]
             .into_iter()
             .collect(),
@@ -260,15 +207,9 @@ fn create_constant_colour_textures_layout(device: Arc<Device>) -> Arc<Descriptor
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::CLOSEST_HIT,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                },
-            )]
-            .into_iter()
-            .collect(),
+            bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
+                .into_iter()
+                .collect(),
             ..Default::default()
         },
     )
@@ -281,30 +222,9 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (
-                    // Lambertian materials.
-                    0,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                    },
-                ),
-                (
-                    // Metal materials.
-                    1,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                    },
-                ),
-                (
-                    // Dielectric materials.
-                    2,
-                    DescriptorSetLayoutBinding {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                    },
-                ),
+                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Lambertian materials.
+                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Metal materials.
+                (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Dielectric materials.
             ]
             .into_iter()
             .collect(),
@@ -314,22 +234,60 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     .unwrap()
 }
 
-/// Create a pipeline layout for checker textures.
-fn create_checker_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+/// Create a pipeline layout for storage buffer used for other textures besides image and constant colour.
+fn create_other_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(
-                0,
-                DescriptorSetLayoutBinding {
-                    stages: ShaderStages::CLOSEST_HIT,
-                    ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-                },
-            )]
-            .into_iter()
-            .collect(),
+            bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
+                .into_iter()
+                .collect(),
             ..Default::default()
         },
     )
     .unwrap()
+}
+
+fn as_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
+    DescriptorSetLayoutBinding {
+        stages,
+        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::AccelerationStructure)
+    }
+}
+
+fn uniform_buffer_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
+    DescriptorSetLayoutBinding {
+        stages,
+        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer)
+    }
+}
+
+fn storage_image_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
+    DescriptorSetLayoutBinding {
+        stages,
+        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageImage)
+    }
+}
+
+fn sampler_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
+    DescriptorSetLayoutBinding {
+        stages,
+        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::Sampler)
+    }
+}
+
+fn variable_sampled_image_binding(stages: ShaderStages, count: u32) -> DescriptorSetLayoutBinding {
+    DescriptorSetLayoutBinding {
+        stages,
+        binding_flags: DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT,
+        descriptor_count: count,
+        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::SampledImage)
+    }
+}
+
+fn storage_buffer_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
+    DescriptorSetLayoutBinding {
+        stages,
+        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
+    }
 }
