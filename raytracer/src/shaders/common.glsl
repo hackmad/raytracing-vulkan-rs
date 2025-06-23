@@ -51,6 +51,24 @@ struct NoiseTexture {
 };
 
 // --------------------------------------------------------------------------------
+// Sky.
+
+const uint SKY_TYPE_NONE = 0;
+const uint SKY_TYPE_SOLID = 1;
+const uint SKY_TYPE_VERTICAL_GRADIENT = 2;
+
+struct Sky {
+    vec3 solid;     // Solid colour.
+
+    uint skyType;   // Sky type.
+    
+    vec3 vTop;      // Vertical gradient top colour;
+    float vFactor;  // Vertical gradient factor.
+    vec3 vBottom;   // Vertical gradient bottom colour;
+
+};
+
+// --------------------------------------------------------------------------------
 // Mesh
 
 // NOTE: The order of fields below will ensure data is aligned/packed correctly and

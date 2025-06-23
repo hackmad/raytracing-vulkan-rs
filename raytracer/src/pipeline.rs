@@ -55,6 +55,9 @@ impl RtPipeline {
     /// Storage buffer used for other textures besides image and constant colour.
     pub const OTHER_TEXTURES_LAYOUT: usize = 7;
 
+    /// Uniform buffer for sky.
+    pub const SKY_LAYOUT: usize = 8;
+
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
         self.pipeline.clone()
@@ -85,6 +88,7 @@ impl RtPipeline {
                     create_constant_colour_textures_layout(device.clone()),
                     create_materials_layout(device.clone()),
                     create_other_textures_layout(device.clone()),
+                    create_sky_layout(device.clone()),
                 ],
                 push_constant_ranges: vec![
                     PushConstantRange {
@@ -245,6 +249,20 @@ fn create_other_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout>
             ]
             .into_iter()
             .collect(),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+/// Create a pipeline layout for uniform buffer containing sky.
+fn create_sky_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        device,
+        DescriptorSetLayoutCreateInfo {
+            bindings: [(0, uniform_buffer_binding(ShaderStages::RAYGEN))]
+                .into_iter()
+                .collect(),
             ..Default::default()
         },
     )

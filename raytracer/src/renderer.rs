@@ -53,6 +53,9 @@ pub struct Renderer {
     /// Descriptor set for binding materials.
     materials_descriptor_set: Arc<DescriptorSet>,
 
+    /// Descriptor set for binding sky.
+    sky_descriptor_set: Arc<DescriptorSet>,
+
     /// The shader binding table.
     shader_binding_table: ShaderBindingTable,
 
@@ -242,6 +245,27 @@ impl Renderer {
             [],
         )?;
 
+        // Sky.
+        let sky_buffer = Buffer::from_data(
+            vk.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            scene_file.sky.to_shader(),
+        )?;
+        let sky_descriptor_set = DescriptorSet::new(
+            vk.descriptor_set_allocator.clone(),
+            layouts[RtPipeline::SKY_LAYOUT].clone(),
+            vec![WriteDescriptorSet::buffer(0, sky_buffer)],
+            [],
+        )?;
+
         // Create the shader binding table.
         let shader_binding_table =
             ShaderBindingTable::new(vk.memory_allocator.clone(), &rt_pipeline.get())?;
@@ -253,6 +277,7 @@ impl Renderer {
             constant_colour_textures_descriptor_set,
             other_textures_descriptor_set,
             materials_descriptor_set,
+            sky_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             push_constants,
@@ -347,6 +372,7 @@ impl Renderer {
                         self.constant_colour_textures_descriptor_set.clone(),
                         self.materials_descriptor_set.clone(),
                         self.other_textures_descriptor_set.clone(),
+                        self.sky_descriptor_set.clone(),
                     ],
                 )
                 .unwrap()

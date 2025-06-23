@@ -17,6 +17,10 @@ layout(set = 1, binding = 0) uniform Camera {
 
 layout(set = 2, binding = 0, rgba8) uniform image2D image;
 
+layout(set = 8, binding = 0) uniform SkyData {
+    Sky value;
+} sky;
+
 layout(push_constant) uniform RayGenPushConstants {
     layout(offset = 32) uvec2 resolution;
     layout(offset = 40) uint samplesPerPixel; // Don't exceed 64. See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
@@ -62,7 +66,19 @@ vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, flo
         } else {
             vec3 unitDirection = normalize(direction.xyz);
             float a = 0.5 * (unitDirection.y + 1.0);
-            attenuation *= mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), a);
+
+            switch (sky.value.skyType) {
+                case SKY_TYPE_SOLID:
+                    attenuation *= sky.value.solid;
+                    break;
+                case SKY_TYPE_VERTICAL_GRADIENT:
+                    attenuation *= mix(sky.value.vTop, sky.value.vBottom, sky.value.vFactor);
+                    break;
+                default:
+                    attenuation *= vec3(0.0);
+                    break;
+            }
+
             break;
         } 
 

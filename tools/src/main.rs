@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use glam::Vec3;
 use random::Random;
-use raytracer::{CameraType, MaterialType, ObjectType, Render, SceneFile, TextureType};
+use raytracer::{CameraType, MaterialType, ObjectType, Render, SceneFile, Sky, TextureType};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -260,11 +260,18 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         max_ray_depth: 50,
     };
 
+    let sky = Sky::VerticalGradient {
+        factor: 0.5,
+        top: [0.5, 0.7, 1.0],
+        bottom: [1.0, 1.0, 1.0],
+    };
+
     let scene_file = SceneFile {
         cameras,
         textures,
         materials,
         objects,
+        sky,
         render,
     };
     scene_file.save_json("assets/final-one-weekend.json")

@@ -2,12 +2,14 @@ mod camera_type;
 mod material_type;
 mod object_type;
 mod render;
+mod sky;
 mod texture_type;
 
 pub use camera_type::*;
 pub use material_type::*;
 pub use object_type::*;
 pub use render::*;
+pub use sky::*;
 pub use texture_type::*;
 
 use std::{
@@ -28,6 +30,7 @@ pub struct SceneFile {
     pub textures: Vec<TextureType>,
     pub materials: Vec<MaterialType>,
     pub objects: Vec<ObjectType>,
+    pub sky: Sky,
     pub render: Render,
 }
 
