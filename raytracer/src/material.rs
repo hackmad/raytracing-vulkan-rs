@@ -16,6 +16,7 @@ pub const MAT_TYPE_DIELECTRIC: u32 = 3;
 pub const MAT_PROP_VALUE_TYPE_RGB: u32 = 0;
 pub const MAT_PROP_VALUE_TYPE_IMAGE: u32 = 1;
 pub const MAT_PROP_VALUE_TYPE_CHECKER: u32 = 2;
+pub const MAT_PROP_VALUE_TYPE_NOISE: u32 = 3;
 
 impl fmt::Debug for closest_hit::MaterialPropertyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -21,6 +21,10 @@ pub enum TextureType {
         even: String,
         odd: String,
     },
+    Noise {
+        name: String,
+        scale: f32,
+    },
 }
 
 impl TextureType {
@@ -29,38 +33,39 @@ impl TextureType {
             Self::Constant { name, .. } => name,
             Self::Image { name, .. } => name,
             Self::Checker { name, .. } => name,
+            Self::Noise { name, .. } => name,
         }
     }
 
     pub fn adjust_relative_path(&mut self, relative_to: &Path) {
-        match self {
-            Self::Image { path, .. } => {
-                let path_buf = Path::new(path).to_path_buf();
-                if path_buf.is_relative() {
-                    let mut new_path_buf = relative_to.to_path_buf();
-                    new_path_buf.push(path_buf);
-                    *path = new_path_buf.to_str().unwrap().to_owned();
-                }
+        if let Self::Image { path, .. } = self {
+            let path_buf = Path::new(path).to_path_buf();
+            if path_buf.is_relative() {
+                let mut new_path_buf = relative_to.to_path_buf();
+                new_path_buf.push(path_buf);
+                *path = new_path_buf.to_str().unwrap().to_owned();
             }
-            Self::Constant { .. } => {}
-            Self::Checker { .. } => {}
         }
     }
 
     pub fn is_valid(&self, all_textures: &HashMap<String, Self>) -> Result<()> {
         match self {
-            Self::Constant { .. } | Self::Image { .. } => Ok(()),
+            Self::Constant { .. } | Self::Image { .. } | Self::Noise { .. } => Ok(()),
             Self::Checker {
                 name, odd, even, ..
             } => match all_textures.get(odd) {
-                Some(Self::Constant { .. }) | Some(Self::Image { .. }) => Ok(()),
+                Some(Self::Constant { .. })
+                | Some(Self::Image { .. })
+                | Some(Self::Noise { .. }) => Ok(()),
                 Some(Self::Checker { .. }) => Err(anyhow!("Checker texture cannot be recursive.")),
                 None => Err(anyhow!(
                     "Check texture {name} references unknown texture odd={odd}"
                 )),
             }
             .and(match all_textures.get(even) {
-                Some(Self::Constant { .. }) | Some(Self::Image { .. }) => Ok(()),
+                Some(Self::Constant { .. })
+                | Some(Self::Image { .. })
+                | Some(Self::Noise { .. }) => Ok(()),
                 Some(Self::Checker { .. }) => Err(anyhow!("Checker texture cannot be recursive.")),
                 None => Err(anyhow!(
                     "Check texture {name} references unknown texture even={even}"
@@ -92,6 +97,7 @@ impl TextureType {
         match self {
             Self::Constant { name, .. } => seen.contains(name),
             Self::Image { name, .. } => seen.contains(name),
+            Self::Noise { name, .. } => seen.contains(name),
             Self::Checker {
                 name, even, odd, ..
             } => {

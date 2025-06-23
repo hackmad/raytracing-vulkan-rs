@@ -53,16 +53,12 @@ impl ImageTextures {
         )?;
 
         for texture in textures.values() {
-            match texture {
-                TextureType::Image { name, path } => {
-                    if let Entry::Vacant(e) = indices.entry(name.clone()) {
-                        let texture = load_texture(vk.clone(), path, &mut builder)?;
-                        e.insert(image_views.len() as u32);
-                        image_views.push(texture);
-                    }
+            if let TextureType::Image { name, path } = texture {
+                if let Entry::Vacant(e) = indices.entry(name.clone()) {
+                    let texture = load_texture(vk.clone(), path, &mut builder)?;
+                    e.insert(image_views.len() as u32);
+                    image_views.push(texture);
                 }
-                TextureType::Constant { .. } => {}
-                TextureType::Checker { .. } => {}
             }
         }
 

@@ -3,6 +3,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 
 #include "common.glsl"
+#include "perlin.glsl"
 
 layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
 hitAttributeEXT vec2 hitAttribs;
@@ -43,15 +44,19 @@ layout(set = 6, binding = 2, scalar) buffer DielectricMaterials {
 layout(set = 7, binding = 0, scalar) buffer CheckerTextures {
     CheckerTexture values[];
 } checkerTexture;
+layout(set = 7, binding = 1, scalar) buffer NoiseTextures {
+    NoiseTexture values[];
+} noiseTexture;
 
 layout(push_constant) uniform ClosestHitPushConstants {
-    uint meshCount;
-    uint imageTextureCount;
-    uint constantColourCount;
-    uint checkerTextureCount;
-    uint lambertianMaterialCount;
-    uint metalMaterialCount;
-    uint dielectricMaterialCount;
+    layout(offset = 0)  uint meshCount;
+    layout(offset = 4)  uint imageTextureCount;
+    layout(offset = 8)  uint constantColourCount;
+    layout(offset = 12) uint checkerTextureCount;
+    layout(offset = 16) uint noiseTextureCount;
+    layout(offset = 20) uint lambertianMaterialCount;
+    layout(offset = 24) uint metalMaterialCount;
+    layout(offset = 28) uint dielectricMaterialCount;
 } pc;
 
 HitRecord unpackInstanceVertex(const int meshInstanceId, const int primitiveId) {
@@ -108,7 +113,7 @@ HitRecord unpackInstanceVertex(const int meshInstanceId, const int primitiveId) 
     );
 }
 
-// This only handles constant colour and image textures. Other textures like checker texture can reference
+// This only handles constant colour, image and noise textures. Other textures like checker texture can reference
 // these "basic" textures for their own properties.
 vec3 getBasicTextureValue(MaterialPropertyValue matPropValue, MeshVertex vertex) {
     vec3 colour = vec3(0.0);
@@ -128,6 +133,13 @@ vec3 getBasicTextureValue(MaterialPropertyValue matPropValue, MeshVertex vertex)
                         ).rgb; // Ignore alpha for now.
             }
             break;
+
+        case MAT_PROP_VALUE_TYPE_NOISE:
+            if (matPropValue.index >= 0 && matPropValue.index < pc.noiseTextureCount) {
+                float scale = noiseTexture.values[matPropValue.index].scale;
+                colour = vec3(0.5, 0.5, 0.5) * (1.0 + sin(scale * vertex.p.z + 10 * turbulence(vertex.p, 7)));
+            }
+            break;
     }
 
     return colour;
@@ -138,10 +150,8 @@ vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex ver
 
     switch (matPropValue.propValueType) {
         case MAT_PROP_VALUE_TYPE_RGB:
-            colour = getBasicTextureValue(matPropValue, vertex);
-            break;
-
         case MAT_PROP_VALUE_TYPE_IMAGE:
+        case MAT_PROP_VALUE_TYPE_NOISE:
             colour = getBasicTextureValue(matPropValue, vertex);
             break;
 

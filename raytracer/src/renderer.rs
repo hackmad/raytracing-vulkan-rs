@@ -1,9 +1,8 @@
 use std::sync::{Arc, RwLock};
 
 use anyhow::Result;
-use log::debug;
 use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage},
+    buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage},
     descriptor_set::{DescriptorSet, WriteDescriptorSet},
     image::{
@@ -23,6 +22,16 @@ use crate::{
     shaders::{ShaderModules, closest_hit, ray_gen},
     textures::Textures,
 };
+
+#[repr(C)]
+#[derive(BufferContents, Clone, Copy)]
+pub struct UnifiedPushConstants {
+    // ClosestHit: 0–31
+    pub closest_hit_pc: closest_hit::ClosestHitPushConstants,
+
+    // RayGen: 32–55
+    pub ray_gen_pc: ray_gen::RayGenPushConstants,
+}
 
 /// Stores resources specific to the rendering pipeline and renders a frame.
 pub struct Renderer {
@@ -50,11 +59,8 @@ pub struct Renderer {
     /// The raytracing pipeline and layout.
     rt_pipeline: RtPipeline,
 
-    /// Push constants for the closest hit shader.
-    closest_hit_push_constants: closest_hit::ClosestHitPushConstants,
-
-    /// Push constants for the ray generation shader.
-    ray_gen_push_constants: ray_gen::RayGenPushConstants,
+    /// Combined push constants for all shaders.
+    push_constants: UnifiedPushConstants,
 
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
     _acceleration_structures: AccelerationStructures,
@@ -71,33 +77,39 @@ impl Renderer {
         let image_texture_count = textures.image_textures.image_views.len();
         let constant_colour_count = textures.constant_colour_textures.colours.len();
         let checker_texture_count = textures.checker_textures.textures.len();
+        let noise_texture_count = textures.noise_textures.textures.len();
 
         // Get meshes.
         let meshes = scene_file.get_meshes();
 
         // Get materials.
         let materials = Materials::new(&scene_file.materials, &textures);
-        debug!("{materials:?}");
+        let lambertian_material_count = materials.lambertian_materials.len();
+        let metal_material_count = materials.metal_materials.len();
+        let dielectric_material_count = materials.dielectric_materials.len();
 
         // Push constants.
-        let closest_hit_push_constants = closest_hit::ClosestHitPushConstants {
-            meshCount: meshes.len() as _,
-            imageTextureCount: image_texture_count as _,
-            constantColourCount: constant_colour_count as _,
-            checkerTextureCount: checker_texture_count as _,
-            lambertianMaterialCount: materials.lambertian_materials.len() as _,
-            metalMaterialCount: materials.metal_materials.len() as _,
-            dielectricMaterialCount: materials.dielectric_materials.len() as _,
-        };
-
         // sampleBatch will need to change in Scene::render() but we can store the push constant
         // data we need for now.
-        let ray_gen_push_constants = ray_gen::RayGenPushConstants {
-            resolution: [window_size[0] as u32, window_size[1] as u32],
-            samplesPerPixel: scene_file.render.samples_per_pixel,
-            sampleBatches: scene_file.render.sample_batches,
-            sampleBatch: 0,
-            maxRayDepth: scene_file.render.max_ray_depth,
+        let push_constants = UnifiedPushConstants {
+            closest_hit_pc: closest_hit::ClosestHitPushConstants {
+                meshCount: meshes.len() as _,
+                imageTextureCount: image_texture_count as _,
+                constantColourCount: constant_colour_count as _,
+                checkerTextureCount: checker_texture_count as _,
+                noiseTextureCount: noise_texture_count as _,
+                lambertianMaterialCount: lambertian_material_count as _,
+                metalMaterialCount: metal_material_count as _,
+                dielectricMaterialCount: dielectric_material_count as _,
+            },
+
+            ray_gen_pc: ray_gen::RayGenPushConstants {
+                resolution: [window_size[0] as u32, window_size[1] as u32],
+                samplesPerPixel: scene_file.render.samples_per_pixel,
+                sampleBatches: scene_file.render.sample_batches,
+                sampleBatch: 0,
+                maxRayDepth: scene_file.render.max_ray_depth,
+            },
         };
 
         // Create the raytracing pipeline.
@@ -106,8 +118,6 @@ impl Renderer {
             &shader_modules.stages,
             &shader_modules.groups,
             image_texture_count as _,
-            size_of::<closest_hit::ClosestHitPushConstants>() as _,
-            size_of::<ray_gen::RayGenPushConstants>() as _,
         )?;
         let pipeline_layout = rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
@@ -219,13 +229,16 @@ impl Renderer {
             [],
         )?;
 
-        // Check textures.
+        // Other textures.
         let texture_buffers = textures.create_buffers(vk.clone())?;
 
         let other_textures_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::OTHER_TEXTURES_LAYOUT].clone(),
-            vec![WriteDescriptorSet::buffer(0, texture_buffers.checker)],
+            vec![
+                WriteDescriptorSet::buffer(0, texture_buffers.checker),
+                WriteDescriptorSet::buffer(1, texture_buffers.noise),
+            ],
             [],
         )?;
 
@@ -242,8 +255,7 @@ impl Renderer {
             materials_descriptor_set,
             shader_binding_table,
             rt_pipeline,
-            closest_hit_push_constants,
-            ray_gen_push_constants,
+            push_constants,
             _acceleration_structures: acceleration_structures,
         })
     }
@@ -270,10 +282,10 @@ impl Renderer {
 
         let mut future = before_future;
 
-        let sample_batches = self.ray_gen_push_constants.sampleBatches;
+        let sample_batches = self.push_constants.ray_gen_pc.sampleBatches;
         for sample_batch in 0..sample_batches {
-            let mut ray_gen_push_constants = self.ray_gen_push_constants;
-            ray_gen_push_constants.sampleBatch = sample_batch as _;
+            let mut push_constants = self.push_constants;
+            push_constants.ray_gen_pc.sampleBatch = sample_batch as _;
 
             let camera_buffer = Buffer::from_data(
                 vk.memory_allocator.clone(),
@@ -338,9 +350,7 @@ impl Renderer {
                     ],
                 )
                 .unwrap()
-                .push_constants(pipeline_layout.clone(), 0, self.closest_hit_push_constants)
-                .unwrap()
-                .push_constants(pipeline_layout.clone(), 16, ray_gen_push_constants)
+                .push_constants(pipeline_layout.clone(), 0, self.push_constants)
                 .unwrap()
                 .bind_pipeline_ray_tracing(self.rt_pipeline.get())
                 .unwrap();

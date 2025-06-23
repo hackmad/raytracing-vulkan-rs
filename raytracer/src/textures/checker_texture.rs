@@ -16,31 +16,28 @@ pub struct CheckerTextures {
 }
 
 impl CheckerTextures {
-    /// Returns all unique colours from scene file.
+    /// Loads all unique checker textures from scene file.
     pub fn new(all_textures: &HashMap<String, TextureType>) -> CheckerTextures {
         let mut textures = vec![];
         let mut indices = HashMap::new();
 
         for texture in all_textures.values() {
-            match texture {
-                TextureType::Checker {
-                    name,
-                    scale,
-                    odd,
-                    even,
-                } => {
-                    if let Entry::Vacant(e) = indices.entry(name.clone()) {
-                        e.insert(textures.len() as u32);
+            if let TextureType::Checker {
+                name,
+                scale,
+                odd,
+                even,
+            } = texture
+            {
+                if let Entry::Vacant(e) = indices.entry(name.clone()) {
+                    e.insert(textures.len() as u32);
 
-                        textures.push(CheckerTexture {
-                            scale: *scale,
-                            odd: odd.clone(),
-                            even: even.clone(),
-                        });
-                    }
+                    textures.push(CheckerTexture {
+                        scale: *scale,
+                        odd: odd.clone(),
+                        even: even.clone(),
+                    });
                 }
-                TextureType::Constant { .. } => {}
-                TextureType::Image { .. } => {}
             }
         }
 
