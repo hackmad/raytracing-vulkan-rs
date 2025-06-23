@@ -95,6 +95,46 @@ impl From<&ObjectType> for Mesh {
                     material: material.clone(),
                 }
             }
+
+            ObjectType::Triangle {
+                name,
+                points,
+                normal,
+                uv,
+                material,
+            } => {
+                let vertices: Vec<_> = points
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| Vertex::new(*p, *normal, uv[i]))
+                    .collect();
+                Mesh {
+                    name: name.clone(),
+                    vertices,
+                    indices: vec![0, 1, 2],
+                    material: material.clone(),
+                }
+            }
+
+            ObjectType::Quad {
+                name,
+                points,
+                normal,
+                uv,
+                material,
+            } => {
+                let vertices: Vec<_> = points
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| Vertex::new(*p, *normal, uv[i]))
+                    .collect();
+                Mesh {
+                    name: name.clone(),
+                    vertices,
+                    indices: vec![0, 1, 2, 0, 2, 3],
+                    material: material.clone(),
+                }
+            }
         }
     }
 }

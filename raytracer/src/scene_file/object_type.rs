@@ -11,4 +11,18 @@ pub enum ObjectType {
         segments: u32,
         material: String,
     },
+    Triangle {
+        name: String,
+        points: [[f32; 3]; 3],
+        normal: [f32; 3],
+        uv: [[f32; 2]; 3],
+        material: String,
+    },
+    Quad {
+        name: String,
+        points: [[f32; 3]; 4],
+        normal: [f32; 3],
+        uv: [[f32; 2]; 4],
+        material: String,
+    },
 }
