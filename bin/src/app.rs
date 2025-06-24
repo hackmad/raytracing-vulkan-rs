@@ -22,6 +22,7 @@ use vulkano_util::{
 };
 use winit::{
     application::ApplicationHandler,
+    dpi::LogicalSize,
     event::{ElementState, KeyEvent, WindowEvent},
     keyboard::{Key, NamedKey},
     raw_window_handle::HasDisplayHandle,
@@ -29,8 +30,7 @@ use winit::{
 
 use raytracer::{Scene, SceneFile, Vk};
 
-const INITIAL_WIDTH: u32 = 1024;
-const INITIAL_HEIGHT: u32 = 576;
+const INITIAL_WINDOW_SIZE: [f32; 2] = [1024.0, 576.0];
 
 /// Winit application.
 pub struct App {
@@ -137,16 +137,31 @@ impl App {
     }
 }
 
+fn adjust_window_size(mut window_size: [f32; 2], aspect_ratio: f32) -> [f32; 2] {
+    if window_size[0] > window_size[1] {
+        window_size[0] = aspect_ratio * window_size[1];
+    } else {
+        window_size[1] = window_size[0] / aspect_ratio;
+    }
+    window_size
+}
+
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        // Create a new window and renderer. Note that fractional scaling in the OS will give a scaled width/height.
+        // Load scene file.
+        let scene_file = SceneFile::load_json(&self.current_file_path).unwrap();
+
+        let mut window_size =
+            adjust_window_size(INITIAL_WINDOW_SIZE, scene_file.render.aspect_ratio);
+
+        // Create a new window and renderer.
         self.windows.create_window(
             event_loop,
             &self.context,
             &WindowDescriptor {
                 title: "Raytracing - Vulkan".to_string(),
-                width: INITIAL_WIDTH as f32,
-                height: INITIAL_HEIGHT as f32,
+                width: window_size[0],
+                height: window_size[1],
                 ..Default::default()
             },
             |ci| {
@@ -162,11 +177,10 @@ impl ApplicationHandler for App {
 
         info!("Swapchain image format: {:?}", renderer.swapchain_format());
 
-        // Create storage image for rendering and display.
-        let window_size = renderer.window_size();
+        // Refetch window size from renderer because window creation will account for fractional scaling.
+        window_size = renderer.window_size();
 
-        // Load scene file.
-        let scene_file = SceneFile::load_json(&self.current_file_path).unwrap();
+        // Create scene.
         let scene = Scene::new(self.vk.clone(), &scene_file, &window_size).unwrap();
         self.scene = Some(scene);
     }
@@ -184,7 +198,17 @@ impl ApplicationHandler for App {
         if let Some(new_scene_path) = &self.new_file_path {
             match SceneFile::load_json(new_scene_path) {
                 Ok(scene_file) => {
-                    match Scene::new(self.vk.clone(), &scene_file, &renderer.window_size()) {
+                    // Resize the window based on initial dimensions and scene aspect ratio.
+                    let mut window_size =
+                        adjust_window_size(INITIAL_WINDOW_SIZE, scene_file.render.aspect_ratio);
+                    let _ = renderer
+                        .window()
+                        .request_inner_size(LogicalSize::new(window_size[0], window_size[1]));
+
+                    // Refetch window size from renderer because window creation will account for fractional scaling.
+                    window_size = renderer.window_size();
+
+                    match Scene::new(self.vk.clone(), &scene_file, &window_size) {
                         Ok(new_scene) => {
                             *scene = new_scene;
                             self.current_file_path = new_scene_path.clone();

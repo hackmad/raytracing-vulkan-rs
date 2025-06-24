@@ -7,4 +7,5 @@ pub struct Render {
     pub samples_per_pixel: u32, // See ray_gen.glsl. Don't exceed 64.
     pub sample_batches: u32,    // See ray_gen.glsl. Don't exceed 32.
     pub max_ray_depth: u32,
+    pub aspect_ratio: f32,
 }

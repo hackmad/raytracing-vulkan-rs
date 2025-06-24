@@ -258,6 +258,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         samples_per_pixel: 64,
         sample_batches: 2,
         max_ray_depth: 50,
+        aspect_ratio: 16.0 / 9.0,
     };
 
     let sky = Sky::VerticalGradient {

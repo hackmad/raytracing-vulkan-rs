@@ -53,6 +53,7 @@
     "camera": "default",
     "samples_per_pixel": 16,
     "sample_batches": 1,
-    "max_ray_depth": 50
+    "max_ray_depth": 50,
+    "aspect_ratio": 1.7777778
   }
 }
