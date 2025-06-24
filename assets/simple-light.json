@@ -68,8 +68,8 @@
   },
   "render": {
     "camera": "default",
-    "samples_per_pixel": 16,
-    "sample_batches": 1,
+    "samples_per_pixel": 64,
+    "sample_batches": 2,
     "max_ray_depth": 50
   }
 }

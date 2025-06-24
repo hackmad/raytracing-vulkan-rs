@@ -211,7 +211,7 @@ void lambertianMaterialScatter(uint materialIndex, HitRecord rec) {
             scatterDirection = rec.normal;
         }
 
-        rayPayload.attenuation = albedo;
+        rayPayload.scatterColour = albedo;
         rayPayload.isScattered = true;
         rayPayload.scatteredRayDirection = scatterDirection;
         rayPayload.scatteredRayOrigin = rec.meshVertex.p;
@@ -229,7 +229,7 @@ void metalMaterialScatter(uint materialIndex, HitRecord rec) {
         vec3 scatteredDirection = normalize(reflectedDirection) +
             (fuzz * randomUnitVec3(rayPayload.rngState));
 
-        rayPayload.attenuation = albedo;
+        rayPayload.scatterColour = albedo;
         rayPayload.isScattered = (dot(scatteredDirection, rec.normal) > 0);
         rayPayload.scatteredRayDirection = scatteredDirection;
         rayPayload.scatteredRayOrigin = rec.meshVertex.p;
@@ -257,7 +257,7 @@ void dielectricMaterialScatter(uint materialIndex, HitRecord rec) {
             ? reflect(unitDirection, rec.normal) // Total internal reflection.
             : refract(unitDirection, rec.normal, ri);
 
-        rayPayload.attenuation = attenuation;
+        rayPayload.scatterColour = attenuation;
         rayPayload.isScattered = true;
         rayPayload.scatteredRayDirection = refractedDirection;
         rayPayload.scatteredRayOrigin = rec.meshVertex.p;
@@ -288,7 +288,7 @@ void calculateScatter(MeshMaterial material, HitRecord rec) {
         default:
             // Materials that don't support scattering.
             rayPayload.isScattered = false;
-            rayPayload.attenuation = vec3(0.0);
+            rayPayload.scatterColour = vec3(0.0);
             break;
     }
 }

@@ -61,7 +61,7 @@ vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, flo
 
         // Closest hit and miss shader will set rayPayload fields.
         if (!rayPayload.isMissed) {
-            attenuation *= (rayPayload.emissionColour + rayPayload.attenuation);
+            attenuation *= (rayPayload.emissionColour + rayPayload.scatterColour);
             if (!rayPayload.isScattered) break;
         } else {
             vec3 unitDirection = normalize(direction.xyz);

@@ -112,7 +112,7 @@ struct RayPayload {
     bool isScattered;
     vec3 scatteredRayOrigin;
     vec3 scatteredRayDirection;
-    vec3 attenuation;
+    vec3 scatterColour;
     vec3 emissionColour;
 };
 
@@ -123,7 +123,7 @@ RayPayload initRayPayload(uint rngState) {
     rp.isScattered = false;
     rp.scatteredRayOrigin = vec3(0.0);
     rp.scatteredRayDirection = vec3(0.0);
-    rp.attenuation = vec3(0.0);
+    rp.scatterColour = vec3(0.0);
     rp.emissionColour = vec3(0.0);
     return rp;
 }
