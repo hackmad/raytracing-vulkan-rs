@@ -2,15 +2,14 @@ use std::{f32::consts::PI, sync::Arc};
 
 use anyhow::Result;
 use glam::Vec3;
-use log::{debug, warn};
+use log::{debug, info};
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
 use crate::{
-    MAT_TYPE_DIELECTRIC, MAT_TYPE_LAMBERTIAN, MAT_TYPE_METAL, MAT_TYPE_NONE, Materials, ObjectType,
-    Vk, create_device_local_buffer, shaders::closest_hit,
+    MAT_TYPE_NONE, Materials, ObjectType, Vk, create_device_local_buffer, shaders::closest_hit,
 };
 
 // This is used for cleaner code and it represents the data that the shader's MeshVertex structure needs.
@@ -255,20 +254,14 @@ pub fn create_mesh_storage_buffer(
     let index_buffer_sizes = meshes.iter().map(|mesh| mesh.indices.len());
 
     let materials = meshes.iter().map(|mesh| {
-        // Material names are unique across all materials.
-        if let Some(index) = materials.lambertian_material_indices.get(&mesh.material) {
-            (MAT_TYPE_LAMBERTIAN, *index)
-        } else if let Some(index) = materials.metal_material_indices.get(&mesh.material) {
-            (MAT_TYPE_METAL, *index)
-        } else if let Some(index) = materials.dielectric_material_indices.get(&mesh.material) {
-            (MAT_TYPE_DIELECTRIC, *index)
-        } else {
-            warn!(
+        let type_and_index = materials.to_shader(&mesh.material);
+        if type_and_index.material_type == MAT_TYPE_NONE {
+            info!(
                 "Mesh '{}' material '{}' not found",
                 mesh.name, mesh.material
             );
-            (MAT_TYPE_NONE, 0)
         }
+        (type_and_index.material_type, type_and_index.material_index)
     });
 
     let mesh_data: Vec<_> = vertex_buffer_sizes

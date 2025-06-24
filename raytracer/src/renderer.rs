@@ -26,11 +26,11 @@ use crate::{
 #[repr(C)]
 #[derive(BufferContents, Clone, Copy)]
 pub struct UnifiedPushConstants {
-    // ClosestHit: 0–31
-    pub closest_hit_pc: closest_hit::ClosestHitPushConstants,
-
-    // RayGen: 32–55
+    // RayGen: 0–23
     pub ray_gen_pc: ray_gen::RayGenPushConstants,
+
+    // ClosestHit: 24–55
+    pub closest_hit_pc: closest_hit::ClosestHitPushConstants,
 }
 
 /// Stores resources specific to the rendering pipeline and renders a frame.
@@ -90,6 +90,7 @@ impl Renderer {
         let lambertian_material_count = materials.lambertian_materials.len();
         let metal_material_count = materials.metal_materials.len();
         let dielectric_material_count = materials.dielectric_materials.len();
+        let diffuse_light_material_count = materials.diffuse_light_materials.len();
 
         // Push constants.
         // sampleBatch will need to change in Scene::render() but we can store the push constant
@@ -104,6 +105,7 @@ impl Renderer {
                 lambertianMaterialCount: lambertian_material_count as _,
                 metalMaterialCount: metal_material_count as _,
                 dielectricMaterialCount: dielectric_material_count as _,
+                diffuseLightMaterialCount: diffuse_light_material_count as _,
             },
 
             ray_gen_pc: ray_gen::RayGenPushConstants {
@@ -228,6 +230,7 @@ impl Renderer {
                 WriteDescriptorSet::buffer(0, material_buffers.lambertian),
                 WriteDescriptorSet::buffer(1, material_buffers.metal),
                 WriteDescriptorSet::buffer(2, material_buffers.dielectric),
+                WriteDescriptorSet::buffer(3, material_buffers.diffuse_light),
             ],
             [],
         )?;

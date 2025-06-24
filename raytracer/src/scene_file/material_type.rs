@@ -16,6 +16,10 @@ pub enum MaterialType {
         name: String,
         refraction_index: f32,
     },
+    DiffuseLight {
+        name: String,
+        emit: String,
+    },
 }
 
 impl MaterialType {
@@ -24,6 +28,7 @@ impl MaterialType {
             Self::Lambertian { name, .. } => name.as_ref(),
             Self::Metal { name, .. } => name.as_ref(),
             Self::Dielectric { name, .. } => name.as_ref(),
+            Self::DiffuseLight { name, .. } => name.as_ref(),
         }
     }
 }

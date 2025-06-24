@@ -40,6 +40,9 @@ layout(set = 6, binding = 1, scalar) buffer MetalMaterials {
 layout(set = 6, binding = 2, scalar) buffer DielectricMaterials {
     DielectricMaterial values[];
 } dielectricMaterial;
+layout(set = 6, binding = 3, scalar) buffer DiffuseLightMaterials {
+    DiffuseLightMaterial values[];
+} diffuseLightMaterial;
 
 layout(set = 7, binding = 0, scalar) buffer CheckerTextures {
     CheckerTexture values[];
@@ -48,16 +51,28 @@ layout(set = 7, binding = 1, scalar) buffer NoiseTextures {
     NoiseTexture values[];
 } noiseTexture;
 
+// If RayGenPushConstants in ray_gen.glsl changes, make sure to update layouts here.
 layout(push_constant) uniform ClosestHitPushConstants {
-    layout(offset = 0)  uint meshCount;
-    layout(offset = 4)  uint imageTextureCount;
-    layout(offset = 8)  uint constantColourCount;
-    layout(offset = 12) uint checkerTextureCount;
-    layout(offset = 16) uint noiseTextureCount;
-    layout(offset = 20) uint lambertianMaterialCount;
-    layout(offset = 24) uint metalMaterialCount;
-    layout(offset = 28) uint dielectricMaterialCount;
+    layout(offset = 24) uint meshCount;
+    layout(offset = 28) uint imageTextureCount;
+    layout(offset = 32) uint constantColourCount;
+    layout(offset = 36) uint checkerTextureCount;
+    layout(offset = 40) uint noiseTextureCount;
+    layout(offset = 44) uint lambertianMaterialCount;
+    layout(offset = 48) uint metalMaterialCount;
+    layout(offset = 52) uint dielectricMaterialCount;
+    layout(offset = 56) uint diffuseLightMaterialCount;
 } pc;
+
+struct MeshMaterial {
+    uint type;
+    uint index;
+};
+
+MeshMaterial unpackInstanceMaterial(const int meshInstanceId) {
+    Mesh mesh = meshData.values[meshInstanceId];
+    return MeshMaterial(mesh.materialType, mesh.materialIndex);
+}
 
 HitRecord unpackInstanceVertex(const int meshInstanceId, const int primitiveId) {
     vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
@@ -184,7 +199,7 @@ float schlickReflectance(float cosine, float refractionIndex) {
     return r0 + (1.0 - r0) * pow((1.0 - cosine), 5);
 }
 
-void scatterLambertianMaterial(uint materialIndex, HitRecord rec) {
+void lambertianMaterialScatter(uint materialIndex, HitRecord rec) {
     if (materialIndex >= 0 && materialIndex < pc.lambertianMaterialCount) {
         LambertianMaterial material = lambertianMaterial.values[materialIndex];
         vec3 albedo = getMaterialPropertyValue(material.albedo, rec.meshVertex);
@@ -203,7 +218,7 @@ void scatterLambertianMaterial(uint materialIndex, HitRecord rec) {
     }
 }
 
-void scatterMetalMaterial(uint materialIndex, HitRecord rec) {
+void metalMaterialScatter(uint materialIndex, HitRecord rec) {
     if (materialIndex >= 0 && materialIndex < pc.metalMaterialCount) {
         MetalMaterial material = metalMaterial.values[materialIndex];
         vec3 albedo = getMaterialPropertyValue(material.albedo, rec.meshVertex);
@@ -221,10 +236,10 @@ void scatterMetalMaterial(uint materialIndex, HitRecord rec) {
     }
 }
 
-void scatterDielectricMaterial(uint materialIndex, HitRecord rec) {
+void dielectricMaterialScatter(uint materialIndex, HitRecord rec) {
     if (materialIndex >= 0 && materialIndex < pc.dielectricMaterialCount) {
-        DielectricMaterial dielectricMaterial = dielectricMaterial.values[materialIndex];
-        float refractionIndex = dielectricMaterial.refractionIndex;
+        DielectricMaterial material = dielectricMaterial.values[materialIndex];
+        float refractionIndex = material.refractionIndex;
 
         vec3 attenuation = vec3(1.0);
 
@@ -249,28 +264,53 @@ void scatterDielectricMaterial(uint materialIndex, HitRecord rec) {
     }
 }
 
-void unpackInstanceMaterialAndScatter(const int meshInstanceId, HitRecord rec) {
-    Mesh mesh = meshData.values[meshInstanceId];
-    uint materialType = mesh.materialType;
-    uint materialIndex = mesh.materialIndex;
+void diffuseLightMaterialEmission(uint materialIndex, HitRecord rec) {
+    if (materialIndex >= 0 && materialIndex < pc.diffuseLightMaterialCount) {
+        DiffuseLightMaterial material = diffuseLightMaterial.values[materialIndex];
+        rayPayload.emissionColour = getMaterialPropertyValue(material.emit, rec.meshVertex);
+    }
+}
 
-    switch (materialType) {
+void calculateScatter(MeshMaterial material, HitRecord rec) {
+    switch (material.type) {
         case MAT_TYPE_LAMBERTIAN:
-            scatterLambertianMaterial(materialIndex, rec);
+            lambertianMaterialScatter(material.index, rec);
             break;
 
         case MAT_TYPE_METAL:
-            scatterMetalMaterial(materialIndex, rec);
+            metalMaterialScatter(material.index, rec);
             break;
 
         case MAT_TYPE_DIELECTRIC:
-            scatterDielectricMaterial(materialIndex, rec);
+            dielectricMaterialScatter(material.index, rec);
+            break;
+
+        default:
+            // Materials that don't support scattering.
+            rayPayload.isScattered = false;
+            rayPayload.attenuation = vec3(0.0);
+            break;
+    }
+}
+
+void calculateEmission(MeshMaterial material, HitRecord rec) {
+    switch (material.type) {
+        case MAT_TYPE_DIFFUSE_LIGHT:
+            diffuseLightMaterialEmission(material.index, rec);
+            break;
+
+        default:
+            // Non-emissive materials.
+            rayPayload.emissionColour = vec3(0.0);
             break;
     }
 }
 
 void main() {
     HitRecord rec = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
-    unpackInstanceMaterialAndScatter(gl_InstanceID, rec);
+    MeshMaterial material = unpackInstanceMaterial(gl_InstanceID);
+
+    calculateScatter(material, rec);
+    calculateEmission(material, rec);
 }
 

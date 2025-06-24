@@ -16,6 +16,7 @@ const uint MAT_TYPE_NONE = 0;
 const uint MAT_TYPE_LAMBERTIAN = 1;
 const uint MAT_TYPE_METAL = 2;
 const uint MAT_TYPE_DIELECTRIC = 3;
+const uint MAT_TYPE_DIFFUSE_LIGHT = 4;
 
 const uint MAT_PROP_VALUE_TYPE_RGB = 0;
 const uint MAT_PROP_VALUE_TYPE_IMAGE = 1;
@@ -38,6 +39,10 @@ struct MetalMaterial {
 
 struct DielectricMaterial {
     float refractionIndex;
+};
+
+struct DiffuseLightMaterial {
+    MaterialPropertyValue emit;
 };
 
 struct CheckerTexture {
@@ -108,6 +113,7 @@ struct RayPayload {
     vec3 scatteredRayOrigin;
     vec3 scatteredRayDirection;
     vec3 attenuation;
+    vec3 emissionColour;
 };
 
 RayPayload initRayPayload(uint rngState) {
@@ -118,6 +124,7 @@ RayPayload initRayPayload(uint rngState) {
     rp.scatteredRayOrigin = vec3(0.0);
     rp.scatteredRayDirection = vec3(0.0);
     rp.attenuation = vec3(0.0);
+    rp.emissionColour = vec3(0.0);
     return rp;
 }
 

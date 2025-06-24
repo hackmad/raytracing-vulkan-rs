@@ -3,8 +3,8 @@
     {
       "perspective": {
         "name": "default",
-        "eye": [13, -2, 3],
-        "look_at": [0, 0, 0],
+        "eye": [26, -3, 6],
+        "look_at": [0, -2, 0],
         "up": [0, 1, 0],
         "fov_y": 20,
         "z_near": 0.01,
@@ -15,10 +15,12 @@
     }
   ],
   "textures": [
-    { "noise": { "name": "pertext", "scale": 4 } }
+    { "noise": { "name": "pertext", "scale": 4 } },
+    { "constant": { "name": "gray", "rgb": [4, 4, 4] } }
   ],
   "materials": [
-    { "lambertian": { "name": "perlin", "albedo": "pertext" } }
+    { "lambertian": { "name": "perlin", "albedo": "pertext" } },
+    { "diffuse_light": { "name": "diffuse-light", "emit": "gray" } }
   ],
   "objects": [
     {
@@ -40,14 +42,29 @@
         "radius": 1000,
         "material": "perlin"
       }
+    },
+    {
+      "quad": {
+        "name": "side-quad-light",
+        "points": [ [3, -1, -2], [5, -1, -2], [5, -3, -2], [3, -3, -2] ],
+        "normal": [0, 0, -1],
+        "uv": [ [0, 0], [1, 0], [1, 1], [0, 1] ],
+        "material": "diffuse-light"
+      }
+    },
+    {
+      "uv_sphere": {
+        "name": "top-sphere-light",
+        "center": [0, -7, 0],
+        "rings": 16,
+        "segments": 32,
+        "radius": 2,
+        "material": "diffuse-light"
+      }
     }
   ],
   "sky": {
-    "vertical_gradient" : {
-        "factor": 0.5,
-        "top": [0.5, 0.7, 1.0],
-        "bottom": [1.0, 1.0, 1.0]
-    }
+    "solid" : { "rgb": [0, 0, 0] }
   },
   "render": {
     "camera": "default",

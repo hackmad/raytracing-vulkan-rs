@@ -21,12 +21,13 @@ layout(set = 8, binding = 0) uniform SkyData {
     Sky value;
 } sky;
 
+// If this changes, make sure to update layouts for ClosestHitPushConstants in closest_hit.glsl.
 layout(push_constant) uniform RayGenPushConstants {
-    layout(offset = 32) uvec2 resolution;
-    layout(offset = 40) uint samplesPerPixel; // Don't exceed 64. See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
-    layout(offset = 44) uint sampleBatches;   // Don't exceed 32.
-    layout(offset = 48) uint sampleBatch;
-    layout(offset = 52) uint maxRayDepth;
+    layout(offset =  0) uvec2 resolution;
+    layout(offset =  8) uint samplesPerPixel; // Don't exceed 64. See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
+    layout(offset = 12) uint sampleBatches;   // Don't exceed 32.
+    layout(offset = 16) uint sampleBatch;
+    layout(offset = 20) uint maxRayDepth;
 } pc;
 
 vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, float tMax, uint rayFlags) {
@@ -60,8 +61,7 @@ vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, flo
 
         // Closest hit and miss shader will set rayPayload fields.
         if (!rayPayload.isMissed) {
-            attenuation *= rayPayload.attenuation;
-
+            attenuation *= (rayPayload.emissionColour + rayPayload.attenuation);
             if (!rayPayload.isScattered) break;
         } else {
             vec3 unitDirection = normalize(direction.xyz);

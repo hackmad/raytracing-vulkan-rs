@@ -8,10 +8,12 @@ use crate::{
     MaterialType, Vk, create_device_local_buffer, shaders::closest_hit, textures::Textures,
 };
 
+// NOTE: Update Materials::to_shader() when adding new materials.
 pub const MAT_TYPE_NONE: u32 = 0;
 pub const MAT_TYPE_LAMBERTIAN: u32 = 1;
 pub const MAT_TYPE_METAL: u32 = 2;
 pub const MAT_TYPE_DIELECTRIC: u32 = 3;
+pub const MAT_TYPE_DIFFUSE_LIGHT: u32 = 4;
 
 pub const MAT_PROP_VALUE_TYPE_RGB: u32 = 0;
 pub const MAT_PROP_VALUE_TYPE_IMAGE: u32 = 1;
@@ -52,6 +54,14 @@ impl fmt::Debug for closest_hit::DielectricMaterial {
     }
 }
 
+impl fmt::Debug for closest_hit::DiffuseLightMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::DiffuseLightMaterial")
+            .field("emit", &self.emit)
+            .finish()
+    }
+}
+
 #[derive(Debug)]
 pub struct Materials {
     /// The lambertian materials. This will be used to create the storage buffers for shaders.
@@ -62,6 +72,9 @@ pub struct Materials {
 
     /// The dielectric materials. This will be used to create the storage buffers for shaders.
     pub dielectric_materials: Vec<closest_hit::DielectricMaterial>,
+
+    /// The diffuse light materials. This will be used to create the storage buffers for shaders.
+    pub diffuse_light_materials: Vec<closest_hit::DiffuseLightMaterial>,
 
     /// Maps unique lambertian materials to their index in `lambertian_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
@@ -74,6 +87,10 @@ pub struct Materials {
     /// Maps unique dielectric materials to their index in `dielectric_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
     pub dielectric_material_indices: HashMap<String, u32>,
+
+    /// Maps unique diffuse light materials to their index in `diffuse_light_materials`. These indices
+    /// are used in the Mesh structure to be referenced in the storage buffers.
+    pub diffuse_light_material_indices: HashMap<String, u32>,
 }
 
 impl Materials {
@@ -81,10 +98,12 @@ impl Materials {
         let mut lambertian_materials = vec![];
         let mut metal_materials = vec![];
         let mut dielectric_materials = vec![];
+        let mut diffuse_light_materials = vec![];
 
         let mut lambertian_material_indices = HashMap::new();
         let mut metal_material_indices = HashMap::new();
         let mut dielectric_material_indices = HashMap::new();
+        let mut diffuse_light_material_indices = HashMap::new();
 
         for material in materials.iter() {
             match material {
@@ -115,6 +134,14 @@ impl Materials {
                         refractionIndex: *refraction_index,
                     });
                 }
+                MaterialType::DiffuseLight { name, emit } => {
+                    diffuse_light_material_indices
+                        .insert(name.clone(), diffuse_light_materials.len() as _);
+
+                    diffuse_light_materials.push(closest_hit::DiffuseLightMaterial {
+                        emit: textures.to_shader(emit).unwrap(),
+                    });
+                }
             }
         }
 
@@ -122,9 +149,11 @@ impl Materials {
             lambertian_materials,
             metal_materials,
             dielectric_materials,
+            diffuse_light_materials,
             lambertian_material_indices,
             metal_material_indices,
             dielectric_material_indices,
+            diffuse_light_material_indices,
         }
     }
 
@@ -185,11 +214,57 @@ impl Materials {
             },
         )?;
 
+        debug!("Creating diffuse light materials buffer");
+        let diffuse_light_materials_buffer = create_device_local_buffer(
+            vk.clone(),
+            buffer_usage,
+            if !self.diffuse_light_materials.is_empty() {
+                self.diffuse_light_materials.clone()
+            } else {
+                vec![closest_hit::DiffuseLightMaterial {
+                    emit: closest_hit::MaterialPropertyValue {
+                        propValueType: 0,
+                        index: 0,
+                    },
+                }]
+            },
+        )?;
+
         Ok(MaterialBuffers {
             lambertian: lambertian_materials_buffer,
             metal: metal_materials_buffer,
             dielectric: dielectric_materials_buffer,
+            diffuse_light: diffuse_light_materials_buffer,
         })
+    }
+
+    pub fn to_shader(&self, material: &str) -> MaterialTypeAndIndex {
+        // Material names are unique across all materials.
+        if let Some(index) = self.lambertian_material_indices.get(material) {
+            MaterialTypeAndIndex::new(MAT_TYPE_LAMBERTIAN, *index)
+        } else if let Some(index) = self.metal_material_indices.get(material) {
+            MaterialTypeAndIndex::new(MAT_TYPE_METAL, *index)
+        } else if let Some(index) = self.dielectric_material_indices.get(material) {
+            MaterialTypeAndIndex::new(MAT_TYPE_DIELECTRIC, *index)
+        } else if let Some(index) = self.diffuse_light_material_indices.get(material) {
+            MaterialTypeAndIndex::new(MAT_TYPE_DIFFUSE_LIGHT, *index)
+        } else {
+            MaterialTypeAndIndex::new(MAT_TYPE_NONE, 0)
+        }
+    }
+}
+
+pub struct MaterialTypeAndIndex {
+    pub material_type: u32,
+    pub material_index: u32,
+}
+
+impl MaterialTypeAndIndex {
+    pub fn new(material_type: u32, material_index: u32) -> Self {
+        Self {
+            material_type,
+            material_index,
+        }
     }
 }
 
@@ -198,4 +273,5 @@ pub struct MaterialBuffers {
     pub lambertian: Subbuffer<[closest_hit::LambertianMaterial]>,
     pub metal: Subbuffer<[closest_hit::MetalMaterial]>,
     pub dielectric: Subbuffer<[closest_hit::DielectricMaterial]>,
+    pub diffuse_light: Subbuffer<[closest_hit::DiffuseLightMaterial]>,
 }

@@ -92,14 +92,14 @@ impl RtPipeline {
                 ],
                 push_constant_ranges: vec![
                     PushConstantRange {
-                        stages: ShaderStages::CLOSEST_HIT,
+                        stages: ShaderStages::RAYGEN,
                         offset: 0,
-                        size: size_of::<closest_hit::ClosestHitPushConstants>() as _,
+                        size: size_of::<ray_gen::RayGenPushConstants>() as _,
                     },
                     PushConstantRange {
-                        stages: ShaderStages::RAYGEN,
-                        offset: size_of::<closest_hit::ClosestHitPushConstants>() as _,
-                        size: size_of::<ray_gen::RayGenPushConstants>() as _,
+                        stages: ShaderStages::CLOSEST_HIT,
+                        offset: size_of::<ray_gen::RayGenPushConstants>() as _,
+                        size: size_of::<closest_hit::ClosestHitPushConstants>() as _,
                     },
                 ],
                 ..Default::default()
@@ -229,6 +229,7 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
                 (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Lambertian materials.
                 (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Metal materials.
                 (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Dielectric materials.
+                (3, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Diffuse light materials.
             ]
             .into_iter()
             .collect(),
