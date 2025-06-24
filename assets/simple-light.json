@@ -22,7 +22,7 @@
     { "lambertian": { "name": "perlin", "albedo": "pertext" } },
     { "diffuse_light": { "name": "diffuse-light", "emit": "gray" } }
   ],
-  "objects": [
+  "primitives": [
     {
       "uv_sphere": {
         "name": "top sphere",

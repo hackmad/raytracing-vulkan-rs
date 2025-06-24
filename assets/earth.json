@@ -20,7 +20,7 @@
   "materials": [
     { "lambertian": { "name": "earth-surface", "albedo": "earth" } }
   ],
-  "objects": [
+  "primitives": [
     {
       "uv_sphere": {
         "name": "globe",

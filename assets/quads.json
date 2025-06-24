@@ -28,7 +28,7 @@
     { "lambertian": { "name": "orange", "albedo": "orange" } },
     { "lambertian": { "name": "teal", "albedo": "teal" } }
   ],
-  "objects": [
+  "primitives": [
     {
       "quad": {
         "name": "left",

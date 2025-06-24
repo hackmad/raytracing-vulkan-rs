@@ -9,7 +9,7 @@ use vulkano::{
 };
 
 use crate::{
-    MAT_TYPE_NONE, Materials, ObjectType, Vk, create_device_local_buffer, shaders::closest_hit,
+    MAT_TYPE_NONE, Materials, Primitive, Vk, create_device_local_buffer, shaders::closest_hit,
 };
 
 // This is used for cleaner code and it represents the data that the shader's MeshVertex structure needs.
@@ -75,10 +75,10 @@ impl Mesh {
     }
 }
 
-impl From<&ObjectType> for Mesh {
-    fn from(value: &ObjectType) -> Self {
+impl From<&Primitive> for Mesh {
+    fn from(value: &Primitive) -> Self {
         match value {
-            ObjectType::UvSphere {
+            Primitive::UvSphere {
                 name,
                 center,
                 radius,
@@ -95,7 +95,7 @@ impl From<&ObjectType> for Mesh {
                 }
             }
 
-            ObjectType::Triangle {
+            Primitive::Triangle {
                 name,
                 points,
                 normal,
@@ -115,7 +115,7 @@ impl From<&ObjectType> for Mesh {
                 }
             }
 
-            ObjectType::Quad {
+            Primitive::Quad {
                 name,
                 points,
                 normal,
@@ -135,7 +135,7 @@ impl From<&ObjectType> for Mesh {
                 }
             }
 
-            ObjectType::Box {
+            Primitive::Box {
                 name,
                 corners,
                 material,

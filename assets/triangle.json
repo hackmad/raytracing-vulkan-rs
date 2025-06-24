@@ -22,7 +22,7 @@
   "materials": [
     { "lambertian": { "name": "green-and-white-sphere", "albedo": "green-and-white-checker" } }
   ],
-  "objects": [
+  "primitives": [
     {
       "triangle": {
         "name": "triangle",

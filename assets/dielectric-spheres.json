@@ -27,7 +27,7 @@
     { "metal": { "name": "right", "albedo": "gold", "fuzz": "white" } },
     { "lambertian": { "name": "ground", "albedo": "yellow" } }
   ],
-  "objects": [
+  "primitives": [
     {
       "uv_sphere": {
         "name": "center sphere",

@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use glam::Vec3;
 use random::Random;
-use raytracer::{CameraType, MaterialType, ObjectType, Render, SceneFile, Sky, TextureType};
+use raytracer::{CameraType, MaterialType, Primitive, Render, SceneFile, Sky, TextureType};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -48,7 +48,7 @@ fn make_sphere_touch_ground(
 fn generate_final_one_weekend_scene() -> Result<()> {
     println!("Generating Raytracing in One Weekend final scene file");
 
-    let mut objects = vec![];
+    let mut primitives = vec![];
     let mut textures = vec![];
     let mut materials = vec![];
     let mut cameras = vec![];
@@ -76,7 +76,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     let ground_center = [0.0, 1000.0, 0.0];
     let ground_radius = 1000.0;
 
-    objects.push(ObjectType::UvSphere {
+    primitives.push(Primitive::UvSphere {
         name: "ground_sphere".to_string(),
         center: ground_center,
         radius: ground_radius,
@@ -169,7 +169,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                 (vec![], mat)
             };
 
-            objects.push(ObjectType::UvSphere {
+            primitives.push(Primitive::UvSphere {
                 name: format!("sphere_{a}_{b}").to_string(),
                 center,
                 radius,
@@ -187,7 +187,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         name: "material1".to_string(),
         refraction_index: 1.5,
     };
-    objects.push(ObjectType::UvSphere {
+    primitives.push(Primitive::UvSphere {
         name: "sphere1".to_string(),
         center: center_sphere_1.to_array(),
         radius: center_spheres_radius,
@@ -205,7 +205,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         name: "material2".to_string(),
         albedo: texture2.get_name().to_string(),
     };
-    objects.push(ObjectType::UvSphere {
+    primitives.push(Primitive::UvSphere {
         name: "sphere2".to_string(),
         center: center_sphere_2.to_array(),
         radius: center_spheres_radius,
@@ -229,7 +229,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         albedo: texture3.get_name().to_string(),
         fuzz: texture4.get_name().to_string(),
     };
-    objects.push(ObjectType::UvSphere {
+    primitives.push(Primitive::UvSphere {
         name: "sphere3".to_string(),
         center: center_sphere_3.to_array(),
         radius: center_spheres_radius,
@@ -271,7 +271,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         cameras,
         textures,
         materials,
-        objects,
+        primitives,
         sky,
         render,
     };

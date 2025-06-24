@@ -22,7 +22,7 @@
     { "lambertian": { "name": "center", "albedo": "blue" } },
     { "lambertian": { "name": "ground", "albedo": "yellow" } }
   ],
-  "objects": [
+  "primitives": [
     {
       "uv_sphere": {
         "name": "center sphere",

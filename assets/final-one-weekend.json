@@ -8573,7 +8573,7 @@
       }
     }
   ],
-  "objects": [
+  "primitives": [
     {
       "uv_sphere": {
         "name": "ground_sphere",

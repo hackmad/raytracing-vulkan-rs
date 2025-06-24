@@ -20,7 +20,7 @@
   "materials": [
     { "lambertian": { "name": "perlin", "albedo": "pertext" } }
   ],
-  "objects": [
+  "primitives": [
     {
       "uv_sphere": {
         "name": "top sphere",

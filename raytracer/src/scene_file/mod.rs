@@ -1,13 +1,13 @@
 mod camera_type;
 mod material_type;
-mod object_type;
+mod primitive;
 mod render;
 mod sky;
 mod texture_type;
 
 pub use camera_type::*;
 pub use material_type::*;
-pub use object_type::*;
+pub use primitive::*;
 pub use render::*;
 pub use sky::*;
 pub use texture_type::*;
@@ -29,7 +29,7 @@ pub struct SceneFile {
     pub cameras: Vec<CameraType>,
     pub textures: Vec<TextureType>,
     pub materials: Vec<MaterialType>,
-    pub objects: Vec<ObjectType>,
+    pub primitives: Vec<Primitive>,
     pub sky: Sky,
     pub render: Render,
 }
@@ -95,6 +95,6 @@ impl SceneFile {
 
     /// Return all meshes.
     pub fn get_meshes(&self) -> Vec<Mesh> {
-        self.objects.iter().map(|o| o.into()).collect()
+        self.primitives.iter().map(|o| o.into()).collect()
     }
 }
