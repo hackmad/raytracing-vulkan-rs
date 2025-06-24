@@ -25,4 +25,9 @@ pub enum ObjectType {
         uv: [[f32; 2]; 4],
         material: String,
     },
+    Box {
+        name: String,
+        corners: [[f32; 3]; 2],
+        material: String,
+    },
 }

@@ -134,6 +134,20 @@ impl From<&ObjectType> for Mesh {
                     material: material.clone(),
                 }
             }
+
+            ObjectType::Box {
+                name,
+                corners,
+                material,
+            } => {
+                let (vertices, indices) = generate_box(corners);
+                Mesh {
+                    name: name.clone(),
+                    vertices,
+                    indices,
+                    material: material.clone(),
+                }
+            }
         }
     }
 }
@@ -239,6 +253,110 @@ fn generate_uv_sphere(
     debug!("Indices {indices:?}");
     debug!("-------------------------------------------------------------------------------");
     */
+
+    (vertices, indices)
+}
+
+fn uv_rect(col: usize, row: usize, cols: usize, rows: usize) -> [[f32; 2]; 4] {
+    let cell_w = 1.0 / cols as f32;
+    let cell_h = 1.0 / rows as f32;
+
+    let u0 = col as f32 * cell_w;
+    let v0 = 1.0 - (row as f32 + 1.0) * cell_h; // flip V: 0 at top
+    let u1 = u0 + cell_w;
+    let v1 = v0 + cell_h;
+
+    [
+        [u0, v1], // BL
+        [u1, v1], // BR
+        [u1, v0], // TR
+        [u0, v0], // TL
+    ]
+}
+
+#[rustfmt::skip]
+fn generate_box(corners: &[[f32; 3]; 2]) -> (Vec<Vertex>, Vec<u32>) {
+    let a = Vec3::from_slice(&corners[0]);
+    let b = Vec3::from_slice(&corners[1]);
+
+    let [x0, y0, z0] = a.min(b).to_array();
+    let [x1, y1, z1] = a.max(b).to_array();
+
+    let (lx, hx) = (x0, x1);
+    let (ly, hy) = (y0, y1);
+    let (lz, hz) = (z0, z1);
+
+    let uv_front =  uv_rect(1, 1, 4, 3);
+    let uv_back =   uv_rect(3, 1, 4, 3);
+    let uv_left =   uv_rect(0, 1, 4, 3);
+    let uv_right =  uv_rect(2, 1, 4, 3);
+    let uv_top =    uv_rect(1, 0, 4, 3);
+    let uv_bottom = uv_rect(1, 2, 4, 3);
+
+    let vertices = vec![
+        // Front (+Z)
+        Vertex::new([lx, ly, hz], [ 0.0,  0.0,  1.0],  uv_front[0]),
+        Vertex::new([hx, ly, hz], [ 0.0,  0.0,  1.0],  uv_front[1]),
+        Vertex::new([hx, hy, hz], [ 0.0,  0.0,  1.0],  uv_front[2]),
+        Vertex::new([lx, hy, hz], [ 0.0,  0.0,  1.0],  uv_front[3]),
+
+        // Back (-Z)
+        Vertex::new([hx, ly, lz], [ 0.0,  0.0, -1.0],   uv_back[0]),
+        Vertex::new([lx, ly, lz], [ 0.0,  0.0, -1.0],   uv_back[1]),
+        Vertex::new([lx, hy, lz], [ 0.0,  0.0, -1.0],   uv_back[2]),
+        Vertex::new([hx, hy, lz], [ 0.0,  0.0, -1.0],   uv_back[3]),
+                                                                 
+        // Left (-X)                                             
+        Vertex::new([lx, ly, lz], [-1.0,  0.0,  0.0],   uv_left[0]),
+        Vertex::new([lx, ly, hz], [-1.0,  0.0,  0.0],   uv_left[1]),
+        Vertex::new([lx, hy, hz], [-1.0,  0.0,  0.0],   uv_left[2]),
+        Vertex::new([lx, hy, lz], [-1.0,  0.0,  0.0],   uv_left[3]),
+                                                                 
+        // Right (+X)                                            
+        Vertex::new([hx, ly, hz], [ 1.0,  0.0,  0.0],  uv_right[0]),
+        Vertex::new([hx, ly, lz], [ 1.0,  0.0,  0.0],  uv_right[1]),
+        Vertex::new([hx, hy, lz], [ 1.0,  0.0,  0.0],  uv_right[2]),
+        Vertex::new([hx, hy, hz], [ 1.0,  0.0,  0.0],  uv_right[3]),
+
+        // Top (-Y)
+        Vertex::new([lx, hy, hz], [ 0.0, -1.0,  0.0],    uv_top[0]),
+        Vertex::new([hx, hy, hz], [ 0.0, -1.0,  0.0],    uv_top[1]),
+        Vertex::new([hx, hy, lz], [ 0.0, -1.0,  0.0],    uv_top[2]),
+        Vertex::new([lx, hy, lz], [ 0.0, -1.0,  0.0],    uv_top[3]),
+
+        // Bottom (+Y)
+        Vertex::new([lx, ly, lz], [ 0.0,  1.0,  0.0], uv_bottom[0]),
+        Vertex::new([hx, ly, lz], [ 0.0,  1.0,  0.0], uv_bottom[1]),
+        Vertex::new([hx, ly, hz], [ 0.0,  1.0,  0.0], uv_bottom[2]),
+        Vertex::new([lx, ly, hz], [ 0.0,  1.0,  0.0], uv_bottom[3]),
+    ];
+
+    // 6 faces, each with 2 triangles = 6 indices per face
+    let indices = vec![
+        // Front
+        0, 1, 2,
+        2, 3, 0,
+
+        // Back
+        4, 5, 6,
+        6, 7, 4,
+
+        // Left
+        8, 9, 10,
+        10, 11, 8,
+
+        // Right
+        12, 13, 14,
+        14, 15, 12,
+
+        // Top
+        16, 17, 18,
+        18, 19, 16,
+
+        // Bottom
+        20, 21, 22,
+        22, 23, 20,
+    ];
 
     (vertices, indices)
 }

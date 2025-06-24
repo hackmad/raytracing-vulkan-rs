@@ -80,6 +80,20 @@
         "uv": [ [0, 0], [0, 1], [1, 1], [1, 0] ],
         "material": "white"
       }
+    },
+    {
+      "box": {
+        "name": "box1",
+        "corners": [ [130, 0, 65],  [295, -165, 230] ],
+        "material": "white"
+      }
+    },
+    {
+      "box": {
+        "name": "box2",
+        "corners": [ [265, 0, 295],  [430, -330, 460] ],
+        "material": "white"
+      }
     }
   ],
   "sky": {
