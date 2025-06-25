@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum MaterialType {
+pub enum Material {
     Lambertian {
         name: String,
         albedo: String,
@@ -22,7 +22,7 @@ pub enum MaterialType {
     },
 }
 
-impl MaterialType {
+impl Material {
     pub fn get_name(&self) -> &str {
         match self {
             Self::Lambertian { name, .. } => name.as_ref(),

@@ -3,11 +3,11 @@ use std::sync::{Arc, RwLock};
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
 
-use crate::{Camera, PerspectiveCamera};
+use crate::PerspectiveCamera;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CameraType {
+pub enum Camera {
     Perspective {
         name: String,
         eye: [f32; 3],
@@ -21,16 +21,16 @@ pub enum CameraType {
     },
 }
 
-impl CameraType {
+impl Camera {
     pub fn get_name(&self) -> &str {
         match self {
             Self::Perspective { name, .. } => name,
         }
     }
 
-    pub fn to_camera(&self, image_width: u32, image_height: u32) -> Arc<RwLock<dyn Camera>> {
+    pub fn to_camera(&self, image_width: u32, image_height: u32) -> Arc<RwLock<dyn crate::Camera>> {
         match self {
-            CameraType::Perspective {
+            Self::Perspective {
                 name: _,
                 eye,
                 look_at,

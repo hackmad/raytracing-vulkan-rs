@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use glam::Vec3;
 use random::Random;
-use raytracer::{CameraType, MaterialType, Primitive, Render, SceneFile, Sky, TextureType};
+use raytracer::{Camera, Material, Primitive, Render, SceneFile, Sky, Texture};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -53,22 +53,22 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     let mut materials = vec![];
     let mut cameras = vec![];
 
-    let green_texture = TextureType::Constant {
+    let green_texture = Texture::Constant {
         name: "green".to_string(),
         rgb: [0.2, 0.3, 0.1],
     };
-    let white_texture = TextureType::Constant {
+    let white_texture = Texture::Constant {
         name: "pale-white".to_string(),
         rgb: [0.9, 0.9, 0.9],
     };
-    let green_and_white_checker_texture = TextureType::Checker {
+    let green_and_white_checker_texture = Texture::Checker {
         name: "green-and-white-checker".to_string(),
         scale: 0.32,
         even: green_texture.get_name().to_string(),
         odd: white_texture.get_name().to_string(),
     };
 
-    let ground_material = MaterialType::Lambertian {
+    let ground_material = Material::Lambertian {
         name: "ground".to_string(),
         albedo: green_and_white_checker_texture.get_name().to_string(),
     };
@@ -134,11 +134,11 @@ fn generate_final_one_weekend_scene() -> Result<()> {
             let (tex, material) = if choose_mat < 0.8 {
                 // diffuse
                 let name = format!("diffuse_{a}_{b}");
-                let t_albedo = TextureType::Constant {
+                let t_albedo = Texture::Constant {
                     name: format!("tex_albedo_{name}"),
                     rgb: (Random::vec3() * Random::vec3()).to_array(),
                 };
-                let mat = MaterialType::Lambertian {
+                let mat = Material::Lambertian {
                     name: format!("mat_{name}"),
                     albedo: t_albedo.get_name().to_string(),
                 };
@@ -146,15 +146,15 @@ fn generate_final_one_weekend_scene() -> Result<()> {
             } else if choose_mat < 0.95 {
                 // metal
                 let name = format!("metal_{a}_{b}");
-                let t_albedo = TextureType::Constant {
+                let t_albedo = Texture::Constant {
                     name: format!("tex_albedo_{name}"),
                     rgb: Random::vec3_in_range(0.5, 1.0).to_array(),
                 };
-                let t_fuzz = TextureType::Constant {
+                let t_fuzz = Texture::Constant {
                     name: format!("tex_fuzz_{name}"),
                     rgb: Random::vec3_in_range(0.0, 0.5).to_array(),
                 };
-                let mat = MaterialType::Metal {
+                let mat = Material::Metal {
                     name: format!("mat_metal_{a}_{b}"),
                     albedo: t_albedo.get_name().to_string(),
                     fuzz: t_fuzz.get_name().to_string(),
@@ -162,7 +162,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                 (vec![t_albedo, t_fuzz], mat)
             } else {
                 // glass
-                let mat = MaterialType::Dielectric {
+                let mat = Material::Dielectric {
                     name: format!("mat_dielectric_{a}_{b}"),
                     refraction_index: 1.5,
                 };
@@ -183,7 +183,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         }
     }
 
-    let material1 = MaterialType::Dielectric {
+    let material1 = Material::Dielectric {
         name: "material1".to_string(),
         refraction_index: 1.5,
     };
@@ -197,11 +197,11 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     });
     materials.push(material1);
 
-    let texture2 = TextureType::Constant {
+    let texture2 = Texture::Constant {
         name: "texture2".to_string(),
         rgb: [0.4, 0.2, 0.1],
     };
-    let material2 = MaterialType::Lambertian {
+    let material2 = Material::Lambertian {
         name: "material2".to_string(),
         albedo: texture2.get_name().to_string(),
     };
@@ -216,15 +216,15 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     textures.push(texture2);
     materials.push(material2);
 
-    let texture3 = TextureType::Constant {
+    let texture3 = Texture::Constant {
         name: "texture3".to_string(),
         rgb: [0.7, 0.6, 0.5],
     };
-    let texture4 = TextureType::Constant {
+    let texture4 = Texture::Constant {
         name: "texture4".to_string(),
         rgb: [0.0, 0.0, 0.0],
     };
-    let material3 = MaterialType::Metal {
+    let material3 = Material::Metal {
         name: "material3".to_string(),
         albedo: texture3.get_name().to_string(),
         fuzz: texture4.get_name().to_string(),
@@ -241,7 +241,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     textures.push(texture4);
     materials.push(material3);
 
-    cameras.push(CameraType::Perspective {
+    cameras.push(Camera::Perspective {
         name: "default".to_string(),
         eye: [13.0, -2.0, 3.0],
         look_at: [0.0, 0.0, 0.0],

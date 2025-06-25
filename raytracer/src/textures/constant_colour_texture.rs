@@ -3,7 +3,7 @@ use std::collections::{HashMap, hash_map::Entry};
 
 use ordered_float::OrderedFloat;
 
-use crate::{MAT_PROP_VALUE_TYPE_RGB, TextureType, shaders::closest_hit};
+use crate::{MAT_PROP_VALUE_TYPE_RGB, Texture, shaders::closest_hit};
 
 /// Stores unique material RGB values which will be added to to a storage buffer used by the
 /// shader.
@@ -18,12 +18,12 @@ pub struct ConstantColourTextures {
 
 impl ConstantColourTextures {
     /// Loads all unique colours from scene file.
-    pub fn new(textures: &HashMap<String, TextureType>) -> ConstantColourTextures {
+    pub fn new(textures: &HashMap<String, Texture>) -> ConstantColourTextures {
         let mut colours = vec![];
         let mut indices = HashMap::new();
 
         for texture in textures.values() {
-            if let TextureType::Constant { name, rgb } = texture {
+            if let Texture::Constant { name, rgb } = texture {
                 if let Entry::Vacant(e) = indices.entry(name.clone()) {
                     e.insert(colours.len() as _);
                     colours.push(*rgb);

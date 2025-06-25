@@ -4,9 +4,7 @@ use anyhow::Result;
 use log::debug;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
-use crate::{
-    MaterialType, Vk, create_device_local_buffer, shaders::closest_hit, textures::Textures,
-};
+use crate::{Material, Vk, create_device_local_buffer, shaders::closest_hit, textures::Textures};
 
 // NOTE: Update Materials::to_shader() when adding new materials.
 pub const MAT_TYPE_NONE: u32 = 0;
@@ -94,7 +92,7 @@ pub struct Materials {
 }
 
 impl Materials {
-    pub fn new(materials: &[MaterialType], textures: &Textures) -> Self {
+    pub fn new(materials: &[Material], textures: &Textures) -> Self {
         let mut lambertian_materials = vec![];
         let mut metal_materials = vec![];
         let mut dielectric_materials = vec![];
@@ -107,7 +105,7 @@ impl Materials {
 
         for material in materials.iter() {
             match material {
-                MaterialType::Lambertian { name, albedo } => {
+                Material::Lambertian { name, albedo } => {
                     lambertian_material_indices
                         .insert(name.clone(), lambertian_materials.len() as _);
 
@@ -115,7 +113,7 @@ impl Materials {
                         albedo: textures.to_shader(albedo).unwrap(),
                     });
                 }
-                MaterialType::Metal { name, albedo, fuzz } => {
+                Material::Metal { name, albedo, fuzz } => {
                     metal_material_indices.insert(name.clone(), metal_materials.len() as _);
 
                     metal_materials.push(closest_hit::MetalMaterial {
@@ -123,7 +121,7 @@ impl Materials {
                         fuzz: textures.to_shader(fuzz).unwrap(),
                     });
                 }
-                MaterialType::Dielectric {
+                Material::Dielectric {
                     name,
                     refraction_index,
                 } => {
@@ -134,7 +132,7 @@ impl Materials {
                         refractionIndex: *refraction_index,
                     });
                 }
-                MaterialType::DiffuseLight { name, emit } => {
+                Material::DiffuseLight { name, emit } => {
                     diffuse_light_material_indices
                         .insert(name.clone(), diffuse_light_materials.len() as _);
 
@@ -238,28 +236,28 @@ impl Materials {
         })
     }
 
-    pub fn to_shader(&self, material: &str) -> MaterialTypeAndIndex {
+    pub fn to_shader(&self, material: &str) -> MaterialAndIndex {
         // Material names are unique across all materials.
         if let Some(index) = self.lambertian_material_indices.get(material) {
-            MaterialTypeAndIndex::new(MAT_TYPE_LAMBERTIAN, *index)
+            MaterialAndIndex::new(MAT_TYPE_LAMBERTIAN, *index)
         } else if let Some(index) = self.metal_material_indices.get(material) {
-            MaterialTypeAndIndex::new(MAT_TYPE_METAL, *index)
+            MaterialAndIndex::new(MAT_TYPE_METAL, *index)
         } else if let Some(index) = self.dielectric_material_indices.get(material) {
-            MaterialTypeAndIndex::new(MAT_TYPE_DIELECTRIC, *index)
+            MaterialAndIndex::new(MAT_TYPE_DIELECTRIC, *index)
         } else if let Some(index) = self.diffuse_light_material_indices.get(material) {
-            MaterialTypeAndIndex::new(MAT_TYPE_DIFFUSE_LIGHT, *index)
+            MaterialAndIndex::new(MAT_TYPE_DIFFUSE_LIGHT, *index)
         } else {
-            MaterialTypeAndIndex::new(MAT_TYPE_NONE, 0)
+            MaterialAndIndex::new(MAT_TYPE_NONE, 0)
         }
     }
 }
 
-pub struct MaterialTypeAndIndex {
+pub struct MaterialAndIndex {
     pub material_type: u32,
     pub material_index: u32,
 }
 
-impl MaterialTypeAndIndex {
+impl MaterialAndIndex {
     pub fn new(material_type: u32, material_index: u32) -> Self {
         Self {
             material_type,

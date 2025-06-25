@@ -1,7 +1,7 @@
 use core::fmt;
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::{MAT_PROP_VALUE_TYPE_CHECKER, TextureType, shaders::closest_hit};
+use crate::{MAT_PROP_VALUE_TYPE_CHECKER, Texture, shaders::closest_hit};
 
 #[derive(Debug)]
 pub struct CheckerTexture {
@@ -17,12 +17,12 @@ pub struct CheckerTextures {
 
 impl CheckerTextures {
     /// Loads all unique checker textures from scene file.
-    pub fn new(all_textures: &HashMap<String, TextureType>) -> CheckerTextures {
+    pub fn new(all_textures: &HashMap<String, Texture>) -> CheckerTextures {
         let mut textures = vec![];
         let mut indices = HashMap::new();
 
         for texture in all_textures.values() {
-            if let TextureType::Checker {
+            if let Texture::Checker {
                 name,
                 scale,
                 odd,

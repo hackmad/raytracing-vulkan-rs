@@ -1,7 +1,7 @@
 use core::fmt;
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::{MAT_PROP_VALUE_TYPE_NOISE, TextureType, shaders::closest_hit};
+use crate::{MAT_PROP_VALUE_TYPE_NOISE, Texture, shaders::closest_hit};
 
 #[derive(Debug)]
 pub struct NoiseTexture {
@@ -14,12 +14,12 @@ pub struct NoiseTextures {
 }
 
 impl NoiseTextures {
-    pub fn new(all_textures: &HashMap<String, TextureType>) -> Self {
+    pub fn new(all_textures: &HashMap<String, Texture>) -> Self {
         let mut textures = vec![];
         let mut indices = HashMap::new();
 
         for texture in all_textures.values() {
-            if let TextureType::Noise { name, scale } = texture {
+            if let Texture::Noise { name, scale } = texture {
                 if let Entry::Vacant(e) = indices.entry(name.clone()) {
                     e.insert(textures.len() as u32);
                     textures.push(NoiseTexture { scale: *scale });

@@ -18,7 +18,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::{MAT_PROP_VALUE_TYPE_IMAGE, TextureType, Vk, shaders::closest_hit};
+use crate::{MAT_PROP_VALUE_TYPE_IMAGE, Texture, Vk, shaders::closest_hit};
 
 /// Stores texture image views that will be added to a `SampledImage` variable descriptor used by
 /// the shader.
@@ -42,7 +42,7 @@ impl fmt::Debug for ImageTextures {
 
 impl ImageTextures {
     /// Load all unique texture paths from all scene objects. Assumes images have alpha channel.
-    pub fn load(vk: Arc<Vk>, textures: &HashMap<String, TextureType>) -> Result<Self> {
+    pub fn load(vk: Arc<Vk>, textures: &HashMap<String, Texture>) -> Result<Self> {
         let mut image_views = vec![];
         let mut indices = HashMap::new();
 
@@ -53,7 +53,7 @@ impl ImageTextures {
         )?;
 
         for texture in textures.values() {
-            if let TextureType::Image { name, path } = texture {
+            if let Texture::Image { name, path } = texture {
                 if let Entry::Vacant(e) = indices.entry(name.clone()) {
                     let texture = load_texture(vk.clone(), path, &mut builder)?;
                     e.insert(image_views.len() as u32);

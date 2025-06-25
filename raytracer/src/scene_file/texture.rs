@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum TextureType {
+pub enum Texture {
     Constant {
         name: String,
         rgb: [f32; 3],
@@ -27,7 +27,7 @@ pub enum TextureType {
     },
 }
 
-impl TextureType {
+impl Texture {
     pub fn get_name(&self) -> &str {
         match self {
             Self::Constant { name, .. } => name,

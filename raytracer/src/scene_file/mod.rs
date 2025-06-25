@@ -1,16 +1,15 @@
-mod camera_type;
-mod material_type;
+mod camera;
+mod material;
 mod primitive;
 mod render;
 mod sky;
-mod texture_type;
+mod texture;
 
-pub use camera_type::*;
-pub use material_type::*;
+pub use material::*;
 pub use primitive::*;
 pub use render::*;
 pub use sky::*;
-pub use texture_type::*;
+pub use texture::*;
 
 use std::{
     collections::{HashMap, hash_map::Entry},
@@ -21,14 +20,14 @@ use anyhow::{Context, Result};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
-use crate::Mesh;
+use crate::{Mesh, scene_file::camera::Camera};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SceneFile {
-    pub cameras: Vec<CameraType>,
-    pub textures: Vec<TextureType>,
-    pub materials: Vec<MaterialType>,
+    pub cameras: Vec<Camera>,
+    pub textures: Vec<Texture>,
+    pub materials: Vec<Material>,
     pub primitives: Vec<Primitive>,
     pub sky: Sky,
     pub render: Render,
@@ -78,8 +77,8 @@ impl SceneFile {
     }
 
     // Note: Texture names will be unique across all texture types.
-    pub fn get_textures(&self) -> HashMap<String, TextureType> {
-        let mut textures: HashMap<String, TextureType> = HashMap::new();
+    pub fn get_textures(&self) -> HashMap<String, Texture> {
+        let mut textures: HashMap<String, Texture> = HashMap::new();
 
         for texture in self.textures.iter() {
             let name = texture.get_name();
