@@ -1,10 +1,12 @@
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use log::debug;
+use scene_file::Material;
+use shaders::closest_hit;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
-use crate::{Material, Vk, create_device_local_buffer, shaders::closest_hit, textures::Textures};
+use crate::{Vk, create_device_local_buffer, textures::Textures};
 
 // NOTE: Update Materials::to_shader() when adding new materials.
 pub const MAT_TYPE_NONE: u32 = 0;
@@ -17,48 +19,6 @@ pub const MAT_PROP_VALUE_TYPE_RGB: u32 = 0;
 pub const MAT_PROP_VALUE_TYPE_IMAGE: u32 = 1;
 pub const MAT_PROP_VALUE_TYPE_CHECKER: u32 = 2;
 pub const MAT_PROP_VALUE_TYPE_NOISE: u32 = 3;
-
-impl fmt::Debug for closest_hit::MaterialPropertyValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::MaterialPropertyValue")
-            .field("propValueType", &self.propValueType)
-            .field("index", &self.index)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::LambertianMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::LambertianMaterial")
-            .field("albedo", &self.albedo)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::MetalMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::MetalMaterial")
-            .field("albedo", &self.albedo)
-            .field("fuzz", &self.fuzz)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::DielectricMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::DielectricMaterial")
-            .field("refractionIndex", &self.refractionIndex)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::DiffuseLightMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::DiffuseLightMaterial")
-            .field("emit", &self.emit)
-            .finish()
-    }
-}
 
 #[derive(Debug)]
 pub struct Materials {

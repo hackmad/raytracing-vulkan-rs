@@ -2,6 +2,7 @@ use std::{iter, mem::size_of, sync::Arc};
 
 use anyhow::{Context, Result};
 use log::debug;
+use shaders::closest_hit::MeshVertex;
 use vulkano::{
     acceleration_structure::{
         AccelerationStructure, AccelerationStructureBuildGeometryInfo,
@@ -18,7 +19,7 @@ use vulkano::{
     sync::GpuFuture,
 };
 
-use crate::{Mesh, Vk, shaders::closest_hit::MeshVertex};
+use crate::{Mesh, Vk};
 
 /// Stores the acceleration structures.
 pub struct AccelerationStructures {

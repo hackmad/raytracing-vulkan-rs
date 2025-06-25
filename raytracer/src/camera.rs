@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use glam::{Mat4, Vec3};
 
 /// Camera interface.
@@ -100,5 +102,36 @@ impl Camera for PerspectiveCamera {
 
     fn get_aperture_size(&self) -> f32 {
         self.aperture_size
+    }
+}
+
+pub fn create_camera(
+    scene_camera: &scene_file::Camera,
+    image_width: u32,
+    image_height: u32,
+) -> Arc<RwLock<dyn crate::Camera>> {
+    match scene_camera {
+        scene_file::Camera::Perspective {
+            name: _,
+            eye,
+            look_at,
+            up,
+            fov_y,
+            z_near,
+            z_far,
+            focal_length,
+            aperture_size,
+        } => Arc::new(RwLock::new(PerspectiveCamera::new(
+            Vec3::from_slice(eye),
+            Vec3::from_slice(look_at),
+            Vec3::from_slice(up),
+            fov_y.to_radians(),
+            *z_near,
+            *z_far,
+            *focal_length,
+            *aperture_size,
+            image_width,
+            image_height,
+        ))),
     }
 }

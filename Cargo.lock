@@ -2391,11 +2391,10 @@ dependencies = [
  "image",
  "log",
  "ordered-float",
- "serde",
- "serde_json",
+ "scene_file",
+ "shaders",
  "tobj",
  "vulkano",
- "vulkano-shaders",
 ]
 
 [[package]]
@@ -2408,6 +2407,7 @@ dependencies = [
  "log",
  "raytracer",
  "rfd",
+ "scene_file",
  "vulkano",
  "vulkano-util",
  "winit",
@@ -2547,6 +2547,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "scene_file"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "log",
+ "serde",
+ "serde_json",
+ "shaders",
+]
+
+[[package]]
 name = "scoped-tls"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2642,6 +2653,14 @@ dependencies = [
  "cmake",
  "libc",
  "roxmltree",
+]
+
+[[package]]
+name = "shaders"
+version = "0.1.0"
+dependencies = [
+ "vulkano",
+ "vulkano-shaders",
 ]
 
 [[package]]
@@ -2931,6 +2950,7 @@ dependencies = [
  "glam",
  "random",
  "raytracer",
+ "scene_file",
  "tobj",
 ]
 

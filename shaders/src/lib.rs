@@ -8,7 +8,7 @@ use vulkano::{
 pub mod ray_gen {
     vulkano_shaders::shader! {
         ty: "raygen",
-        path: "src/shaders/ray_gen.glsl",
+        path: "src/ray_gen.glsl",
         vulkan_version: "1.3",
     }
 }
@@ -16,7 +16,7 @@ pub mod ray_gen {
 pub mod closest_hit {
     vulkano_shaders::shader! {
         ty: "closesthit",
-        path: "src/shaders/closest_hit.glsl",
+        path: "src/closest_hit.glsl",
         vulkan_version: "1.3",
     }
 }
@@ -24,7 +24,7 @@ pub mod closest_hit {
 pub mod ray_miss {
     vulkano_shaders::shader! {
         ty: "miss",
-        path: "src/shaders/ray_miss.glsl",
+        path: "src/ray_miss.glsl",
         vulkan_version: "1.3",
     }
 }
@@ -91,6 +91,48 @@ impl fmt::Debug for ray_gen::RayGenPushConstants {
             .field("resolution", &self.resolution)
             .field("samplesPerPixel", &self.samplesPerPixel)
             .field("maxRayDepth", &self.maxRayDepth)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::MaterialPropertyValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::MaterialPropertyValue")
+            .field("propValueType", &self.propValueType)
+            .field("index", &self.index)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::LambertianMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::LambertianMaterial")
+            .field("albedo", &self.albedo)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::MetalMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::MetalMaterial")
+            .field("albedo", &self.albedo)
+            .field("fuzz", &self.fuzz)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::DielectricMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::DielectricMaterial")
+            .field("refractionIndex", &self.refractionIndex)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::DiffuseLightMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::DiffuseLightMaterial")
+            .field("emit", &self.emit)
             .finish()
     }
 }

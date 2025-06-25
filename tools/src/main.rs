@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use glam::Vec3;
 use random::Random;
-use raytracer::{Camera, Material, Primitive, Render, SceneFile, Sky, Texture};
+use scene_file::{Camera, Material, Primitive, Render, SceneFile, Sky, Texture};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]

@@ -7,6 +7,8 @@ use std::{
 use anyhow::Result;
 use image::{GenericImageView, ImageReader};
 use log::info;
+use scene_file::Texture;
+use shaders::closest_hit;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -18,7 +20,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::{MAT_PROP_VALUE_TYPE_IMAGE, Texture, Vk, shaders::closest_hit};
+use crate::{MAT_PROP_VALUE_TYPE_IMAGE, Vk};
 
 /// Stores texture image views that will be added to a `SampledImage` variable descriptor used by
 /// the shader.

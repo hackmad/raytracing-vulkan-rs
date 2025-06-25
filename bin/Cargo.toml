@@ -6,6 +6,7 @@ edition = "2024"
 
 [dependencies]
 raytracer = { path = "../raytracer" }
+scene_file = { path = "../scene_file" }
 
 anyhow = { workspace = true }
 clap = { workspace = true }

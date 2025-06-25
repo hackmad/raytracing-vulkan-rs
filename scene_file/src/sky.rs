@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-
-use crate::shaders::ray_gen;
+use shaders::ray_gen;
 
 const _SKY_TYPE_NONE: u32 = 0;
 const SKY_TYPE_SOLID: u32 = 1;

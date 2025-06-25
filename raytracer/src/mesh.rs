@@ -3,14 +3,14 @@ use std::{f32::consts::PI, sync::Arc};
 use anyhow::Result;
 use glam::Vec3;
 use log::{debug, info};
+use scene_file::Primitive;
+use shaders::closest_hit;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::{
-    MAT_TYPE_NONE, Materials, Primitive, Vk, create_device_local_buffer, shaders::closest_hit,
-};
+use crate::{MAT_TYPE_NONE, Materials, Vk, create_device_local_buffer};
 
 // This is used for cleaner code and it represents the data that the shader's MeshVertex structure needs.
 #[derive(Clone, Debug)]

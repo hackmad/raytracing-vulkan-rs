@@ -1,0 +1,13 @@
+[package]
+name = "scene_file"
+version = "0.1.0"
+authors = ["Ahmad Kabani <ahmadkabani@yahoo.com>"]
+edition = "2024"
+
+[dependencies]
+shaders = { path = "../shaders" }
+
+anyhow = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

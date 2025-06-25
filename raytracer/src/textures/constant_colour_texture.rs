@@ -2,8 +2,10 @@ use core::fmt;
 use std::collections::{HashMap, hash_map::Entry};
 
 use ordered_float::OrderedFloat;
+use scene_file::Texture;
+use shaders::closest_hit;
 
-use crate::{MAT_PROP_VALUE_TYPE_RGB, Texture, shaders::closest_hit};
+use crate::MAT_PROP_VALUE_TYPE_RGB;
 
 /// Stores unique material RGB values which will be added to to a storage buffer used by the
 /// shader.

@@ -6,8 +6,6 @@ mod obj_loader;
 mod pipeline;
 mod renderer;
 mod scene;
-mod scene_file;
-mod shaders;
 mod textures;
 mod vk;
 
@@ -16,5 +14,4 @@ pub use material::*;
 pub use mesh::*;
 pub use obj_loader::*;
 pub use scene::*;
-pub use scene_file::*;
 pub use vk::*;

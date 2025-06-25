@@ -1,7 +1,10 @@
 use core::fmt;
 use std::collections::{HashMap, hash_map::Entry};
 
-use crate::{MAT_PROP_VALUE_TYPE_CHECKER, Texture, shaders::closest_hit};
+use scene_file::Texture;
+use shaders::closest_hit;
+
+use crate::MAT_PROP_VALUE_TYPE_CHECKER;
 
 #[derive(Debug)]
 pub struct CheckerTexture {

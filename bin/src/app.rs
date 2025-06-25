@@ -28,7 +28,8 @@ use winit::{
     raw_window_handle::HasDisplayHandle,
 };
 
-use raytracer::{Scene, SceneFile, Vk};
+use raytracer::{Scene, Vk};
+use scene_file::SceneFile;
 
 const INITIAL_WINDOW_SIZE: [f32; 2] = [1024.0, 576.0];
 

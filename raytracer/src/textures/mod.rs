@@ -11,11 +11,11 @@ pub use constant_colour_texture::*;
 pub use image_texture::*;
 use log::debug;
 pub use noise_texture::*;
+use scene_file::SceneFile;
+use shaders::closest_hit;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
-use crate::{
-    MAT_PROP_VALUE_TYPE_RGB, SceneFile, Vk, create_device_local_buffer, shaders::closest_hit,
-};
+use crate::{MAT_PROP_VALUE_TYPE_RGB, Vk, create_device_local_buffer};
 
 pub struct Textures {
     pub constant_colour_textures: ConstantColourTextures,

@@ -2,9 +2,10 @@ use std::sync::{Arc, RwLock};
 
 use anyhow::{Context, Result};
 use log::debug;
+use scene_file::SceneFile;
 use vulkano::{image::view::ImageView, sync::GpuFuture};
 
-use crate::{Camera, SceneFile, Vk, renderer::Renderer};
+use crate::{Camera, Vk, create_camera, renderer::Renderer};
 
 /// Describes the scene for raytracing.
 pub struct Scene {
@@ -23,14 +24,14 @@ impl Scene {
     pub fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: &[f32; 2]) -> Result<Self> {
         let render_camera = &scene_file.render.camera;
 
-        let camera_type = scene_file
+        let scene_camera = scene_file
             .cameras
             .iter()
             .find(|&cam| cam.get_name() == render_camera)
             .with_context(|| format!("Camera ${render_camera} is no specified in cameras"))?;
-        debug!("{camera_type:?}");
+        debug!("{scene_camera:?}");
 
-        let camera = camera_type.to_camera(window_size[0] as u32, window_size[1] as u32);
+        let camera = create_camera(scene_camera, window_size[0] as u32, window_size[1] as u32);
 
         Renderer::new(vk.clone(), scene_file, window_size).map(|resources| Scene {
             vk,

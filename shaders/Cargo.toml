@@ -1,0 +1,10 @@
+[package]
+name = "shaders"
+version = "0.1.0"
+authors = ["Ahmad Kabani <ahmadkabani@yahoo.com>"]
+edition = "2024"
+
+[dependencies]
+vulkano = "0.35"
+vulkano-shaders = "0.35"
+

@@ -5,6 +5,7 @@ mod render;
 mod sky;
 mod texture;
 
+pub use camera::*;
 pub use material::*;
 pub use primitive::*;
 pub use render::*;
@@ -19,8 +20,6 @@ use std::{
 use anyhow::{Context, Result};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
-
-use crate::{Mesh, scene_file::camera::Camera};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -90,10 +89,5 @@ impl SceneFile {
         }
 
         textures
-    }
-
-    /// Return all meshes.
-    pub fn get_meshes(&self) -> Vec<Mesh> {
-        self.primitives.iter().map(|o| o.into()).collect()
     }
 }

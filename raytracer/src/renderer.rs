@@ -1,6 +1,8 @@
 use std::sync::{Arc, RwLock};
 
 use anyhow::Result;
+use scene_file::SceneFile;
+use shaders::{ShaderModules, closest_hit, ray_gen};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage},
@@ -15,11 +17,8 @@ use vulkano::{
 };
 
 use crate::{
-    Camera, Materials, SceneFile, Vk,
-    acceleration::AccelerationStructures,
-    create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
-    pipeline::RtPipeline,
-    shaders::{ShaderModules, closest_hit, ray_gen},
+    Camera, Materials, Vk, acceleration::AccelerationStructures, create_mesh_index_buffer,
+    create_mesh_storage_buffer, create_mesh_vertex_buffer, pipeline::RtPipeline,
     textures::Textures,
 };
 
@@ -83,7 +82,7 @@ impl Renderer {
         let noise_texture_count = textures.noise_textures.textures.len();
 
         // Get meshes.
-        let meshes = scene_file.get_meshes();
+        let meshes: Vec<_> = scene_file.primitives.iter().map(|o| o.into()).collect();
 
         // Get materials.
         let materials = Materials::new(&scene_file.materials, &textures);

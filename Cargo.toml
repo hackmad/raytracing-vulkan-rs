@@ -3,7 +3,7 @@ members = [
     "bin",
     "tools",
     "random",
-    "raytracer",
+    "raytracer", "shaders", "scene_file",
 ]
 default-members = ["bin"]
 resolver = "3"

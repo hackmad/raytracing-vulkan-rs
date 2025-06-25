@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use shaders::{closest_hit, ray_gen};
 use vulkano::{
     descriptor_set::layout::{
         DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
@@ -16,8 +17,6 @@ use vulkano::{
     },
     shader::ShaderStages,
 };
-
-use crate::shaders::{closest_hit, ray_gen};
 
 /// The raytracing pipeline.
 pub struct RtPipeline {
