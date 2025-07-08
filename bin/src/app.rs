@@ -1,5 +1,166 @@
 use std::{path::PathBuf, sync::Arc};
 
+use anyhow::Result;
+use log::info;
+use raytracer::Scene;
+use scene_file::SceneFile;
+use vulkan::VulkanContext;
+use winit::{
+    application::ApplicationHandler,
+    dpi::LogicalSize,
+    event::{ElementState, KeyEvent, WindowEvent},
+    event_loop::ActiveEventLoop,
+    keyboard::Key,
+    window::{Window, WindowId},
+};
+
+const INITIAL_WINDOW_SIZE: [f32; 2] = [1024.0, 576.0];
+
+/// Winit application.
+pub struct App {
+    /// The winit window.
+    window: Option<Window>,
+
+    /// Vulkan context.
+    vk: Option<Arc<VulkanContext>>,
+
+    /// The scene to render.
+    scene: Option<Scene>,
+
+    /// The current scene file being rendered.
+    current_file_path: String,
+
+    /// This will be used to track egui File > Open will result in a new scene being loaded.
+    new_file_path: Option<String>,
+}
+
+impl App {
+    pub fn new(initial_file_path: &str) -> Result<Self> {
+        Ok(Self {
+            window: None,
+            vk: None,
+            scene: None,
+            current_file_path: initial_file_path.to_string(),
+            new_file_path: None,
+        })
+    }
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // Load scene file.
+        let scene_file = SceneFile::load_json(&self.current_file_path).unwrap();
+
+        // Create a new window.
+        let window_size = adjust_window_size(INITIAL_WINDOW_SIZE, scene_file.render.aspect_ratio);
+
+        let app_name = "Raytracing - Vulkan";
+
+        let window = event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_title(app_name)
+                    .with_inner_size(LogicalSize::new(window_size[0], window_size[1])),
+            )
+            .expect("Failed to create window");
+
+        let vk = Arc::new(VulkanContext::new(app_name, &window).unwrap());
+
+        // Create scene.
+        let scene = Scene::new(vk.clone(), &scene_file, &window_size).unwrap();
+
+        self.window = Some(window);
+        self.scene = Some(scene);
+        self.vk = Some(vk);
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => {
+                println!("The close button was pressed; stopping");
+                event_loop.exit();
+            }
+
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        logical_key: key,
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => match key.as_ref() {
+                Key::Character("q") => {
+                    info!("Q was pressed; stopping.");
+                    event_loop.exit();
+                }
+                Key::Character("o") => {
+                    // Handle File > Open.
+                    let current_file_path_buf = PathBuf::from(&self.current_file_path);
+                    let current_dir_path = current_file_path_buf
+                        .parent()
+                        .expect("Unable to get current directory.");
+                    let absolute_path = std::fs::canonicalize(current_dir_path)
+                        .expect("Unable to get absolute path of current directory.");
+
+                    let fd = rfd::FileDialog::new()
+                        .set_directory(absolute_path)
+                        .add_filter("JSON (.json)", &["json"]);
+
+                    if let Some(path) = fd.pick_file() {
+                        let selected_path = path.display().to_string();
+
+                        if self.current_file_path != selected_path {
+                            self.new_file_path = Some(selected_path);
+                        }
+                    }
+                }
+
+                _ => (),
+            },
+
+            WindowEvent::Resized(window_size) => {
+                if let Some(scene) = self.scene.as_mut() {
+                    scene
+                        .update_window_size([window_size.width as f32, window_size.height as f32])
+                        .unwrap();
+                }
+            }
+
+            WindowEvent::ScaleFactorChanged { .. } => {
+                if let Some(scene) = self.scene.as_mut()
+                    && let Some(window) = &self.window
+                {
+                    let window_size = window.inner_size();
+                    scene
+                        .update_window_size([window_size.width as f32, window_size.height as f32])
+                        .unwrap();
+                }
+            }
+
+            WindowEvent::RedrawRequested => {
+                if let Some(scene) = self.scene.as_mut() {
+                    scene.render().unwrap();
+                }
+            }
+
+            _ => (),
+        }
+    }
+}
+
+fn adjust_window_size(mut window_size: [f32; 2], aspect_ratio: f32) -> [f32; 2] {
+    if window_size[0] > window_size[1] {
+        window_size[0] = aspect_ratio * window_size[1];
+    } else {
+        window_size[1] = window_size[0] / aspect_ratio;
+    }
+    window_size
+}
+
+/*
+use std::{path::PathBuf, sync::Arc};
+
 use log::{debug, error, info};
 use vulkano::{
     Version,
@@ -31,7 +192,6 @@ use winit::{
 use raytracer::{Scene, Vk};
 use scene_file::SceneFile;
 
-const INITIAL_WINDOW_SIZE: [f32; 2] = [1024.0, 576.0];
 
 /// Winit application.
 pub struct App {
@@ -138,14 +298,6 @@ impl App {
     }
 }
 
-fn adjust_window_size(mut window_size: [f32; 2], aspect_ratio: f32) -> [f32; 2] {
-    if window_size[0] > window_size[1] {
-        window_size[0] = aspect_ratio * window_size[1];
-    } else {
-        window_size[1] = window_size[0] / aspect_ratio;
-    }
-    window_size
-}
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
@@ -360,3 +512,4 @@ fn setup_debug_callback(enable_debug_logging: bool) -> Option<DebugUtilsMessenge
         ..DebugUtilsMessengerCreateInfo::user_callback(callback)
     })
 }
+*/

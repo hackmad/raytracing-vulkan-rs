@@ -7,13 +7,12 @@ edition = "2024"
 [dependencies]
 raytracer = { path = "../raytracer" }
 scene_file = { path = "../scene_file" }
+vulkan = { path = "../vulkan" }
 
 anyhow = { workspace = true }
 clap = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 rfd = { workspace = true }
-vulkano = { workspace = true }
-vulkano-util = { workspace = true }
 winit = { workspace = true }
 

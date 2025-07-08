@@ -1,254 +1,284 @@
-use std::{iter, mem::size_of, sync::Arc};
+use std::sync::Arc;
 
-use anyhow::{Context, Result};
-use log::debug;
-use shaders::closest_hit::MeshVertex;
-use vulkano::{
-    acceleration_structure::{
-        AccelerationStructure, AccelerationStructureBuildGeometryInfo,
-        AccelerationStructureBuildRangeInfo, AccelerationStructureBuildType,
-        AccelerationStructureCreateInfo, AccelerationStructureGeometries,
-        AccelerationStructureGeometryInstancesData, AccelerationStructureGeometryInstancesDataType,
-        AccelerationStructureGeometryTrianglesData, AccelerationStructureInstance,
-        AccelerationStructureType, BuildAccelerationStructureFlags, BuildAccelerationStructureMode,
-    },
-    buffer::{Buffer, BufferCreateInfo, BufferUsage, IndexBuffer, Subbuffer},
-    command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBufferAbstract},
-    format::Format,
-    memory::allocator::{AllocationCreateInfo, DeviceLayout, MemoryTypeFilter},
-    sync::GpuFuture,
+use crate::MeshGeometryBuffers;
+use anyhow::Result;
+use ash::{
+    khr,
+    vk::{self, Packed24_8},
 };
+use vulkan::{Buffer, CommandBuffer, NO_FENCE, VulkanContext};
 
-use crate::{Mesh, Vk};
+#[rustfmt::skip]
+pub const IDENTITY_TRANSFORM: [f32; 12] = [
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+];
 
 /// Stores the acceleration structures.
 pub struct AccelerationStructures {
-    /// The top-level acceleration structure.
-    pub tlas: Arc<AccelerationStructure>,
-
-    /// The bottom-level acceleration structure is required to be kept alive even though renderer will not
-    /// directly use it. The top-level acceleration structure needs it.
-    _blas_vec: Vec<Arc<AccelerationStructure>>,
+    _blas_vec: Vec<AccelerationStructure>,
+    _blas_instances: Vec<vk::AccelerationStructureInstanceKHR>,
+    pub tlas: AccelerationStructure,
 }
 
 impl AccelerationStructures {
     /// Create new acceleration structures for the given model.
-    pub fn new(vk: Arc<Vk>, meshes: &[Mesh]) -> Result<Self> {
-        let vertex_buffers = meshes
-            .iter()
-            .map(|mesh| mesh.create_blas_vertex_buffer(vk.clone()))
-            .collect::<Result<Vec<_>>>()?;
+    pub fn new(
+        context: Arc<VulkanContext>,
+        mesh_geometry_buffers: &[MeshGeometryBuffers],
+    ) -> Result<Self> {
+        let as_loader = Arc::new(khr::acceleration_structure::Device::new(
+            &context.instance,
+            &context.device,
+        ));
 
-        let index_buffers = meshes
+        let blas_vec = mesh_geometry_buffers
             .iter()
-            .map(|model| model.create_blas_index_buffer(vk.clone()))
-            .collect::<Result<Vec<_>>>()?;
-
-        let blas_vec = vertex_buffers
-            .into_iter()
-            .zip(index_buffers)
-            .map(|(vertex_buffer, index_buffer)| {
-                build_acceleration_structure_triangles(vk.clone(), vertex_buffer, index_buffer)
+            .map(|geometry_buffers| {
+                AccelerationStructure::new_bottom_level_accleration_structure(
+                    context.clone(),
+                    as_loader.clone(),
+                    geometry_buffers,
+                )
             })
             .collect::<Result<Vec<_>>>()?;
 
         let blas_instances = blas_vec
             .iter()
-            .map(|blas| AccelerationStructureInstance {
-                acceleration_structure_reference: blas.device_address().into(),
-                ..Default::default()
-            })
-            .collect();
+            .enumerate()
+            .map(|(index, blas)| blas.create_instance(index as _, IDENTITY_TRANSFORM))
+            .collect::<Vec<_>>();
 
-        // Build the top-level acceleration structure.
-        let tlas = unsafe { build_top_level_acceleration_structure(vk.clone(), blas_instances) }?;
+        let blas_instance_count = blas_instances.len();
+
+        let blas_instance_buffer_size =
+            std::mem::size_of::<vk::AccelerationStructureInstanceKHR>() * blas_instance_count;
+
+        let mut blas_instance_buffer = Buffer::new(
+            context.clone(),
+            blas_instance_buffer_size as _,
+            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+
+        blas_instance_buffer.store(&blas_instances)?;
+
+        let tlas = AccelerationStructure::new_top_level_accleration_structure(
+            context.clone(),
+            as_loader,
+            &blas_instance_buffer,
+            blas_instance_count,
+        )?;
 
         Ok(Self {
             _blas_vec: blas_vec,
+            _blas_instances: blas_instances,
             tlas,
         })
     }
 }
 
-/// A helper function to build a acceleration structure and wait for its completion.
-///
-/// # Safety
-///
-/// - If you are referencing a bottom-level acceleration structure in a top-level acceleration
-///   structure, you must ensure that the bottom-level acceleration structure is kept alive.
-fn build_acceleration_structure_common(
-    vk: Arc<Vk>,
-    geometries: AccelerationStructureGeometries,
-    primitive_count: u32,
-    ty: AccelerationStructureType,
-) -> Result<Arc<AccelerationStructure>> {
-    let mut as_build_geometry_info = AccelerationStructureBuildGeometryInfo {
-        mode: BuildAccelerationStructureMode::Build,
-        flags: BuildAccelerationStructureFlags::PREFER_FAST_TRACE,
-        ..AccelerationStructureBuildGeometryInfo::new(geometries)
-    };
+pub struct AccelerationStructure {
+    as_loader: Arc<khr::acceleration_structure::Device>,
+    pub acceleration_structure: vk::AccelerationStructureKHR,
+    handle: u64,
+    _buffer: Buffer,
+}
 
-    let as_build_sizes_info = vk.device.acceleration_structure_build_sizes(
-        AccelerationStructureBuildType::Device,
-        &as_build_geometry_info,
-        &[primitive_count],
-    )?;
+impl AccelerationStructure {
+    fn new(
+        context: Arc<VulkanContext>,
+        as_loader: Arc<khr::acceleration_structure::Device>,
+        ty: vk::AccelerationStructureTypeKHR,
+        geometries: &[vk::AccelerationStructureGeometryKHR],
+        instance_count: usize,
+    ) -> Result<Self> {
+        let build_range_info = vk::AccelerationStructureBuildRangeInfoKHR::default()
+            .first_vertex(0)
+            .primitive_count(instance_count as u32)
+            .primitive_offset(0)
+            .transform_offset(0);
 
-    // Create a memory layout so the scratch buffer address is aligned correctly for the
-    // acceleration structure.
-    let device_properties = vk.device.physical_device().properties();
-    let min_scratch_offset = device_properties
-        .min_acceleration_structure_scratch_offset_alignment
-        .context(
-            "Unable to get min_acceleration_structure_scratch_offset_alignment device property",
-        )?
-        .into();
+        let mut build_info = vk::AccelerationStructureBuildGeometryInfoKHR::default()
+            .flags(vk::BuildAccelerationStructureFlagsKHR::PREFER_FAST_TRACE)
+            .geometries(geometries)
+            .mode(vk::BuildAccelerationStructureModeKHR::BUILD)
+            .ty(ty);
 
-    let scratch_buffer_size = as_build_sizes_info.build_scratch_size;
+        let mut size_info = vk::AccelerationStructureBuildSizesInfoKHR::default();
+        unsafe {
+            as_loader.get_acceleration_structure_build_sizes(
+                vk::AccelerationStructureBuildTypeKHR::DEVICE,
+                &build_info,
+                &[build_range_info.primitive_count],
+                &mut size_info,
+            )
+        };
 
-    let scratch_buffer_layout =
-        DeviceLayout::from_size_alignment(scratch_buffer_size, min_scratch_offset)
-            .context("Unable to create scratch buffer device layout")?;
+        let buffer = Buffer::new(
+            context.clone(),
+            size_info.acceleration_structure_size,
+            vk::BufferUsageFlags::ACCELERATION_STRUCTURE_STORAGE_KHR
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                | vk::BufferUsageFlags::STORAGE_BUFFER,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        )?;
 
-    debug!("AS min_acceleration_structure_scratch_offset_alignment: {min_scratch_offset}");
-    debug!("AS scratch buffer size: {}", scratch_buffer_size);
-    debug!("AS scratch buffer layout: {:?}", scratch_buffer_layout);
+        let as_create_info = vk::AccelerationStructureCreateInfoKHR::default()
+            .ty(build_info.ty)
+            .size(size_info.acceleration_structure_size)
+            .buffer(buffer.buffer)
+            .offset(0);
 
-    // We create a new scratch buffer for each acceleration structure for simplicity. You may want
-    // to reuse scratch buffers if you need to build many acceleration structures.
-    let scratch_buffer = Subbuffer::new(Buffer::new(
-        vk.memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::TRANSFER_SRC
-                | BufferUsage::SHADER_DEVICE_ADDRESS
-                | BufferUsage::STORAGE_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo::default(),
-        scratch_buffer_layout,
-    )?);
+        let acceleration_structure =
+            unsafe { as_loader.create_acceleration_structure(&as_create_info, None)? };
 
-    let scratch_buffer_device_address: u64 = scratch_buffer.device_address().unwrap().into();
-    debug!(
-        "AS scratch buffer device addr: {scratch_buffer_device_address} is {}",
-        if (scratch_buffer_device_address % min_scratch_offset) == 0 {
-            "aligned"
-        } else {
-            "NOT ALIGNED"
+        build_info.dst_acceleration_structure = acceleration_structure;
+
+        let scratch_buffer = Buffer::new(
+            context.clone(),
+            size_info.build_scratch_size,
+            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS | vk::BufferUsageFlags::STORAGE_BUFFER,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        )?;
+
+        build_info.scratch_data = vk::DeviceOrHostAddressKHR {
+            device_address: scratch_buffer.get_buffer_device_address(),
+        };
+
+        let command_buffer = CommandBuffer::new(context.clone())?;
+        command_buffer.begin_one_time_submit()?;
+
+        let memory_barrier = vk::MemoryBarrier::default()
+            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .dst_access_mask(vk::AccessFlags::ACCELERATION_STRUCTURE_WRITE_KHR);
+
+        command_buffer.memory_barrier(
+            memory_barrier,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::PipelineStageFlags::ACCELERATION_STRUCTURE_BUILD_KHR,
+            vk::DependencyFlags::empty(),
+        );
+
+        unsafe {
+            as_loader.cmd_build_acceleration_structures(
+                command_buffer.get(),
+                &[build_info],
+                &[&[build_range_info]],
+            );
         }
-    );
 
-    let as_create_info = AccelerationStructureCreateInfo {
-        ty,
-        ..AccelerationStructureCreateInfo::new(Buffer::new_slice::<u8>(
-            vk.memory_allocator.clone(),
-            BufferCreateInfo {
-                usage: BufferUsage::ACCELERATION_STRUCTURE_STORAGE
-                    | BufferUsage::SHADER_DEVICE_ADDRESS,
-                ..Default::default()
+        command_buffer.end()?;
+
+        command_buffer.submit(None, &NO_FENCE)?;
+
+        let handle = {
+            let as_addr_info = vk::AccelerationStructureDeviceAddressInfoKHR::default()
+                .acceleration_structure(acceleration_structure);
+            unsafe { as_loader.get_acceleration_structure_device_address(&as_addr_info) }
+        };
+
+        Ok(Self {
+            as_loader,
+            acceleration_structure,
+            handle,
+            _buffer: buffer,
+        })
+    }
+
+    fn new_bottom_level_accleration_structure(
+        context: Arc<VulkanContext>,
+        as_loader: Arc<khr::acceleration_structure::Device>,
+        mesh_geometry_buffers: &MeshGeometryBuffers,
+    ) -> Result<AccelerationStructure> {
+        let geometry = vk::AccelerationStructureGeometryKHR::default()
+            .geometry_type(vk::GeometryTypeKHR::TRIANGLES)
+            .geometry(vk::AccelerationStructureGeometryDataKHR {
+                triangles: vk::AccelerationStructureGeometryTrianglesDataKHR::default()
+                    // Vertices
+                    .vertex_data(vk::DeviceOrHostAddressConstKHR {
+                        device_address: mesh_geometry_buffers
+                            .vertex_buffer
+                            .get_buffer_device_address(),
+                    })
+                    .max_vertex(mesh_geometry_buffers.vertex_count as u32 - 1)
+                    .vertex_stride(mesh_geometry_buffers.vertex_stride as u64)
+                    .vertex_format(vk::Format::R32G32B32_SFLOAT)
+                    //
+                    // Indices
+                    .index_data(vk::DeviceOrHostAddressConstKHR {
+                        device_address: mesh_geometry_buffers
+                            .index_buffer
+                            .get_buffer_device_address(),
+                    })
+                    .index_type(vk::IndexType::UINT32),
+            })
+            .flags(vk::GeometryFlagsKHR::OPAQUE);
+
+        Self::new(
+            context.clone(),
+            as_loader,
+            vk::AccelerationStructureTypeKHR::BOTTOM_LEVEL,
+            &[geometry],
+            mesh_geometry_buffers.index_count / 3,
+        )
+    }
+
+    fn new_top_level_accleration_structure(
+        context: Arc<VulkanContext>,
+        as_loader: Arc<khr::acceleration_structure::Device>,
+        blas_instance_buffer: &Buffer,
+        blas_instance_count: usize,
+    ) -> Result<AccelerationStructure> {
+        let tlas_instances = vk::AccelerationStructureGeometryInstancesDataKHR::default()
+            .array_of_pointers(false)
+            .data(vk::DeviceOrHostAddressConstKHR {
+                device_address: blas_instance_buffer.get_buffer_device_address(),
+            });
+
+        let geometry = vk::AccelerationStructureGeometryKHR::default()
+            .geometry_type(vk::GeometryTypeKHR::INSTANCES)
+            .geometry(vk::AccelerationStructureGeometryDataKHR {
+                instances: tlas_instances,
+            });
+
+        Self::new(
+            context.clone(),
+            as_loader,
+            vk::AccelerationStructureTypeKHR::TOP_LEVEL,
+            &[geometry],
+            blas_instance_count,
+        )
+    }
+
+    // Use this to create transformed instances for the same mesh. This should be used when
+    // generating the bottom level acceleration structure.
+    fn create_instance(
+        &self,
+        index: u32,
+        transform: [f32; 12],
+    ) -> vk::AccelerationStructureInstanceKHR {
+        vk::AccelerationStructureInstanceKHR {
+            transform: vk::TransformMatrixKHR { matrix: transform },
+            instance_custom_index_and_mask: Packed24_8::new(index, 0xff),
+            instance_shader_binding_table_record_offset_and_flags: Packed24_8::new(
+                0, // RAY_GEN
+                vk::GeometryInstanceFlagsKHR::TRIANGLE_FACING_CULL_DISABLE.as_raw() as u8,
+            ),
+            acceleration_structure_reference: vk::AccelerationStructureReferenceKHR {
+                device_handle: self.handle,
             },
-            AllocationCreateInfo::default(),
-            as_build_sizes_info.acceleration_structure_size,
-        )?)
-    };
-
-    let acceleration = unsafe { AccelerationStructure::new(vk.device.clone(), as_create_info) }?;
-
-    as_build_geometry_info.dst_acceleration_structure = Some(acceleration.clone());
-    as_build_geometry_info.scratch_data = Some(scratch_buffer);
-
-    let as_build_range_info = AccelerationStructureBuildRangeInfo {
-        primitive_count,
-        ..Default::default()
-    };
-
-    // For simplicity, we build a single command buffer that builds the acceleration structure,
-    // then waits for its execution to complete.
-    let mut builder = AutoCommandBufferBuilder::primary(
-        vk.command_buffer_allocator.clone(),
-        vk.queue.queue_family_index(),
-        CommandBufferUsage::OneTimeSubmit,
-    )?;
-
-    unsafe {
-        builder.build_acceleration_structure(
-            as_build_geometry_info,
-            iter::once(as_build_range_info).collect(),
-        )?
-    };
-
-    builder
-        .build()?
-        .execute(vk.queue.clone())?
-        .then_signal_fence_and_flush()?
-        .wait(None)?;
-
-    Ok(acceleration)
+        }
+    }
 }
 
-/// Builds a bottom level accerlation strucuture for a set of triangles.
-fn build_acceleration_structure_triangles(
-    vk: Arc<Vk>,
-    vertex_buffer: Subbuffer<[MeshVertex]>,
-    index_buffer: Subbuffer<[u32]>,
-) -> Result<Arc<AccelerationStructure>> {
-    let primitive_count = (index_buffer.len() / 3) as u32;
-
-    let as_geometry_triangles_data = AccelerationStructureGeometryTrianglesData {
-        max_vertex: vertex_buffer.len() as _,
-        vertex_data: Some(vertex_buffer.into_bytes()),
-        index_data: Some(IndexBuffer::U32(index_buffer)),
-        vertex_stride: size_of::<MeshVertex>() as _,
-        ..AccelerationStructureGeometryTrianglesData::new(Format::R32G32B32_SFLOAT)
-    };
-
-    let geometries = AccelerationStructureGeometries::Triangles(vec![as_geometry_triangles_data]);
-
-    build_acceleration_structure_common(
-        vk,
-        geometries,
-        primitive_count,
-        AccelerationStructureType::BottomLevel,
-    )
-}
-
-/// Builds the top level accerlation strucuture.
-///
-/// # Safety
-///
-/// - If you are referencing a bottom-level acceleration structure in a top-level acceleration
-///   structure, you must ensure that the bottom-level acceleration structure is kept alive.
-unsafe fn build_top_level_acceleration_structure(
-    vk: Arc<Vk>,
-    as_instances: Vec<AccelerationStructureInstance>,
-) -> Result<Arc<AccelerationStructure>> {
-    let primitive_count = as_instances.len() as u32;
-
-    let instance_buffer = Buffer::from_iter(
-        vk.memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::SHADER_DEVICE_ADDRESS
-                | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        as_instances,
-    )?;
-
-    let as_geometry_instances_data = AccelerationStructureGeometryInstancesData::new(
-        AccelerationStructureGeometryInstancesDataType::Values(Some(instance_buffer)),
-    );
-
-    let geometries = AccelerationStructureGeometries::Instances(as_geometry_instances_data);
-
-    build_acceleration_structure_common(
-        vk,
-        geometries,
-        primitive_count,
-        AccelerationStructureType::TopLevel,
-    )
+impl Drop for AccelerationStructure {
+    fn drop(&mut self) {
+        unsafe {
+            self.as_loader
+                .destroy_acceleration_structure(self.acceleration_structure, None);
+        }
+    }
 }

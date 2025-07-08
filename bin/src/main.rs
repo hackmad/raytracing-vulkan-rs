@@ -1,7 +1,8 @@
 mod app;
 
+use anyhow::{Result, anyhow};
 use clap::Parser;
-use winit::{error::EventLoopError, event_loop::EventLoop};
+use winit::event_loop::EventLoop;
 
 use crate::app::App;
 
@@ -13,13 +14,13 @@ struct Cli {
     path: String,
 }
 
-fn main() -> Result<(), EventLoopError> {
+fn main() -> Result<()> {
     env_logger::init();
 
     let cli = Cli::parse();
 
     let event_loop = EventLoop::new().unwrap();
 
-    let mut app = App::new(&event_loop, false, &cli.path);
-    event_loop.run_app(&mut app)
+    let mut app = App::new(&cli.path)?;
+    event_loop.run_app(&mut app).map_err(|e| anyhow!("{e:?}"))
 }

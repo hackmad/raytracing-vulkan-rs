@@ -5,6 +5,12 @@ authors = ["Ahmad Kabani <ahmadkabani@yahoo.com>"]
 edition = "2024"
 
 [dependencies]
-vulkano = "0.35"
-vulkano-shaders = "0.35"
+vulkan = { path = "../vulkan" }
 
+anyhow = { workspace = true }
+ash = { workspace = true }
+log = { workspace = true }
+shaderc = { workspace = true }
+
+[build-dependencies]
+shaderc = { workspace = true }

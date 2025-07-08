@@ -1,19 +1,17 @@
 use std::{f32::consts::PI, sync::Arc};
 
 use anyhow::Result;
+use ash::vk;
 use glam::Vec3;
 use log::{debug, info};
 use scene_file::Primitive;
-use shaders::closest_hit;
-use vulkano::{
-    buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
-    memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
-};
+use shaders::{MAT_TYPE_NONE, MeshVertex};
+use vulkan::{Buffer, VulkanContext};
 
-use crate::{MAT_TYPE_NONE, Materials, Vk, create_device_local_buffer};
+use crate::Materials;
 
 // This is used for cleaner code and it represents the data that the shader's MeshVertex structure needs.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Vertex {
     pub p: [f32; 3],
     pub n: [f32; 3],
@@ -26,7 +24,7 @@ impl Vertex {
     }
 }
 
-impl From<&Vertex> for closest_hit::MeshVertex {
+impl From<&Vertex> for MeshVertex {
     // Convert Vertex to shader struct.
     fn from(value: &Vertex) -> Self {
         Self {
@@ -38,6 +36,14 @@ impl From<&Vertex> for closest_hit::MeshVertex {
     }
 }
 
+pub struct MeshGeometryBuffers {
+    pub vertex_buffer: Buffer,
+    pub vertex_count: usize,
+    pub vertex_stride: usize,
+    pub index_buffer: Buffer,
+    pub index_count: usize,
+}
+
 #[derive(Debug)]
 pub struct Mesh {
     pub name: String,
@@ -47,31 +53,40 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    /// Create a vertex buffer for buildng the acceleration structure.
-    pub fn create_blas_vertex_buffer(
+    pub fn create_geometry_buffers(
         &self,
-        vk: Arc<Vk>,
-    ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
-        debug!("Creating BLAS vertex buffer");
-        create_device_local_buffer(
-            vk.clone(),
-            BufferUsage::VERTEX_BUFFER
-                | BufferUsage::SHADER_DEVICE_ADDRESS
-                | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-            self.vertices.iter().map(closest_hit::MeshVertex::from),
-        )
-    }
+        context: Arc<VulkanContext>,
+    ) -> Result<MeshGeometryBuffers> {
+        let vertex_count = self.vertices.len();
+        let vertex_stride = std::mem::size_of::<MeshVertex>();
+        let mut vertex_buffer = Buffer::new(
+            context.clone(),
+            (vertex_stride * vertex_count) as _,
+            vk::BufferUsageFlags::VERTEX_BUFFER
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS_EXT
+                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+        vertex_buffer.store(&self.vertices)?;
 
-    /// Create an index buffer for buildng the acceleration structure.
-    pub fn create_blas_index_buffer(&self, vk: Arc<Vk>) -> Result<Subbuffer<[u32]>> {
-        debug!("Creating BLAS index buffer");
-        create_device_local_buffer(
-            vk.clone(),
-            BufferUsage::INDEX_BUFFER
-                | BufferUsage::SHADER_DEVICE_ADDRESS
-                | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-            self.indices.clone(),
-        )
+        let index_count = self.indices.len();
+        let mut index_buffer = Buffer::new(
+            context.clone(),
+            (std::mem::size_of::<u32>() * index_count) as _,
+            vk::BufferUsageFlags::INDEX_BUFFER
+                | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS_EXT
+                | vk::BufferUsageFlags::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_KHR,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        )?;
+        index_buffer.store(&self.indices)?;
+
+        Ok(MeshGeometryBuffers {
+            vertex_buffer,
+            vertex_count,
+            vertex_stride,
+            index_buffer,
+            index_count,
+        })
     }
 }
 
@@ -204,8 +219,6 @@ fn generate_uv_sphere(
     let mut o2 = segments; // Top row has 1 less vertex because of single triangles.
 
     for r in 0..rings {
-        debug!("r={r}, o1: {o1}, o2: {o2}");
-
         for s in 0..segments {
             if r == 0 {
                 // Top triangles.
@@ -363,10 +376,10 @@ fn generate_box(corners: &[[f32; 3]; 2]) -> (Vec<Vertex>, Vec<u32>) {
 
 /// This will create a storage buffer to hold the mesh related data.
 pub fn create_mesh_storage_buffer(
-    vk: Arc<Vk>,
+    context: Arc<VulkanContext>,
     meshes: &[Mesh],
     materials: &Materials,
-) -> Result<Subbuffer<[closest_hit::Mesh]>> {
+) -> Result<Buffer> {
     let vertex_buffer_sizes = meshes.iter().map(|mesh| mesh.vertices.len());
 
     let index_buffer_sizes = meshes.iter().map(|mesh| mesh.indices.len());
@@ -387,82 +400,55 @@ pub fn create_mesh_storage_buffer(
         .zip(materials)
         .map(
             |((vertex_buffer_size, index_buffer_size), (material_type, material_index))| {
-                closest_hit::Mesh {
-                    vertexBufferSize: vertex_buffer_size as _,
-                    indexBufferSize: index_buffer_size as _,
-                    materialType: material_type,
-                    materialIndex: material_index,
+                shaders::Mesh {
+                    vertex_buffer_size: vertex_buffer_size as _,
+                    index_buffer_size: index_buffer_size as _,
+                    material_type,
+                    material_index,
                 }
             },
         )
         .collect();
 
     debug!("Creating mesh storage buffer");
-    let buffer = Buffer::from_iter(
-        vk.memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::STORAGE_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        mesh_data,
+    let buffer = Buffer::new_device_local_storage_buffer(
+        context.clone(),
+        vk::BufferUsageFlags::STORAGE_BUFFER,
+        &mesh_data,
     )?;
     Ok(buffer)
 }
 
 /// Create a storage buffer for accessing vertices in shader code. This will pack vertices in order
 /// of meshes.
-pub fn create_mesh_vertex_buffer(
-    vk: Arc<Vk>,
-    meshes: &[Mesh],
-) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
+pub fn create_mesh_vertex_buffer(context: Arc<VulkanContext>, meshes: &[Mesh]) -> Result<Buffer> {
     let vertex_buffer_data: Vec<_> = meshes
         .iter()
-        .flat_map(|mesh| mesh.vertices.iter().map(closest_hit::MeshVertex::from))
+        .flat_map(|mesh| mesh.vertices.iter().map(MeshVertex::from))
         .collect();
 
     debug!("Creating vertex buffer");
-    let buffer = Buffer::from_iter(
-        vk.memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::STORAGE_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        vertex_buffer_data,
+    let buffer = Buffer::new_device_local_storage_buffer(
+        context.clone(),
+        vk::BufferUsageFlags::STORAGE_BUFFER,
+        &vertex_buffer_data,
     )?;
     Ok(buffer)
 }
 
 /// Create a storage buffer for accessing indices in shader code. This will pack indices in order
 /// of meshes.
-pub fn create_mesh_index_buffer(vk: Arc<Vk>, meshes: &[Mesh]) -> Result<Subbuffer<[u32]>> {
+pub fn create_mesh_index_buffer(context: Arc<VulkanContext>, meshes: &[Mesh]) -> Result<Buffer> {
     let index_buffer_data: Vec<_> = meshes
         .iter()
         .flat_map(|mesh| mesh.indices.clone())
         .collect();
 
     debug!("Creating vertex buffer");
-    let buffer = Buffer::from_iter(
-        vk.memory_allocator.clone(),
-        BufferCreateInfo {
-            usage: BufferUsage::STORAGE_BUFFER,
-            ..Default::default()
-        },
-        AllocationCreateInfo {
-            memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-            ..Default::default()
-        },
-        index_buffer_data,
+    let buffer = Buffer::new_device_local_storage_buffer(
+        context.clone(),
+        vk::BufferUsageFlags::STORAGE_BUFFER,
+        &index_buffer_data,
     )?;
     Ok(buffer)
 }

@@ -1,18 +1,13 @@
 [package]
-name = "raytracer"
+name = "vulkan"
 version = "0.1.0"
 authors = ["Ahmad Kabani <ahmadkabani@yahoo.com>"]
 edition = "2024"
 
 [dependencies]
-scene_file = { path = "../scene_file" }
-shaders = { path = "../shaders" }
-vulkan = { path = "../vulkan" }
-
 ash = { workspace = true }
+ash-window = { workspace = true }
 anyhow = { workspace = true }
-glam = { workspace = true }
 image = { workspace = true }
 log = { workspace = true }
-ordered-float = { workspace = true }
-tobj = { workspace = true }
+winit = { workspace = true }

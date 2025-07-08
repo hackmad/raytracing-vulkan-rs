@@ -1,10 +1,9 @@
 use anyhow::Result;
 use log::debug;
-
-use crate::Vertex;
+use shaders::MeshVertex;
 
 /// Load a Wavefront OBJ file.
-pub fn load_obj(path: &str) -> Result<Vec<(Vec<Vertex>, Vec<u32>)>> {
+pub fn load_obj(path: &str) -> Result<Vec<(Vec<MeshVertex>, Vec<u32>)>> {
     let (models, _materials) = tobj::load_obj(path, &tobj::GPU_LOAD_OPTIONS)?;
 
     let mut result = vec![];
@@ -20,7 +19,7 @@ pub fn load_obj(path: &str) -> Result<Vec<(Vec<Vertex>, Vec<u32>)>> {
             let tex_coord_offset = (2 * index) as usize;
 
             #[rustfmt::skip]
-            let vertex =Vertex::new(
+            let vertex = MeshVertex::new(
                 [ mesh.positions[pos_offset], mesh.positions[pos_offset + 1], mesh.positions[pos_offset + 2] ], // p
                 [ mesh.normals[pos_offset], mesh.normals[pos_offset + 1], mesh.normals[pos_offset + 2] ], // n
                 [ mesh.texcoords[tex_coord_offset], 1.0 - mesh.texcoords[tex_coord_offset + 1] ], // uv

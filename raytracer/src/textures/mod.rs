@@ -6,16 +6,15 @@ mod noise_texture;
 use std::sync::Arc;
 
 use anyhow::Result;
+use ash::vk;
 pub use checker_texture::*;
 pub use constant_colour_texture::*;
 pub use image_texture::*;
 use log::debug;
 pub use noise_texture::*;
 use scene_file::SceneFile;
-use shaders::closest_hit;
-use vulkano::buffer::{BufferUsage, Subbuffer};
-
-use crate::{MAT_PROP_VALUE_TYPE_RGB, Vk, create_device_local_buffer};
+use shaders::MaterialPropertyValue;
+use vulkan::{Buffer, VulkanContext};
 
 pub struct Textures {
     pub constant_colour_textures: ConstantColourTextures,
@@ -25,7 +24,7 @@ pub struct Textures {
 }
 
 impl Textures {
-    pub fn new(vk: Arc<Vk>, scene_file: &SceneFile) -> Result<Self> {
+    pub fn new(context: Arc<VulkanContext>, scene_file: &SceneFile) -> Result<Self> {
         let all_textures = scene_file.get_textures();
 
         for texture in scene_file.textures.iter() {
@@ -33,12 +32,14 @@ impl Textures {
         }
 
         let constant_colour_textures = ConstantColourTextures::new(&all_textures);
-        let image_textures = ImageTextures::load(vk, &all_textures)?;
+        let image_textures = ImageTextures::load(context, &all_textures)?;
         let checker_textures = CheckerTextures::new(&all_textures);
         let noise_textures = NoiseTextures::new(&all_textures);
 
         debug!("{constant_colour_textures:?}");
         debug!("{image_textures:?}");
+        debug!("{checker_textures:?}");
+        debug!("{noise_textures:?}");
 
         Ok(Self {
             constant_colour_textures,
@@ -48,7 +49,7 @@ impl Textures {
         })
     }
 
-    pub fn to_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
+    pub fn to_shader(&self, name: &str) -> Option<MaterialPropertyValue> {
         // Texture names will be unique across all texture types.
         if let Some(v) = self.constant_colour_textures.to_shader(name) {
             return Some(v);
@@ -66,54 +67,43 @@ impl Textures {
     }
 
     /// Create a storage buffers for accessing materials in shader code.
-    pub fn create_buffers(&self, vk: Arc<Vk>) -> Result<TextureBuffers> {
-        let buffer_usage = BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS;
+    pub fn create_buffers(&self, context: Arc<VulkanContext>) -> Result<TextureBuffers> {
+        let buffer_usage =
+            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
 
         // Note: We can't create buffers from empty list. So use a texture and push constants
         // will set the number of textures to 0 which the shader code checks for out of bounds.
 
         debug!("Creating checker texture storage buffer");
-        let checker_buffer = create_device_local_buffer(
-            vk.clone(),
+        let checker_textures: Vec<_> = self
+            .checker_textures
+            .textures
+            .iter()
+            .map(|t| shaders::CheckerTexture {
+                scale: t.scale,
+                odd: self.to_shader(&t.odd).unwrap(), // TODO could return Err() when odd/even not found.
+                even: self.to_shader(&t.even).unwrap(),
+            })
+            .collect();
+
+        let checker_buffer = Buffer::new_device_local_storage_buffer(
+            context.clone(),
             buffer_usage,
-            if !self.checker_textures.textures.is_empty() {
-                self.checker_textures
-                    .textures
-                    .iter()
-                    .map(|t| closest_hit::CheckerTexture {
-                        scale: t.scale,
-                        odd: self.to_shader(&t.odd).unwrap(), // TODO could return Err() when odd/even not found.
-                        even: self.to_shader(&t.even).unwrap(),
-                    })
-                    .collect()
-            } else {
-                vec![closest_hit::CheckerTexture {
-                    scale: 1.0,
-                    odd: closest_hit::MaterialPropertyValue {
-                        propValueType: MAT_PROP_VALUE_TYPE_RGB,
-                        index: 0,
-                    },
-                    even: closest_hit::MaterialPropertyValue {
-                        propValueType: MAT_PROP_VALUE_TYPE_RGB,
-                        index: 0,
-                    },
-                }]
-            },
+            &checker_textures,
         )?;
 
         debug!("Creating noise texture storage buffer");
-        let noise_buffer = create_device_local_buffer(
-            vk.clone(),
+        let noise_textures: Vec<_> = self
+            .noise_textures
+            .textures
+            .iter()
+            .map(|t| shaders::NoiseTexture { scale: t.scale })
+            .collect();
+
+        let noise_buffer = Buffer::new_device_local_storage_buffer(
+            context.clone(),
             buffer_usage,
-            if !self.noise_textures.textures.is_empty() {
-                self.noise_textures
-                    .textures
-                    .iter()
-                    .map(|t| closest_hit::NoiseTexture { scale: t.scale })
-                    .collect()
-            } else {
-                vec![closest_hit::NoiseTexture { scale: 1.0 }]
-            },
+            &noise_textures,
         )?;
 
         Ok(TextureBuffers {
@@ -125,6 +115,6 @@ impl Textures {
 
 /// Holds the storage buffers for the textures other than constant colour and image types.
 pub struct TextureBuffers {
-    pub checker: Subbuffer<[closest_hit::CheckerTexture]>,
-    pub noise: Subbuffer<[closest_hit::NoiseTexture]>,
+    pub checker: Buffer,
+    pub noise: Buffer,
 }

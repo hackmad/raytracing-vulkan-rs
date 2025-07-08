@@ -10,8 +10,6 @@ hitAttributeEXT vec2 hitAttribs;
 
 layout(location = 1) rayPayloadEXT bool isShadowed;
 
-layout(set = 0, binding = 0) uniform accelerationStructureEXT topLevelAS;
-
 layout(set = 3, binding = 0, scalar) buffer MeshVertices {
     MeshVertex values[];
 } meshVertexData;
@@ -28,7 +26,7 @@ layout(set = 4, binding = 0) uniform sampler imageTextureSampler;
 layout(set = 4, binding = 1) uniform texture2D imageTextures[];
 
 layout(set = 5, binding = 0, scalar) buffer ConstantColours {
-    vec3 values[];
+    vec4 values[]; // vec4 for alignment. only xyz will be used.
 } constantColour;
 
 layout(set = 6, binding = 0, scalar) buffer LambertianMaterials {
@@ -136,7 +134,7 @@ vec3 getBasicTextureValue(MaterialPropertyValue matPropValue, MeshVertex vertex)
     switch (matPropValue.propValueType) {
         case MAT_PROP_VALUE_TYPE_RGB:
             if (matPropValue.index >= 0 && matPropValue.index < pc.constantColourCount) {
-                colour = constantColour.values[matPropValue.index];
+                colour = constantColour.values[matPropValue.index].xyz;
             }
             break;
 

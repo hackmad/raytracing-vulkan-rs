@@ -1,38 +1,30 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
+use ash::vk;
 use log::debug;
 use scene_file::Material;
-use shaders::closest_hit;
-use vulkano::buffer::{BufferUsage, Subbuffer};
+use shaders::{
+    self, MAT_TYPE_DIELECTRIC, MAT_TYPE_DIFFUSE_LIGHT, MAT_TYPE_LAMBERTIAN, MAT_TYPE_METAL,
+    MAT_TYPE_NONE,
+};
+use vulkan::{Buffer, VulkanContext};
 
-use crate::{Vk, create_device_local_buffer, textures::Textures};
-
-// NOTE: Update Materials::to_shader() when adding new materials.
-pub const MAT_TYPE_NONE: u32 = 0;
-pub const MAT_TYPE_LAMBERTIAN: u32 = 1;
-pub const MAT_TYPE_METAL: u32 = 2;
-pub const MAT_TYPE_DIELECTRIC: u32 = 3;
-pub const MAT_TYPE_DIFFUSE_LIGHT: u32 = 4;
-
-pub const MAT_PROP_VALUE_TYPE_RGB: u32 = 0;
-pub const MAT_PROP_VALUE_TYPE_IMAGE: u32 = 1;
-pub const MAT_PROP_VALUE_TYPE_CHECKER: u32 = 2;
-pub const MAT_PROP_VALUE_TYPE_NOISE: u32 = 3;
+use crate::textures::Textures;
 
 #[derive(Debug)]
 pub struct Materials {
     /// The lambertian materials. This will be used to create the storage buffers for shaders.
-    pub lambertian_materials: Vec<closest_hit::LambertianMaterial>,
+    pub lambertian_materials: Vec<shaders::LambertianMaterial>,
 
     /// The lambertian materials. This will be used to create the storage buffers for shaders.
-    pub metal_materials: Vec<closest_hit::MetalMaterial>,
+    pub metal_materials: Vec<shaders::MetalMaterial>,
 
     /// The dielectric materials. This will be used to create the storage buffers for shaders.
-    pub dielectric_materials: Vec<closest_hit::DielectricMaterial>,
+    pub dielectric_materials: Vec<shaders::DielectricMaterial>,
 
     /// The diffuse light materials. This will be used to create the storage buffers for shaders.
-    pub diffuse_light_materials: Vec<closest_hit::DiffuseLightMaterial>,
+    pub diffuse_light_materials: Vec<shaders::DiffuseLightMaterial>,
 
     /// Maps unique lambertian materials to their index in `lambertian_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
@@ -69,14 +61,14 @@ impl Materials {
                     lambertian_material_indices
                         .insert(name.clone(), lambertian_materials.len() as _);
 
-                    lambertian_materials.push(closest_hit::LambertianMaterial {
+                    lambertian_materials.push(shaders::LambertianMaterial {
                         albedo: textures.to_shader(albedo).unwrap(),
                     });
                 }
                 Material::Metal { name, albedo, fuzz } => {
                     metal_material_indices.insert(name.clone(), metal_materials.len() as _);
 
-                    metal_materials.push(closest_hit::MetalMaterial {
+                    metal_materials.push(shaders::MetalMaterial {
                         albedo: textures.to_shader(albedo).unwrap(),
                         fuzz: textures.to_shader(fuzz).unwrap(),
                     });
@@ -88,15 +80,15 @@ impl Materials {
                     dielectric_material_indices
                         .insert(name.clone(), dielectric_materials.len() as _);
 
-                    dielectric_materials.push(closest_hit::DielectricMaterial {
-                        refractionIndex: *refraction_index,
+                    dielectric_materials.push(shaders::DielectricMaterial {
+                        refraction_index: *refraction_index,
                     });
                 }
                 Material::DiffuseLight { name, emit } => {
                     diffuse_light_material_indices
                         .insert(name.clone(), diffuse_light_materials.len() as _);
 
-                    diffuse_light_materials.push(closest_hit::DiffuseLightMaterial {
+                    diffuse_light_materials.push(shaders::DiffuseLightMaterial {
                         emit: textures.to_shader(emit).unwrap(),
                     });
                 }
@@ -116,76 +108,40 @@ impl Materials {
     }
 
     /// Create a storage buffers for accessing materials in shader code.
-    pub fn create_buffers(&self, vk: Arc<Vk>) -> Result<MaterialBuffers> {
-        let buffer_usage = BufferUsage::STORAGE_BUFFER | BufferUsage::SHADER_DEVICE_ADDRESS;
+    pub fn create_buffers(&self, context: Arc<VulkanContext>) -> Result<MaterialBuffers> {
+        let buffer_usage =
+            vk::BufferUsageFlags::STORAGE_BUFFER | vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS;
 
         // Note: We can't create buffers from empty list. So use a default material and push
         // constants will set the number of materials to 0 which the shader code checks for out of
         // bounds.
 
         debug!("Creating Lambertian materials buffer");
-        let lambertian_materials_buffer = create_device_local_buffer(
-            vk.clone(),
+        let lambertian_materials_buffer = Buffer::new_device_local_storage_buffer(
+            context.clone(),
             buffer_usage,
-            if !self.lambertian_materials.is_empty() {
-                self.lambertian_materials.clone()
-            } else {
-                vec![closest_hit::LambertianMaterial {
-                    albedo: closest_hit::MaterialPropertyValue {
-                        propValueType: 0,
-                        index: 0,
-                    },
-                }]
-            },
+            &self.lambertian_materials,
         )?;
 
         debug!("Creating metal materials buffer");
-        let metal_materials_buffer = create_device_local_buffer(
-            vk.clone(),
+        let metal_materials_buffer = Buffer::new_device_local_storage_buffer(
+            context.clone(),
             buffer_usage,
-            if !self.metal_materials.is_empty() {
-                self.metal_materials.clone()
-            } else {
-                vec![closest_hit::MetalMaterial {
-                    albedo: closest_hit::MaterialPropertyValue {
-                        propValueType: 0,
-                        index: 0,
-                    },
-                    fuzz: closest_hit::MaterialPropertyValue {
-                        propValueType: 0,
-                        index: 0,
-                    },
-                }]
-            },
+            &self.metal_materials,
         )?;
 
         debug!("Creating dielectric materials buffer");
-        let dielectric_materials_buffer = create_device_local_buffer(
-            vk.clone(),
+        let dielectric_materials_buffer = Buffer::new_device_local_storage_buffer(
+            context.clone(),
             buffer_usage,
-            if !self.dielectric_materials.is_empty() {
-                self.dielectric_materials.clone()
-            } else {
-                vec![closest_hit::DielectricMaterial {
-                    refractionIndex: 1.0,
-                }]
-            },
+            &self.dielectric_materials,
         )?;
 
         debug!("Creating diffuse light materials buffer");
-        let diffuse_light_materials_buffer = create_device_local_buffer(
-            vk.clone(),
+        let diffuse_light_materials_buffer = Buffer::new_device_local_storage_buffer(
+            context.clone(),
             buffer_usage,
-            if !self.diffuse_light_materials.is_empty() {
-                self.diffuse_light_materials.clone()
-            } else {
-                vec![closest_hit::DiffuseLightMaterial {
-                    emit: closest_hit::MaterialPropertyValue {
-                        propValueType: 0,
-                        index: 0,
-                    },
-                }]
-            },
+            &self.diffuse_light_materials,
         )?;
 
         Ok(MaterialBuffers {
@@ -228,8 +184,8 @@ impl MaterialAndIndex {
 
 /// Holds the storage buffers for the different material types.
 pub struct MaterialBuffers {
-    pub lambertian: Subbuffer<[closest_hit::LambertianMaterial]>,
-    pub metal: Subbuffer<[closest_hit::MetalMaterial]>,
-    pub dielectric: Subbuffer<[closest_hit::DielectricMaterial]>,
-    pub diffuse_light: Subbuffer<[closest_hit::DiffuseLightMaterial]>,
+    pub lambertian: Buffer,
+    pub metal: Buffer,
+    pub dielectric: Buffer,
+    pub diffuse_light: Buffer,
 }

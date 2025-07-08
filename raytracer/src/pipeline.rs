@@ -1,30 +1,26 @@
 use std::sync::Arc;
 
-use anyhow::Result;
-use shaders::{closest_hit, ray_gen};
-use vulkano::{
-    descriptor_set::layout::{
-        DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
-        DescriptorSetLayoutCreateInfo, DescriptorType,
-    },
-    device::Device,
-    pipeline::{
-        PipelineLayout, PipelineShaderStageCreateInfo,
-        layout::{PipelineLayoutCreateInfo, PushConstantRange},
-        ray_tracing::{
-            RayTracingPipeline, RayTracingPipelineCreateInfo, RayTracingShaderGroupCreateInfo,
-        },
-    },
-    shader::ShaderStages,
-};
+use anyhow::{Result, anyhow};
+use ash::{khr, vk};
+use log::debug;
+use shaders::{ClosestHitPushConstants, RayGenPushConstants, ShaderModules, UnifiedPushConstants};
+use vulkan::{Buffer, CommandBuffer, VulkanContext};
+
+const ENTRY_POINT: &core::ffi::CStr = c"main";
 
 /// The raytracing pipeline.
 pub struct RtPipeline {
-    /// The pipeline.
-    pipeline: Arc<RayTracingPipeline>,
+    context: Arc<VulkanContext>,
+    rt_loader: khr::ray_tracing_pipeline::Device,
+    pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
+    pub set_layouts: Vec<vk::DescriptorSetLayout>,
 
-    /// The pipeline layout.
-    pipeline_layout: Arc<PipelineLayout>,
+    sbt_ray_gen_region: vk::StridedDeviceAddressRegionKHR,
+    sbt_ray_miss_region: vk::StridedDeviceAddressRegionKHR,
+    sbt_closest_hit_region: vk::StridedDeviceAddressRegionKHR,
+    sbt_call_region: vk::StridedDeviceAddressRegionKHR,
+    _sbt_buffer: Buffer,
 }
 
 impl RtPipeline {
@@ -57,258 +53,414 @@ impl RtPipeline {
     /// Uniform buffer for sky.
     pub const SKY_LAYOUT: usize = 8;
 
-    /// Returns the pipeline.
-    pub fn get(&self) -> Arc<RayTracingPipeline> {
-        self.pipeline.clone()
-    }
-
-    /// Returns the pipeline layout.
-    pub fn get_layout(&self) -> Arc<PipelineLayout> {
-        self.pipeline_layout.clone()
-    }
-
     /// Create a new raytracing pipeline.
-    pub fn new(
-        device: Arc<Device>,
-        stages: &[PipelineShaderStageCreateInfo],
-        groups: &[RayTracingShaderGroupCreateInfo],
-        image_texture_count: u32,
-    ) -> Result<Self> {
-        let pipeline_layout = PipelineLayout::new(
-            device.clone(),
-            PipelineLayoutCreateInfo {
-                set_layouts: vec![
-                    // The order should match the `*_LAYOUT` constants.
-                    create_tlas_layout(device.clone()),
-                    create_camera_layout(device.clone()),
-                    create_render_image_layout(device.clone()),
-                    create_mesh_data_layout(device.clone()),
-                    create_sampler_and_image_textures_layout(device.clone(), image_texture_count),
-                    create_constant_colour_textures_layout(device.clone()),
-                    create_materials_layout(device.clone()),
-                    create_other_textures_layout(device.clone()),
-                    create_sky_layout(device.clone()),
-                ],
-                push_constant_ranges: vec![
-                    PushConstantRange {
-                        stages: ShaderStages::RAYGEN,
-                        offset: 0,
-                        size: size_of::<ray_gen::RayGenPushConstants>() as _,
-                    },
-                    PushConstantRange {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        offset: size_of::<ray_gen::RayGenPushConstants>() as _,
-                        size: size_of::<closest_hit::ClosestHitPushConstants>() as _,
-                    },
-                ],
-                ..Default::default()
-            },
-        )?;
+    pub fn new(context: Arc<VulkanContext>) -> Result<Self> {
+        let context = context.clone();
 
-        let pipeline = RayTracingPipeline::new(
-            device.clone(),
-            None,
-            RayTracingPipelineCreateInfo {
-                stages: stages.into(),
-                groups: groups.into(),
-                max_pipeline_ray_recursion_depth: 1,
-                ..RayTracingPipelineCreateInfo::layout(pipeline_layout.clone())
-            },
+        // The order should match the `*_LAYOUT` constants.
+        let set_layouts = vec![
+            create_tlas_layout(&context.device)?,
+            create_camera_layout(&context.device)?,
+            create_render_image_layout(&context.device)?,
+            create_mesh_data_layout(&context.device)?,
+            create_sampler_and_image_textures_layout(&context.device)?,
+            create_constant_colour_textures_layout(&context.device)?,
+            create_materials_layout(&context.device)?,
+            create_other_textures_layout(&context.device)?,
+            create_sky_layout(&context.device)?,
+        ];
+
+        let push_constant_ranges = [
+            vk::PushConstantRange::default()
+                .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)
+                .offset(0)
+                .size(size_of::<RayGenPushConstants>() as _),
+            vk::PushConstantRange::default()
+                .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                .offset(size_of::<RayGenPushConstants>() as _)
+                .size(size_of::<ClosestHitPushConstants>() as _),
+        ];
+
+        let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default()
+            .set_layouts(&set_layouts)
+            .push_constant_ranges(&push_constant_ranges);
+
+        let pipeline_layout = unsafe {
+            context
+                .device
+                .create_pipeline_layout(&pipeline_layout_create_info, None)?
+        };
+
+        let shader_modules = ShaderModules::load(context.clone())?;
+
+        let shader_stages = [
+            vk::PipelineShaderStageCreateInfo::default()
+                .stage(vk::ShaderStageFlags::RAYGEN_KHR)
+                .module(shader_modules.ray_gen)
+                .name(ENTRY_POINT),
+            vk::PipelineShaderStageCreateInfo::default()
+                .stage(vk::ShaderStageFlags::MISS_KHR)
+                .module(shader_modules.ray_miss)
+                .name(ENTRY_POINT),
+            vk::PipelineShaderStageCreateInfo::default()
+                .stage(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+                .module(shader_modules.closest_hit)
+                .name(ENTRY_POINT),
+        ];
+
+        let shader_groups = [
+            // ray_gen
+            vk::RayTracingShaderGroupCreateInfoKHR::default()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                .general_shader(0)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR),
+            // ray_miss
+            vk::RayTracingShaderGroupCreateInfoKHR::default()
+                .ty(vk::RayTracingShaderGroupTypeKHR::GENERAL)
+                .general_shader(1)
+                .closest_hit_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR),
+            // closest_hit
+            vk::RayTracingShaderGroupCreateInfoKHR::default()
+                .ty(vk::RayTracingShaderGroupTypeKHR::TRIANGLES_HIT_GROUP)
+                .closest_hit_shader(2)
+                .general_shader(vk::SHADER_UNUSED_KHR)
+                .any_hit_shader(vk::SHADER_UNUSED_KHR)
+                .intersection_shader(vk::SHADER_UNUSED_KHR),
+        ];
+
+        let rt_loader = khr::ray_tracing_pipeline::Device::new(&context.instance, &context.device);
+
+        let pipeline_create_info = vk::RayTracingPipelineCreateInfoKHR::default()
+            .stages(&shader_stages)
+            .groups(&shader_groups)
+            .max_pipeline_ray_recursion_depth(context.rt_pipeline_max_recursion_depth)
+            .layout(pipeline_layout);
+
+        let pipeline = unsafe {
+            rt_loader
+                .create_ray_tracing_pipelines(
+                    vk::DeferredOperationKHR::null(),
+                    vk::PipelineCache::null(),
+                    &[pipeline_create_info],
+                    None,
+                )
+                .map_err(|(_p, e)| anyhow!("Failed to create raytracing pipeline. {e:?}"))?
+        }[0];
+
+        let mut rt_pipeline_properties =
+            vk::PhysicalDeviceRayTracingPipelinePropertiesKHR::default();
+
+        {
+            let mut physical_device_properties2 =
+                vk::PhysicalDeviceProperties2::default().push_next(&mut rt_pipeline_properties);
+
+            unsafe {
+                context.instance.get_physical_device_properties2(
+                    context.physical_device,
+                    &mut physical_device_properties2,
+                );
+            }
+        }
+
+        let handle_size_aligned = aligned_size(
+            rt_pipeline_properties.shader_group_handle_size,
+            rt_pipeline_properties.shader_group_base_alignment,
+        );
+
+        let incoming_table_data = unsafe {
+            rt_loader.get_ray_tracing_shader_group_handles(
+                pipeline,
+                0,
+                shader_groups.len() as u32,
+                shader_groups.len() * rt_pipeline_properties.shader_group_handle_size as usize,
+            )
+        }
+        .unwrap();
+
+        let table_size = shader_groups.len() * handle_size_aligned as usize;
+        let mut table_data = vec![0u8; table_size];
+
+        for i in 0..shader_groups.len() {
+            table_data[i * handle_size_aligned as usize
+                ..i * handle_size_aligned as usize
+                    + rt_pipeline_properties.shader_group_handle_size as usize]
+                .copy_from_slice(
+                    &incoming_table_data[i * rt_pipeline_properties.shader_group_handle_size
+                        as usize
+                        ..i * rt_pipeline_properties.shader_group_handle_size as usize
+                            + rt_pipeline_properties.shader_group_handle_size as usize],
+                );
+        }
+
+        let mut sbt_buffer = Buffer::new(
+            context.clone(),
+            table_size as u64,
+            vk::BufferUsageFlags::SHADER_DEVICE_ADDRESS
+                | vk::BufferUsageFlags::TRANSFER_SRC
+                | vk::BufferUsageFlags::SHADER_BINDING_TABLE_KHR,
+            vk::MemoryPropertyFlags::HOST_VISIBLE,
         )?;
+        sbt_buffer.store(&table_data)?;
+
+        // |[ ray gen shader ]|[ ray miss shader  ]|[ closest hit shader ]|
+        // |                  |                    |                      |
+        // | 0                | 1                  | 2                    | 3
+        let sbt_address = sbt_buffer.get_buffer_device_address();
+
+        let sbt_ray_gen_region = vk::StridedDeviceAddressRegionKHR::default()
+            .device_address(sbt_address)
+            .size(handle_size_aligned)
+            .stride(handle_size_aligned);
+
+        let sbt_ray_miss_region = vk::StridedDeviceAddressRegionKHR::default()
+            .device_address(sbt_address + handle_size_aligned)
+            .size(handle_size_aligned)
+            .stride(handle_size_aligned);
+
+        let sbt_closest_hit_region = vk::StridedDeviceAddressRegionKHR::default()
+            .device_address(sbt_address + 2 * handle_size_aligned)
+            .size(handle_size_aligned)
+            .stride(handle_size_aligned);
+
+        let sbt_call_region = vk::StridedDeviceAddressRegionKHR::default();
+
+        debug!("ray-gen SBT: {sbt_ray_gen_region:?}");
+        debug!("ray-miss SBT: {sbt_ray_miss_region:?}");
+        debug!("closest-hit SBT: {sbt_closest_hit_region:?}");
 
         Ok(Self {
-            pipeline,
+            context,
             pipeline_layout,
+            pipeline,
+            set_layouts,
+            rt_loader,
+            sbt_ray_gen_region,
+            sbt_ray_miss_region,
+            sbt_closest_hit_region,
+            sbt_call_region,
+            _sbt_buffer: sbt_buffer,
         })
     }
+
+    pub fn record_commands(
+        &self,
+        command_buffer: &CommandBuffer,
+        descriptor_sets: &[vk::DescriptorSet],
+        push_constants: &UnifiedPushConstants,
+    ) {
+        command_buffer.bind_pipeline(vk::PipelineBindPoint::RAY_TRACING_KHR, self.pipeline);
+
+        command_buffer.bind_descriptor_sets(
+            vk::PipelineBindPoint::RAY_TRACING_KHR,
+            self.pipeline_layout,
+            descriptor_sets,
+        );
+
+        command_buffer.push_constants(
+            self.pipeline_layout,
+            vk::ShaderStageFlags::RAYGEN_KHR,
+            push_constants.ray_gen_pc.to_raw_bytes(),
+            0,
+        );
+        command_buffer.push_constants(
+            self.pipeline_layout,
+            vk::ShaderStageFlags::CLOSEST_HIT_KHR,
+            push_constants.closest_hit_pc.to_raw_bytes(),
+            std::mem::size_of::<RayGenPushConstants>() as _,
+        );
+
+        unsafe {
+            self.rt_loader.cmd_trace_rays(
+                command_buffer.get(),
+                &self.sbt_ray_gen_region,
+                &self.sbt_ray_miss_region,
+                &self.sbt_closest_hit_region,
+                &self.sbt_call_region,
+                push_constants.ray_gen_pc.resolution[0],
+                push_constants.ray_gen_pc.resolution[1],
+                1,
+            );
+        }
+    }
+}
+
+impl Drop for RtPipeline {
+    fn drop(&mut self) {
+        unsafe {
+            self.context.device.destroy_pipeline(self.pipeline, None);
+
+            self.context
+                .device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+        }
+    }
+}
+
+fn create_descriptor_set_layout(
+    device: &ash::Device,
+    bindings: &[vk::DescriptorSetLayoutBinding],
+    binding_flags: &[vk::DescriptorBindingFlags],
+) -> Result<vk::DescriptorSetLayout> {
+    let mut binding_flags_info =
+        vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(binding_flags);
+
+    let create_info = vk::DescriptorSetLayoutCreateInfo::default()
+        .bindings(bindings)
+        .push_next(&mut binding_flags_info);
+
+    let descriptor_set_layout = unsafe { device.create_descriptor_set_layout(&create_info, None)? };
+
+    Ok(descriptor_set_layout)
 }
 
 /// Create a pipeline layout for top level acceleration structure.
-fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
+fn create_tlas_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    create_descriptor_set_layout(
         device,
-        DescriptorSetLayoutCreateInfo {
-            #[rustfmt::skip]
-            bindings: [(0, as_binding(ShaderStages::RAYGEN | ShaderStages::CLOSEST_HIT))]
-                .into_iter()
-                .collect(),
-            ..Default::default()
-        },
+        &[vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR | vk::ShaderStageFlags::CLOSEST_HIT_KHR)],
+        &[],
     )
-    .unwrap()
 }
 
 /// Create a pipeline layout for uniform buffer containing camera matrices.
-fn create_camera_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
+fn create_camera_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    create_descriptor_set_layout(
         device,
-        DescriptorSetLayoutCreateInfo {
-            bindings: [(0, uniform_buffer_binding(ShaderStages::RAYGEN))]
-                .into_iter()
-                .collect(),
-            ..Default::default()
-        },
+        &[vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)],
+        &[],
     )
-    .unwrap()
 }
 
 /// Create a pipeline layout for the render image storage buffer.
-fn create_render_image_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            bindings: [(0, storage_image_binding(ShaderStages::RAYGEN))]
-                .into_iter()
-                .collect(),
-            ..Default::default()
-        },
+fn create_render_image_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    create_descriptor_set_layout(
+        device,
+        &[vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)],
+        &[],
     )
-    .unwrap()
 }
 
 /// Create a pipeline layout for mesh data references storage buffer.
-fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Vertex buffer.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Index buffer.
-                (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Meshes.
-            ]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
-    )
-    .unwrap()
+fn create_mesh_data_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    // 0 - Vertex buffer.
+    // 1 - Index buffer.
+    // 2 - Meshes.
+    let bindings: Vec<_> = (0..3)
+        .map(|i| {
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(i)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+        })
+        .collect();
+    create_descriptor_set_layout(device, &bindings, &[])
 }
 
 /// Create a pipeline layout for sampler and image textures.
 fn create_sampler_and_image_textures_layout(
-    device: Arc<Device>,
-    image_texture_count: u32,
-) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            #[rustfmt::skip]
-            bindings: [
-                (0, sampler_binding(ShaderStages::CLOSEST_HIT)),
-                (1, variable_sampled_image_binding(ShaderStages::CLOSEST_HIT, image_texture_count)),
-            ]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
+    device: &ash::Device,
+) -> Result<vk::DescriptorSetLayout> {
+    create_descriptor_set_layout(
+        device,
+        &[
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::SAMPLER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR),
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR),
+        ],
+        &[
+            vk::DescriptorBindingFlags::empty(), // for sampler
+            vk::DescriptorBindingFlags::PARTIALLY_BOUND
+                | vk::DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT, // texture images
+        ],
     )
-    .unwrap()
 }
 
 /// Create a pipeline layout for constant colour textures (this is just unique colour values).
-fn create_constant_colour_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
-                .into_iter()
-                .collect(),
-            ..Default::default()
-        },
+fn create_constant_colour_textures_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    create_descriptor_set_layout(
+        device,
+        &[vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)],
+        &[],
     )
-    .unwrap()
 }
 
 /// Create a pipeline layout for material references storage buffer.
-fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Lambertian materials.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Metal materials.
-                (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Dielectric materials.
-                (3, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Diffuse light materials.
-            ]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
-    )
-    .unwrap()
+fn create_materials_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    // 0 - Lambertian materials.
+    // 1 - Metal materials.
+    // 2 - Dielectric materials.
+    // 3 - Diffuse light materials.
+    let bindings: Vec<_> = (0..4)
+        .map(|i| {
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(i)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+        })
+        .collect();
+
+    create_descriptor_set_layout(device, &bindings, &[])
 }
 
 /// Create a pipeline layout for storage buffer used for other textures besides image and constant colour.
-fn create_other_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
-        device.clone(),
-        DescriptorSetLayoutCreateInfo {
-            bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Checker textures.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Noise textures.
-            ]
-            .into_iter()
-            .collect(),
-            ..Default::default()
-        },
-    )
-    .unwrap()
+fn create_other_textures_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    // 0 - Checker textures.
+    // 1 - Noise textures.
+    let bindings: Vec<_> = (0..2)
+        .map(|i| {
+            vk::DescriptorSetLayoutBinding::default()
+                .binding(i)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
+        })
+        .collect();
+
+    create_descriptor_set_layout(device, &bindings, &[])
 }
 
 /// Create a pipeline layout for uniform buffer containing sky.
-fn create_sky_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    DescriptorSetLayout::new(
+fn create_sky_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+    create_descriptor_set_layout(
         device,
-        DescriptorSetLayoutCreateInfo {
-            bindings: [(0, uniform_buffer_binding(ShaderStages::RAYGEN))]
-                .into_iter()
-                .collect(),
-            ..Default::default()
-        },
+        &[vk::DescriptorSetLayoutBinding::default()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::RAYGEN_KHR)],
+        &[],
     )
-    .unwrap()
 }
 
-fn as_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
-    DescriptorSetLayoutBinding {
-        stages,
-        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::AccelerationStructure)
-    }
-}
-
-fn uniform_buffer_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
-    DescriptorSetLayoutBinding {
-        stages,
-        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::UniformBuffer)
-    }
-}
-
-fn storage_image_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
-    DescriptorSetLayoutBinding {
-        stages,
-        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageImage)
-    }
-}
-
-fn sampler_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
-    DescriptorSetLayoutBinding {
-        stages,
-        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::Sampler)
-    }
-}
-
-fn variable_sampled_image_binding(stages: ShaderStages, count: u32) -> DescriptorSetLayoutBinding {
-    DescriptorSetLayoutBinding {
-        stages,
-        binding_flags: DescriptorBindingFlags::VARIABLE_DESCRIPTOR_COUNT,
-        descriptor_count: count,
-        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::SampledImage)
-    }
-}
-
-fn storage_buffer_binding(stages: ShaderStages) -> DescriptorSetLayoutBinding {
-    DescriptorSetLayoutBinding {
-        stages,
-        ..DescriptorSetLayoutBinding::descriptor_type(DescriptorType::StorageBuffer)
-    }
+fn aligned_size(value: u32, alignment: u32) -> u64 {
+    ((value + alignment - 1) & !(alignment - 1)) as u64
 }

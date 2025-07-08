@@ -1,138 +1,83 @@
-use std::{fmt, sync::Arc};
+mod camera;
+mod material;
+mod mesh;
+mod push_constants;
+mod sky;
 
-use vulkano::{
-    device::Device,
-    pipeline::{PipelineShaderStageCreateInfo, ray_tracing::RayTracingShaderGroupCreateInfo},
-};
+use std::{io::Cursor, path::Path, sync::Arc};
 
-pub mod ray_gen {
-    vulkano_shaders::shader! {
-        ty: "raygen",
-        path: "src/ray_gen.glsl",
-        vulkan_version: "1.3",
-    }
-}
-
-pub mod closest_hit {
-    vulkano_shaders::shader! {
-        ty: "closesthit",
-        path: "src/closest_hit.glsl",
-        vulkan_version: "1.3",
-    }
-}
-
-pub mod ray_miss {
-    vulkano_shaders::shader! {
-        ty: "miss",
-        path: "src/ray_miss.glsl",
-        vulkan_version: "1.3",
-    }
-}
+use anyhow::Result;
+use ash::vk;
+pub use camera::*;
+use log::info;
+pub use material::*;
+pub use mesh::*;
+pub use push_constants::*;
+pub use sky::*;
+use vulkan::VulkanContext;
 
 pub struct ShaderModules {
-    pub stages: Vec<PipelineShaderStageCreateInfo>,
-    pub groups: Vec<RayTracingShaderGroupCreateInfo>,
+    context: Arc<VulkanContext>,
+    pub ray_gen: vk::ShaderModule,
+    pub ray_miss: vk::ShaderModule,
+    pub closest_hit: vk::ShaderModule,
 }
 
 impl ShaderModules {
-    pub fn load(device: Arc<Device>) -> Self {
-        let ray_gen = ray_gen::load(device.clone())
-            .unwrap()
-            .entry_point("main")
-            .unwrap();
+    pub fn load(context: Arc<VulkanContext>) -> Result<Self> {
+        let ray_gen_code = read_shader_from_file(concat!(env!("OUT_DIR"), "/ray_gen.spv"));
+        let ray_gen = create_shader_module(&context.device, &ray_gen_code)?;
 
-        let closest_hit = closest_hit::load(device.clone())
-            .unwrap()
-            .entry_point("main")
-            .unwrap();
+        let ray_miss_code = read_shader_from_file(concat!(env!("OUT_DIR"), "/ray_miss.spv"));
+        let ray_miss = create_shader_module(&context.device, &ray_miss_code)?;
 
-        let ray_miss = ray_miss::load(device.clone())
-            .unwrap()
-            .entry_point("main")
-            .unwrap();
+        let closest_hit_code = read_shader_from_file(concat!(env!("OUT_DIR"), "/closest_hit.spv"));
+        let closest_hit = create_shader_module(&context.device, &closest_hit_code)?;
 
-        // Make a list of the shader stages that the pipeline will have.
-        let stages = vec![
-            PipelineShaderStageCreateInfo::new(ray_gen),
-            PipelineShaderStageCreateInfo::new(ray_miss),
-            PipelineShaderStageCreateInfo::new(closest_hit),
-        ];
-
-        // Define the shader groups that will eventually turn into the shader binding table.
-        // The numbers are the indices of the stages in the `stages` array.
-        let groups = vec![
-            RayTracingShaderGroupCreateInfo::General { general_shader: 0 },
-            RayTracingShaderGroupCreateInfo::General { general_shader: 1 },
-            RayTracingShaderGroupCreateInfo::TrianglesHit {
-                closest_hit_shader: Some(2),
-                any_hit_shader: None,
-            },
-        ];
-
-        Self { stages, groups }
+        Ok(Self {
+            context,
+            ray_gen,
+            ray_miss,
+            closest_hit,
+        })
     }
 }
 
-impl fmt::Debug for closest_hit::ClosestHitPushConstants {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::ClosestHitPushConstants")
-            .field("imageTextureCount", &self.imageTextureCount)
-            .field("constantColourCount", &self.constantColourCount)
-            .field("lambertianMaterialCount", &self.lambertianMaterialCount)
-            .field("metalMaterialCount", &self.metalMaterialCount)
-            .field("dielectricMaterialCount", &self.dielectricMaterialCount)
-            .finish()
+impl Drop for ShaderModules {
+    fn drop(&mut self) {
+        unsafe {
+            self.context
+                .device
+                .destroy_shader_module(self.closest_hit, None);
+            self.context
+                .device
+                .destroy_shader_module(self.ray_miss, None);
+            self.context
+                .device
+                .destroy_shader_module(self.ray_gen, None);
+        }
     }
 }
 
-impl fmt::Debug for ray_gen::RayGenPushConstants {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::RayGenPushConstants")
-            .field("resolution", &self.resolution)
-            .field("samplesPerPixel", &self.samplesPerPixel)
-            .field("maxRayDepth", &self.maxRayDepth)
-            .finish()
-    }
+fn create_shader_module(device: &ash::Device, code: &[u32]) -> Result<vk::ShaderModule> {
+    let create_info = vk::ShaderModuleCreateInfo::default().code(code);
+    let shader_module = unsafe { device.create_shader_module(&create_info, None)? };
+    Ok(shader_module)
 }
 
-impl fmt::Debug for closest_hit::MaterialPropertyValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::MaterialPropertyValue")
-            .field("propValueType", &self.propValueType)
-            .field("index", &self.index)
-            .finish()
-    }
+fn read_shader_from_file<P: AsRef<Path>>(path: P) -> Vec<u32> {
+    info!("Loading shader file {}", path.as_ref().to_str().unwrap());
+    let mut cursor = load(path);
+    ash::util::read_spv(&mut cursor).unwrap()
 }
 
-impl fmt::Debug for closest_hit::LambertianMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::LambertianMaterial")
-            .field("albedo", &self.albedo)
-            .finish()
-    }
-}
+fn load<P: AsRef<Path>>(path: P) -> Cursor<Vec<u8>> {
+    use std::fs::File;
+    use std::io::Read;
 
-impl fmt::Debug for closest_hit::MetalMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::MetalMaterial")
-            .field("albedo", &self.albedo)
-            .field("fuzz", &self.fuzz)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::DielectricMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::DielectricMaterial")
-            .field("refractionIndex", &self.refractionIndex)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::DiffuseLightMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::DiffuseLightMaterial")
-            .field("emit", &self.emit)
-            .finish()
-    }
+    let mut buf = Vec::new();
+    let fullpath = Path::new("assets").join(path);
+    let mut file = File::open(fullpath).unwrap();
+    file.read_to_end(&mut buf).unwrap();
+    Cursor::new(buf)
 }

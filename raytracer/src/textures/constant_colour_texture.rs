@@ -3,9 +3,7 @@ use std::collections::{HashMap, hash_map::Entry};
 
 use ordered_float::OrderedFloat;
 use scene_file::Texture;
-use shaders::closest_hit;
-
-use crate::MAT_PROP_VALUE_TYPE_RGB;
+use shaders::{MAT_PROP_VALUE_TYPE_RGB, MaterialPropertyValue};
 
 /// Stores unique material RGB values which will be added to to a storage buffer used by the
 /// shader.
@@ -36,13 +34,11 @@ impl ConstantColourTextures {
         ConstantColourTextures { colours, indices }
     }
 
-    pub fn to_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
-        self.indices
-            .get(name)
-            .map(|i| closest_hit::MaterialPropertyValue {
-                propValueType: MAT_PROP_VALUE_TYPE_RGB,
-                index: *i,
-            })
+    pub fn to_shader(&self, name: &str) -> Option<MaterialPropertyValue> {
+        self.indices.get(name).map(|i| MaterialPropertyValue {
+            prop_value_type: MAT_PROP_VALUE_TYPE_RGB,
+            index: *i,
+        })
     }
 }
 
