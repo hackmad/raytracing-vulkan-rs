@@ -415,6 +415,7 @@ pub fn create_mesh_storage_buffer(
         context.clone(),
         vk::BufferUsageFlags::STORAGE_BUFFER,
         &mesh_data,
+        "mesh_data",
     )?;
     Ok(buffer)
 }
@@ -432,6 +433,7 @@ pub fn create_mesh_vertex_buffer(context: Arc<VulkanContext>, meshes: &[Mesh]) -
         context.clone(),
         vk::BufferUsageFlags::STORAGE_BUFFER,
         &vertex_buffer_data,
+        "mesh_vertex_buffer",
     )?;
     Ok(buffer)
 }
@@ -449,6 +451,7 @@ pub fn create_mesh_index_buffer(context: Arc<VulkanContext>, meshes: &[Mesh]) ->
         context.clone(),
         vk::BufferUsageFlags::STORAGE_BUFFER,
         &index_buffer_data,
+        "mesh_index_buffer",
     )?;
     Ok(buffer)
 }

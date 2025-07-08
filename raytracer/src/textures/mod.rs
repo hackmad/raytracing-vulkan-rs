@@ -90,6 +90,7 @@ impl Textures {
             context.clone(),
             buffer_usage,
             &checker_textures,
+            "checker_buffer",
         )?;
 
         debug!("Creating noise texture storage buffer");
@@ -104,6 +105,7 @@ impl Textures {
             context.clone(),
             buffer_usage,
             &noise_textures,
+            "noise_buffer",
         )?;
 
         Ok(TextureBuffers {

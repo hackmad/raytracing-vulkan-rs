@@ -148,7 +148,7 @@ impl AccelerationStructure {
             device_address: scratch_buffer.get_buffer_device_address(),
         };
 
-        let command_buffer = CommandBuffer::new(context.clone())?;
+        let command_buffer = CommandBuffer::new(context.clone(), "acceleration")?;
         command_buffer.begin_one_time_submit()?;
 
         let memory_barrier = vk::MemoryBarrier::default()
@@ -172,7 +172,7 @@ impl AccelerationStructure {
 
         command_buffer.end()?;
 
-        command_buffer.submit(None, &NO_FENCE)?;
+        command_buffer.submit_and_wait(None, &NO_FENCE)?;
 
         let handle = {
             let as_addr_info = vk::AccelerationStructureDeviceAddressInfoKHR::default()

@@ -4,7 +4,7 @@ use std::{
     ffi::{CStr, CString, c_char},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use ash::{
     ext::debug_utils,
     khr::{surface, swapchain},
@@ -33,15 +33,8 @@ pub struct VulkanContext {
     pub physical_device_properties: vk::PhysicalDeviceProperties,
     pub device_memory_properties: vk::PhysicalDeviceMemoryProperties,
     pub queue_family_index: u32,
-    pub present_queue: vk::Queue,
 
     pub surface: vk::SurfaceKHR,
-    pub surface_format: vk::SurfaceFormatKHR,
-    pub surface_resolution: vk::Extent2D,
-
-    pub swapchain: vk::SwapchainKHR,
-    pub present_images: Vec<vk::Image>,
-    pub present_image_views: Vec<vk::ImageView>,
 
     pub command_pool: vk::CommandPool,
 
@@ -76,28 +69,9 @@ impl VulkanContext {
 
         let device = create_device(&instance, physical_device, queue_family_index)?;
 
-        let present_queue = unsafe { device.get_device_queue(queue_family_index, 0) };
-
-        let (surface_format, surface_resolution, surface_capabilities, pre_transform) =
-            get_surface_format(window, physical_device, &surface_loader, surface)?;
-
         let swapchain_loader = swapchain::Device::new(&instance, &device);
 
         let command_pool = create_command_pool(&device, queue_family_index)?;
-
-        let swapchain = create_swapchain(
-            physical_device,
-            surface,
-            &surface_loader,
-            &swapchain_loader,
-            surface_capabilities,
-            surface_format,
-            surface_resolution,
-            pre_transform,
-        )?;
-
-        let (present_images, present_image_views) =
-            create_present_images(&device, &swapchain_loader, swapchain, surface_format)?;
 
         let device_memory_properties =
             unsafe { instance.get_physical_device_memory_properties(physical_device) };
@@ -124,16 +98,10 @@ impl VulkanContext {
             physical_device,
             physical_device_properties,
             device_memory_properties,
-            surface_loader,
-            surface_format,
-            present_queue,
-            surface_resolution,
-            swapchain_loader,
-            swapchain,
-            present_images,
-            present_image_views,
-            command_pool,
             surface,
+            surface_loader,
+            swapchain_loader,
+            command_pool,
             debug_callback,
             debug_utils_loader,
             debug_utils_instance,
@@ -197,14 +165,7 @@ impl Drop for VulkanContext {
         unsafe {
             self.device.device_wait_idle().unwrap();
 
-            for &image_view in self.present_image_views.iter() {
-                self.device.destroy_image_view(image_view, None);
-            }
-
             self.device.destroy_command_pool(self.command_pool, None);
-
-            self.swapchain_loader
-                .destroy_swapchain(self.swapchain, None);
 
             self.device.destroy_device(None);
 
@@ -216,6 +177,15 @@ impl Drop for VulkanContext {
             self.instance.destroy_instance(None);
         }
     }
+}
+
+fn create_command_pool(device: &ash::Device, queue_family_index: u32) -> Result<vk::CommandPool> {
+    let pool_create_info = vk::CommandPoolCreateInfo::default()
+        .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
+        .queue_family_index(queue_family_index);
+
+    let pool = unsafe { device.create_command_pool(&pool_create_info, None)? };
+    Ok(pool)
 }
 
 fn create_instance(app_name: &str, entry: &ash::Entry, window: &Window) -> Result<ash::Instance> {
@@ -358,143 +328,6 @@ fn create_device(
 
     let device = unsafe { instance.create_device(physical_device, &device_create_info, None)? };
     Ok(device)
-}
-
-fn get_surface_format(
-    window: &Window,
-    physical_device: vk::PhysicalDevice,
-    surface_loader: &surface::Instance,
-    surface: vk::SurfaceKHR,
-) -> Result<(
-    vk::SurfaceFormatKHR,
-    vk::Extent2D,
-    vk::SurfaceCapabilitiesKHR,
-    vk::SurfaceTransformFlagsKHR,
-)> {
-    let surface_format =
-        unsafe { surface_loader.get_physical_device_surface_formats(physical_device, surface)?[0] };
-
-    let surface_capabilities = unsafe {
-        surface_loader.get_physical_device_surface_capabilities(physical_device, surface)?
-    };
-
-    let window_size = window.inner_size();
-    let surface_resolution = match surface_capabilities.current_extent.width {
-        u32::MAX => vk::Extent2D {
-            width: window_size.width,
-            height: window_size.height,
-        },
-        _ => surface_capabilities.current_extent,
-    };
-
-    let pre_transform = if surface_capabilities
-        .supported_transforms
-        .contains(vk::SurfaceTransformFlagsKHR::IDENTITY)
-    {
-        vk::SurfaceTransformFlagsKHR::IDENTITY
-    } else {
-        surface_capabilities.current_transform
-    };
-
-    Ok((
-        surface_format,
-        surface_resolution,
-        surface_capabilities,
-        pre_transform,
-    ))
-}
-
-#[allow(clippy::too_many_arguments)]
-fn create_swapchain(
-    physical_device: vk::PhysicalDevice,
-    surface: vk::SurfaceKHR,
-    surface_loader: &surface::Instance,
-    swapchain_loader: &swapchain::Device,
-    surface_capabilities: vk::SurfaceCapabilitiesKHR,
-    surface_format: vk::SurfaceFormatKHR,
-    surface_resolution: vk::Extent2D,
-    pre_transform: vk::SurfaceTransformFlagsKHR,
-) -> Result<vk::SwapchainKHR> {
-    let present_modes = unsafe {
-        surface_loader.get_physical_device_surface_present_modes(physical_device, surface)?
-    };
-    let present_mode = present_modes
-        .iter()
-        .cloned()
-        .find(|&mode| mode == vk::PresentModeKHR::MAILBOX)
-        .unwrap_or(vk::PresentModeKHR::FIFO);
-
-    let mut desired_image_count = surface_capabilities.min_image_count + 1;
-    if surface_capabilities.max_image_count > 0
-        && desired_image_count > surface_capabilities.max_image_count
-    {
-        desired_image_count = surface_capabilities.max_image_count;
-    }
-
-    let swapchain_create_info = vk::SwapchainCreateInfoKHR::default()
-        .surface(surface)
-        .min_image_count(desired_image_count)
-        .image_color_space(surface_format.color_space)
-        .image_format(surface_format.format)
-        .image_extent(surface_resolution)
-        .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_DST)
-        .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-        .pre_transform(pre_transform)
-        .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
-        .present_mode(present_mode)
-        .clipped(true)
-        .image_array_layers(1);
-
-    let swapchain = unsafe { swapchain_loader.create_swapchain(&swapchain_create_info, None)? };
-    Ok(swapchain)
-}
-
-fn create_command_pool(device: &ash::Device, queue_family_index: u32) -> Result<vk::CommandPool> {
-    let pool_create_info = vk::CommandPoolCreateInfo::default()
-        .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER)
-        .queue_family_index(queue_family_index);
-
-    let pool = unsafe { device.create_command_pool(&pool_create_info, None)? };
-    Ok(pool)
-}
-
-fn create_present_images(
-    device: &ash::Device,
-    swapchain_loader: &swapchain::Device,
-    swapchain: vk::SwapchainKHR,
-    surface_format: vk::SurfaceFormatKHR,
-) -> Result<(Vec<vk::Image>, Vec<vk::ImageView>)> {
-    let present_images = unsafe { swapchain_loader.get_swapchain_images(swapchain)? };
-
-    let present_image_views: Result<Vec<_>> = present_images
-        .iter()
-        .map(|&image| {
-            let create_view_info = vk::ImageViewCreateInfo::default()
-                .view_type(vk::ImageViewType::TYPE_2D)
-                .format(surface_format.format)
-                .components(vk::ComponentMapping {
-                    r: vk::ComponentSwizzle::R,
-                    g: vk::ComponentSwizzle::G,
-                    b: vk::ComponentSwizzle::B,
-                    a: vk::ComponentSwizzle::A,
-                })
-                .subresource_range(vk::ImageSubresourceRange {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    base_mip_level: 0,
-                    level_count: 1,
-                    base_array_layer: 0,
-                    layer_count: 1,
-                })
-                .image(image);
-            unsafe {
-                device
-                    .create_image_view(&create_view_info, None)
-                    .map_err(|e| anyhow!("Failed to create image view. {e:?}"))
-            }
-        })
-        .collect();
-
-    Ok((present_images, present_image_views?))
 }
 
 fn setup_debug_callback(

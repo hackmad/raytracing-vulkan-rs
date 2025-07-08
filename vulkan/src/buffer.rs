@@ -112,6 +112,7 @@ impl Buffer {
         context: Arc<VulkanContext>,
         usage: vk::BufferUsageFlags,
         data: &[T],
+        name: &str,
     ) -> Result<Self> {
         let data_size = std::mem::size_of_val(data);
 
@@ -132,7 +133,7 @@ impl Buffer {
             )?;
             staging_buffer.store(data)?;
 
-            let command_buffer = CommandBuffer::new(context.clone())?;
+            let command_buffer = CommandBuffer::new(context.clone(), name)?;
             command_buffer.begin_one_time_submit()?;
 
             let copy_regions = [vk::BufferCopy::default().size(buffer_size)];
@@ -140,7 +141,7 @@ impl Buffer {
 
             command_buffer.end()?;
 
-            command_buffer.submit(None, &NO_FENCE)?;
+            command_buffer.submit_and_wait(None, &NO_FENCE)?;
         }
 
         Ok(device_local_buffer)

@@ -16,3 +16,4 @@ image = { workspace = true }
 log = { workspace = true }
 ordered-float = { workspace = true }
 tobj = { workspace = true }
+winit = { workspace = true }

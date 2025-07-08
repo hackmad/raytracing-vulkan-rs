@@ -253,7 +253,8 @@ fn transition_image_layout(
     old_layout: vk::ImageLayout,
     new_layout: vk::ImageLayout,
 ) -> Result<()> {
-    let command_buffer = CommandBuffer::new(context.clone())?;
+    let command_buffer = CommandBuffer::new(context.clone(), "transition_image_layout")?;
+
     command_buffer.begin_one_time_submit()?;
 
     let (src_access_mask, dst_access_mask, src_stage, dst_stage) = match (old_layout, new_layout) {
@@ -296,7 +297,7 @@ fn transition_image_layout(
 
     command_buffer.end()?;
 
-    command_buffer.submit(None, &NO_FENCE)?;
+    command_buffer.submit_and_wait(None, &NO_FENCE)?;
 
     Ok(())
 }
@@ -308,7 +309,7 @@ fn copy_buffer_to_image(
     width: u32,
     height: u32,
 ) -> Result<()> {
-    let command_buffer = CommandBuffer::new(context.clone())?;
+    let command_buffer = CommandBuffer::new(context.clone(), "copy_buffer_to_image")?;
     command_buffer.begin_one_time_submit()?;
 
     let region = vk::BufferImageCopy::default()
@@ -338,7 +339,7 @@ fn copy_buffer_to_image(
 
     command_buffer.end()?;
 
-    command_buffer.submit(None, &NO_FENCE)?;
+    command_buffer.submit_and_wait(None, &NO_FENCE)?;
 
     Ok(())
 }

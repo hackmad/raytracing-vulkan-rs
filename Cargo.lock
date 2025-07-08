@@ -2377,6 +2377,7 @@ dependencies = [
  "shaders",
  "tobj",
  "vulkan",
+ "winit",
 ]
 
 [[package]]

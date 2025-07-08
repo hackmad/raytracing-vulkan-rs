@@ -7,6 +7,7 @@ mod fence;
 mod image;
 mod sampler;
 mod semaphore;
+mod swapchain;
 
 pub use buffer::*;
 pub use command_buffer::*;
@@ -17,3 +18,4 @@ pub use fence::*;
 pub use image::*;
 pub use sampler::*;
 pub use semaphore::*;
+pub use swapchain::*;

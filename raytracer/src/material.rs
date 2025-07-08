@@ -121,6 +121,7 @@ impl Materials {
             context.clone(),
             buffer_usage,
             &self.lambertian_materials,
+            "lambertian_materials_buffer",
         )?;
 
         debug!("Creating metal materials buffer");
@@ -128,6 +129,7 @@ impl Materials {
             context.clone(),
             buffer_usage,
             &self.metal_materials,
+            "metal_materials",
         )?;
 
         debug!("Creating dielectric materials buffer");
@@ -135,6 +137,7 @@ impl Materials {
             context.clone(),
             buffer_usage,
             &self.dielectric_materials,
+            "dielectric_materials",
         )?;
 
         debug!("Creating diffuse light materials buffer");
@@ -142,6 +145,7 @@ impl Materials {
             context.clone(),
             buffer_usage,
             &self.diffuse_light_materials,
+            "diffuse_light_materials",
         )?;
 
         Ok(MaterialBuffers {

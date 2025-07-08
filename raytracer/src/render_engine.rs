@@ -1,19 +1,20 @@
 use std::sync::{Arc, RwLock};
 
-use anyhow::Result;
+use anyhow::{Context, Result, anyhow};
 use ash::vk;
 use log::debug;
 use scene_file::SceneFile;
 use shaders::{ClosestHitPushConstants, RayGenPushConstants, UnifiedPushConstants};
 use vulkan::{
     Buffer, CommandBuffer, DescriptorSet, DescriptorSetBufferType, Fence, Image, NO_FENCE, Sampler,
-    Semaphore, VulkanContext, new_buffer_ds, new_buffers_ds, new_sampler_and_textures_ds,
-    new_storage_image_ds, new_tlas_ds,
+    Semaphore, Swapchain, SwapchainNextImage, VulkanContext, new_buffer_ds, new_buffers_ds,
+    new_sampler_and_textures_ds, new_storage_image_ds, new_tlas_ds,
 };
+use winit::window::Window;
 
 use crate::{
     Camera, Materials, Mesh, RtPipeline, Textures, acceleration::AccelerationStructures,
-    create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
+    create_camera, create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
 };
 
 struct FrameSyncObjects {
@@ -22,8 +23,25 @@ struct FrameSyncObjects {
     fence: Fence,
 }
 
+pub enum RenderResult {
+    Done,
+    RecreateSwapchain,
+}
+
 /// Stores resources specific to the rendering pipeline and renders a frame.
 pub struct RenderEngine {
+    /// Vulkan context.
+    context: Arc<VulkanContext>,
+
+    /// Swapchain
+    swapchain: Swapchain,
+
+    /// Image to render scene.
+    render_image: Image,
+
+    /// Camera.
+    camera: Arc<RwLock<dyn Camera>>,
+
     /// Descriptor set for binding the top-level acceleration structure for the scene.
     tlas_descriptor_set: DescriptorSet<vk::AccelerationStructureKHR>,
 
@@ -63,8 +81,40 @@ impl RenderEngine {
     pub fn new(
         context: Arc<VulkanContext>,
         scene_file: &SceneFile,
+        window: &Window,
         window_size: &[f32; 2],
     ) -> Result<Self> {
+        // Create the swapchain.
+        debug!("Creating swapchain");
+        let swapchain = Swapchain::new(context.clone(), window)?;
+
+        let max_frames_in_flight = swapchain.num_images().min(2);
+
+        let mut frame_sync_objects = Vec::with_capacity(max_frames_in_flight);
+        for _ in 0..max_frames_in_flight {
+            frame_sync_objects.push(FrameSyncObjects {
+                image_available_semaphore: Semaphore::new(context.clone())?,
+                render_finished_semaphore: Semaphore::new(context.clone())?,
+                fence: Fence::new(context.clone(), true)?,
+            });
+        }
+
+        let render_camera = &scene_file.render.camera;
+
+        let scene_camera = scene_file
+            .cameras
+            .iter()
+            .find(|&cam| cam.get_name() == render_camera)
+            .with_context(|| format!("Camera ${render_camera} is no specified in cameras"))?;
+
+        let camera = create_camera(scene_camera, window_size[0] as u32, window_size[1] as u32);
+
+        let render_image = Image::new_render_image(
+            context.clone(),
+            window_size[0] as u32,
+            window_size[1] as u32,
+        )?;
+
         // Load Textures.
         let textures = Textures::new(context.clone(), scene_file)?;
         let image_texture_count = textures.image_textures.images.len();
@@ -178,6 +228,7 @@ impl RenderEngine {
             context.clone(),
             vk::BufferUsageFlags::STORAGE_BUFFER,
             &constant_colours,
+            "constant_colour_textures_buffer",
         )?;
 
         let constant_colour_textures_descriptor_set = new_buffer_ds(
@@ -218,6 +269,7 @@ impl RenderEngine {
             context.clone(),
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             &[scene_file.sky.to_shader()],
+            "sky_buffer",
         )?;
 
         let sky_descriptor_set = new_buffer_ds(
@@ -227,18 +279,12 @@ impl RenderEngine {
             sky_buffer,
         )?;
 
-        let max_frames_in_flight = context.present_images.len().min(2);
-        let mut frame_sync_objects = Vec::with_capacity(max_frames_in_flight);
-        for _ in 0..max_frames_in_flight {
-            frame_sync_objects.push(FrameSyncObjects {
-                image_available_semaphore: Semaphore::new(context.clone())?,
-                render_finished_semaphore: Semaphore::new(context.clone())?,
-                fence: Fence::new(context.clone(), true)?,
-            });
-        }
-
         debug!("Finished setting up render engine");
         Ok(Self {
+            context,
+            swapchain,
+            camera,
+            render_image,
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             image_textures_descriptor_set,
@@ -254,20 +300,40 @@ impl RenderEngine {
         })
     }
 
+    /// Updates the camera image size to match a new window size.
+    pub fn update_window_size(&mut self, window_size: [f32; 2]) -> Result<()> {
+        let mut camera = self.camera.write().unwrap();
+        camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
+
+        self.render_image = Image::new_render_image(
+            self.context.clone(),
+            window_size[0] as u32,
+            window_size[1] as u32,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn recreate_swapchain(&mut self, window: &Window) -> Result<()> {
+        debug!("Destroying swapchain");
+        self.swapchain.destroy()?;
+
+        debug!("Recreating swapchain");
+        self.swapchain = Swapchain::new(self.context.clone(), window)?;
+
+        debug!("Done recreating swapchain.");
+        Ok(())
+    }
+
     /// Renders an image view after the given future completes. This will return a new
     /// future for the rendering operation.
-    pub fn render(
-        &mut self,
-        context: Arc<VulkanContext>,
-        render_image: &Image,
-        camera: Arc<RwLock<dyn Camera>>,
-    ) -> Result<()> {
+    pub fn render(&mut self) -> Result<RenderResult> {
         // Wait for fence to ensure this frame’s work is done.
         let sync = &self.frame_sync_objects[self.current_frame];
         sync.fence.wait_and_reset()?;
 
         // Create the uniform buffer for the camera.
-        let camera = camera.read().unwrap();
+        let camera = self.camera.read().unwrap();
 
         // Create the descriptor sets for the raytracing pipeline.
         let camera = shaders::Camera {
@@ -281,53 +347,51 @@ impl RenderEngine {
 
         debug!("Creating camera buffer");
         let camera_buffer = Buffer::new_device_local_storage_buffer(
-            context.clone(),
+            self.context.clone(),
             vk::BufferUsageFlags::UNIFORM_BUFFER,
             &[camera],
+            "camera_buffer",
         )
         .unwrap();
 
         let camera_buffer_descriptor_set = new_buffer_ds(
-            context.clone(),
+            self.context.clone(),
             self.rt_pipeline.set_layouts[RtPipeline::CAMERA_BUFFER_LAYOUT],
             DescriptorSetBufferType::Uniform,
             camera_buffer,
         )
         .unwrap();
 
-        debug!("Creating render render image descriptor set");
+        debug!("Creating render image descriptor set");
         let render_image_descriptor_set = new_storage_image_ds(
-            context.clone(),
+            self.context.clone(),
             self.rt_pipeline.set_layouts[RtPipeline::RENDER_IMAGE_LAYOUT],
-            render_image,
+            &self.render_image,
         )
         .unwrap();
 
         // Acquire the swapchain image to render to.
-        let (image_index, _) = unsafe {
-            context.swapchain_loader.acquire_next_image(
-                context.swapchain,
-                u64::MAX,
-                sync.image_available_semaphore.get(),
-                NO_FENCE.get(),
-            )?
+        let acquire_result =
+            self.swapchain
+                .acquire_next_image(u64::MAX, &sync.image_available_semaphore, &NO_FENCE);
+
+        let image_index = match acquire_result {
+            Ok(SwapchainNextImage::Acquired(i)) => i,
+            Ok(SwapchainNextImage::RecreateSwapchain) => {
+                // Let calling code trigger recreate_swapchain().
+                return Ok(RenderResult::RecreateSwapchain);
+            }
+            Err(e) => return Err(anyhow!("{e:?}")),
         };
-        let present_image = context.present_images[image_index as usize];
-        let present_image_view = context.present_image_views[image_index as usize];
-        let present_image_wrapped = Image::new(
-            context.clone(),
-            present_image,
-            present_image_view,
-            render_image.width,
-            render_image.height,
-        );
+
+        let swapchain_image = &self.swapchain.get_image(image_index);
 
         // Create a command buffer and record commands to it.
-        let command_buffer = CommandBuffer::new(context.clone())?;
+        let command_buffer = CommandBuffer::new(self.context.clone(), "render")?;
         command_buffer.begin_one_time_submit()?;
 
         // Transition render image to GENERAL
-        render_image.transition_layout(
+        self.render_image.transition_layout(
             &command_buffer,
             vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::GENERAL,
@@ -360,7 +424,7 @@ impl RenderEngine {
         }
 
         // Transition render image for transfer.
-        render_image.transition_layout(
+        self.render_image.transition_layout(
             &command_buffer,
             vk::ImageLayout::GENERAL,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -371,9 +435,9 @@ impl RenderEngine {
         );
 
         // Transition swapchain image to transfer dst
-        present_image_wrapped.transition_layout(
+        swapchain_image.transition_layout(
             &command_buffer,
-            vk::ImageLayout::PRESENT_SRC_KHR,
+            vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::PipelineStageFlags::TRANSFER,
@@ -383,25 +447,25 @@ impl RenderEngine {
 
         // Blit render image → swapchain image.
         command_buffer.blit_image(
-            render_image.image,
-            present_image_wrapped.image,
+            self.render_image.image,
+            swapchain_image.image,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::Extent3D {
-                width: render_image.width,
-                height: render_image.height,
+                width: self.render_image.width,
+                height: self.render_image.height,
                 depth: 1,
             },
             vk::Extent3D {
-                width: render_image.width,
-                height: render_image.height,
+                width: swapchain_image.width,
+                height: swapchain_image.height,
                 depth: 1,
             },
             vk::Filter::NEAREST,
         );
 
         // Transition swapchain image to present.
-        present_image_wrapped.transition_layout(
+        swapchain_image.transition_layout(
             &command_buffer,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::ImageLayout::PRESENT_SRC_KHR,
@@ -422,31 +486,43 @@ impl RenderEngine {
             .wait_dst_stage_mask(&[vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT])
             .signal_semaphores(&render_finished_semaphores);
 
-        command_buffer.submit(Some(submit_info), &sync.fence)?;
+        command_buffer.submit_and_wait(Some(submit_info), &sync.fence)?;
 
         unsafe {
-            let status = context.device.get_fence_status(sync.fence.get());
+            let status = self.context.device.get_fence_status(sync.fence.get());
             debug!("Fence status: {status:?}");
         }
 
         // Present.
         debug!("Presenting swapchain image");
-        let swapchains = [context.swapchain];
-        let image_indices = [image_index];
+        let swapchains = [self.swapchain.get()];
+        let image_indices = [image_index as u32];
         let present_info = vk::PresentInfoKHR::default()
             .wait_semaphores(&render_finished_semaphores)
             .swapchains(&swapchains)
             .image_indices(&image_indices);
 
-        unsafe {
-            context
+        let present_result = unsafe {
+            self.context
                 .swapchain_loader
-                .queue_present(context.present_queue, &present_info)?;
-        }
+                .queue_present(self.context.get_graphics_queue(), &present_info)
+        };
+        debug!("Present result: {present_result:?}");
 
         // Advance current frame index (wrap around).
         self.current_frame = (self.current_frame + 1) % self.frame_sync_objects.len();
 
-        Ok(())
+        match present_result {
+            Ok(false) => Ok(RenderResult::Done),
+            Ok(true) => {
+                // Suboptimal. Let calling code trigger recreate_swapchain().
+                Ok(RenderResult::RecreateSwapchain)
+            }
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) | Err(vk::Result::SUBOPTIMAL_KHR) => {
+                // Let calling code trigger recreate_swapchain().
+                Ok(RenderResult::RecreateSwapchain)
+            }
+            Err(e) => Err(anyhow!("{e:?}")),
+        }
     }
 }
