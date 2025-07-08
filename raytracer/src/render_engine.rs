@@ -295,7 +295,7 @@ impl RenderEngine {
         )
         .unwrap();
 
-        debug!("Creating render storage image descriptor set");
+        debug!("Creating render render image descriptor set");
         let render_image_descriptor_set = new_storage_image_ds(
             context.clone(),
             self.rt_pipeline.set_layouts[RtPipeline::RENDER_IMAGE_LAYOUT],
@@ -322,11 +322,11 @@ impl RenderEngine {
             render_image.height,
         );
 
-        // Create a command buffer and record commands to it (simplified)
+        // Create a command buffer and record commands to it.
         let command_buffer = CommandBuffer::new(context.clone())?;
         command_buffer.begin_one_time_submit()?;
 
-        // Transition storage image to GENERAL
+        // Transition render image to GENERAL
         render_image.transition_layout(
             &command_buffer,
             vk::ImageLayout::UNDEFINED,
@@ -359,7 +359,7 @@ impl RenderEngine {
             );
         }
 
-        // Transition storage image for transfer
+        // Transition render image for transfer.
         render_image.transition_layout(
             &command_buffer,
             vk::ImageLayout::GENERAL,
@@ -373,7 +373,7 @@ impl RenderEngine {
         // Transition swapchain image to transfer dst
         present_image_wrapped.transition_layout(
             &command_buffer,
-            vk::ImageLayout::UNDEFINED, // if just acquired
+            vk::ImageLayout::PRESENT_SRC_KHR,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
             vk::PipelineStageFlags::TOP_OF_PIPE,
             vk::PipelineStageFlags::TRANSFER,
@@ -381,7 +381,7 @@ impl RenderEngine {
             vk::AccessFlags::TRANSFER_WRITE,
         );
 
-        // Blit storage image → swapchain image.
+        // Blit render image → swapchain image.
         command_buffer.blit_image(
             render_image.image,
             present_image_wrapped.image,
@@ -414,7 +414,7 @@ impl RenderEngine {
         // End command buffer.
         command_buffer.end()?;
 
-        // Submit the command buffer, signaling semaphores and waiting on fences
+        // Submit the command buffer, signaling semaphores and waiting on fences.
         let image_available_semaphores = [sync.image_available_semaphore.get()];
         let render_finished_semaphores = [sync.render_finished_semaphore.get()];
         let submit_info = vk::SubmitInfo::default()
