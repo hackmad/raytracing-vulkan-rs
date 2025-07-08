@@ -103,7 +103,7 @@ impl RenderEngine {
                 samples_per_pixel: scene_file.render.samples_per_pixel,
                 sample_batches: scene_file.render.sample_batches,
                 sample_batch: 0,
-                max_ray_uepth: scene_file.render.max_ray_depth,
+                max_ray_depth: scene_file.render.max_ray_depth,
             },
         };
 

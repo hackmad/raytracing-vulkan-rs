@@ -5,7 +5,7 @@ pub struct RayGenPushConstants {
     pub samples_per_pixel: u32,
     pub sample_batches: u32,
     pub sample_batch: u32,
-    pub max_ray_uepth: u32,
+    pub max_ray_depth: u32,
 }
 
 impl RayGenPushConstants {
