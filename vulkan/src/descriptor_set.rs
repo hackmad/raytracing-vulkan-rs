@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use ash::vk;
+use log::debug;
 
-use crate::{Buffer, Descriptor, Sampler, VulkanContext, image::Image};
+use crate::{Buffer, Descriptor, DescriptorSetLayout, Sampler, VulkanContext, image::Image};
 
 pub enum DescriptorSetBufferType {
     Uniform,
@@ -50,11 +51,14 @@ impl<T> DescriptorSet<T> {
 
 impl<T> Drop for DescriptorSet<T> {
     fn drop(&mut self) {
+        debug!("DescriptorSet::drop()");
         unsafe {
-            let _ = self
-                .context
+            self.context.device.device_wait_idle().unwrap();
+
+            self.context
                 .device
-                .free_descriptor_sets(self.pool, &[self.set]);
+                .free_descriptor_sets(self.pool, &[self.set])
+                .unwrap();
 
             self.context.device.destroy_descriptor_pool(self.pool, None);
         }
@@ -63,7 +67,7 @@ impl<T> Drop for DescriptorSet<T> {
 
 fn new_ds(
     context: Arc<VulkanContext>,
-    descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set_layout: &DescriptorSetLayout,
     descriptors: &[Descriptor],
     variable_descriptor_count: u32, // Use > 0 for variable descriptors.
 ) -> Result<(vk::DescriptorPool, vk::DescriptorSet)> {
@@ -83,7 +87,7 @@ fn new_ds(
             .create_descriptor_pool(&descriptor_pool_info, None)?
     };
 
-    let layouts = [descriptor_set_layout];
+    let layouts = [descriptor_set_layout.get()];
 
     let variable_descriptor_counts = [variable_descriptor_count];
 
@@ -106,7 +110,7 @@ fn new_ds(
 
 pub fn new_tlas_ds(
     context: Arc<VulkanContext>,
-    descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set_layout: &DescriptorSetLayout,
     data: vk::AccelerationStructureKHR,
 ) -> Result<DescriptorSet<vk::AccelerationStructureKHR>> {
     let descriptors = [Descriptor::new(
@@ -144,11 +148,11 @@ pub fn new_tlas_ds(
     ))
 }
 
-pub fn new_storage_image_ds(
+pub fn new_storage_image_ds<'a>(
     context: Arc<VulkanContext>,
-    descriptor_set_layout: vk::DescriptorSetLayout,
-    data: &Image,
-) -> Result<DescriptorSet<&Image>> {
+    descriptor_set_layout: &'a DescriptorSetLayout,
+    data: &'a Image,
+) -> Result<DescriptorSet<&'a Image>> {
     let descriptors = [Descriptor::new(vk::DescriptorType::STORAGE_IMAGE, 1)];
 
     let (descriptor_pool, descriptor_set) =
@@ -181,7 +185,7 @@ pub fn new_storage_image_ds(
 
 pub fn new_buffer_ds(
     context: Arc<VulkanContext>,
-    descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set_layout: &DescriptorSetLayout,
     ty: DescriptorSetBufferType,
     data: Buffer,
 ) -> Result<DescriptorSet<Buffer>> {
@@ -220,7 +224,7 @@ pub fn new_buffer_ds(
 
 pub fn new_buffers_ds(
     context: Arc<VulkanContext>,
-    descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set_layout: &DescriptorSetLayout,
     ty: DescriptorSetBufferType,
     data: Vec<Buffer>,
 ) -> Result<DescriptorSet<Vec<Buffer>>> {
@@ -270,7 +274,7 @@ pub fn new_buffers_ds(
 
 pub fn new_sampler_and_textures_ds<I>(
     context: Arc<VulkanContext>,
-    descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set_layout: &DescriptorSetLayout,
     sampler: Sampler,
     texture_image_views: I,
 ) -> Result<DescriptorSet<Sampler>>

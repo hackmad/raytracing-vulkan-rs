@@ -9,7 +9,7 @@ use std::{io::Cursor, path::Path, sync::Arc};
 use anyhow::Result;
 use ash::vk;
 pub use camera::*;
-use log::info;
+use log::{debug, info};
 pub use material::*;
 pub use mesh::*;
 pub use push_constants::*;
@@ -45,13 +45,18 @@ impl ShaderModules {
 
 impl Drop for ShaderModules {
     fn drop(&mut self) {
+        debug!("ShaderModules::drop()");
         unsafe {
+            self.context.device.device_wait_idle().unwrap();
+
             self.context
                 .device
                 .destroy_shader_module(self.closest_hit, None);
+
             self.context
                 .device
                 .destroy_shader_module(self.ray_miss, None);
+
             self.context
                 .device
                 .destroy_shader_module(self.ray_gen, None);

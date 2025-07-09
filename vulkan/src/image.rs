@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use ash::vk;
 use image::RgbaImage;
+use log::debug;
 
 use crate::{Buffer, CommandBuffer, NO_FENCE, VulkanContext, get_memory_type_index};
 
@@ -231,8 +232,11 @@ impl Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
+        debug!("Image: drop");
         if !self.is_external_alloc {
             unsafe {
+                self.context.device.device_wait_idle().unwrap();
+
                 self.context
                     .device
                     .destroy_image_view(self.image_view, None);

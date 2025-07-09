@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use ash::vk::{self, Handle};
+use log::debug;
 
 use crate::VulkanContext;
 
@@ -57,10 +58,12 @@ impl Fence {
 
 impl Drop for Fence {
     fn drop(&mut self) {
+        debug!("Fence::drop()");
         if !self.fence.is_null()
             && let Some(context) = self.context.as_ref()
         {
             unsafe {
+                context.device.device_wait_idle().unwrap();
                 context.device.destroy_fence(self.fence, None);
             }
         }

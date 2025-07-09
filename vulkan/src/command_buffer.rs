@@ -6,9 +6,9 @@ use ash::vk::{self, Handle};
 use log::debug;
 
 pub struct CommandBuffer {
+    name: String,
     context: Arc<VulkanContext>,
     command_buffer: vk::CommandBuffer,
-    name: String,
 }
 
 impl CommandBuffer {
@@ -20,10 +20,16 @@ impl CommandBuffer {
 
         let command_buffer = unsafe { context.device.allocate_command_buffers(&alloc_info)? }[0];
 
+        context.set_debug_utils_object_name(
+            command_buffer,
+            vk::ObjectType::COMMAND_BUFFER,
+            name,
+        )?;
+
         Ok(Self {
+            name: name.to_string(),
             context,
             command_buffer,
-            name: name.to_string(),
         })
     }
 
@@ -32,7 +38,7 @@ impl CommandBuffer {
     }
 
     pub fn begin_one_time_submit(&self) -> Result<()> {
-        debug!("Command buffer {}: begin", &self.name);
+        debug!("CommandBuffer::begin_one_time_submit(): {}", &self.name);
 
         let begin_info = vk::CommandBufferBeginInfo::default()
             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT);
@@ -51,7 +57,7 @@ impl CommandBuffer {
         submit_info: Option<vk::SubmitInfo>,
         fence: &Fence,
     ) -> Result<()> {
-        debug!("Command buffer {}: submit_and_wait", &self.name);
+        debug!("CommandBuffer::submit_and_wait(): {}", &self.name);
 
         let graphics_queue = self.context.get_graphics_queue();
         let command_buffers = [self.command_buffer];
@@ -61,33 +67,18 @@ impl CommandBuffer {
                 .unwrap_or_default()
                 .command_buffers(&command_buffers);
 
-            debug!("Command buffer {}: submitting", &self.name);
-
             let submit_result =
                 self.context
                     .device
                     .queue_submit(graphics_queue, &[submit_info], fence.get());
 
-            debug!(
-                "Command buffer {}, queue_submit result: {submit_result:?}",
-                &self.name
-            );
-
             submit_result?;
 
             if !fence.get().is_null() {
-                debug!(
-                    "Command buffer {}: waiting for fence after submit",
-                    &self.name
-                );
                 self.context
                     .device
                     .wait_for_fences(&[fence.get()], true, u64::MAX)?;
             } else {
-                debug!(
-                    "Command buffer {}: waiting for queue_wait_idle after submit",
-                    &self.name
-                );
                 self.context.device.queue_wait_idle(graphics_queue)?;
             }
         }
@@ -96,7 +87,7 @@ impl CommandBuffer {
     }
 
     pub fn end(&self) -> Result<()> {
-        debug!("Command buffer {}: end", &self.name);
+        debug!("CommandBuffer::end(): {}", &self.name);
         unsafe {
             self.context
                 .device
@@ -107,7 +98,7 @@ impl CommandBuffer {
     }
 
     pub fn reset(&self) -> Result<()> {
-        debug!("Command buffer {}: reset", &self.name);
+        debug!("CommandBuffer::reset(): {}", &self.name);
         unsafe {
             self.context
                 .device
@@ -292,8 +283,10 @@ impl CommandBuffer {
 
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
-        debug!("Command buffer {}: drop", &self.name);
+        debug!("CommandBuffer::drop(): {}", &self.name);
         unsafe {
+            self.context.device.device_wait_idle().unwrap();
+
             self.context
                 .device
                 .free_command_buffers(self.context.command_pool, &[self.command_buffer]);

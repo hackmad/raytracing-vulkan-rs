@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow};
 use ash::{khr, vk};
 use log::debug;
 use shaders::{ClosestHitPushConstants, RayGenPushConstants, ShaderModules, UnifiedPushConstants};
-use vulkan::{Buffer, CommandBuffer, VulkanContext};
+use vulkan::{Buffer, CommandBuffer, DescriptorSetLayout, VulkanContext};
 
 const ENTRY_POINT: &core::ffi::CStr = c"main";
 
@@ -14,7 +14,7 @@ pub struct RtPipeline {
     rt_loader: khr::ray_tracing_pipeline::Device,
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
-    pub set_layouts: Vec<vk::DescriptorSetLayout>,
+    pub set_layouts: Vec<DescriptorSetLayout>,
 
     sbt_ray_gen_region: vk::StridedDeviceAddressRegionKHR,
     sbt_ray_miss_region: vk::StridedDeviceAddressRegionKHR,
@@ -59,15 +59,15 @@ impl RtPipeline {
 
         // The order should match the `*_LAYOUT` constants.
         let set_layouts = vec![
-            create_tlas_layout(&context.device)?,
-            create_camera_layout(&context.device)?,
-            create_render_image_layout(&context.device)?,
-            create_mesh_data_layout(&context.device)?,
-            create_sampler_and_image_textures_layout(&context.device)?,
-            create_constant_colour_textures_layout(&context.device)?,
-            create_materials_layout(&context.device)?,
-            create_other_textures_layout(&context.device)?,
-            create_sky_layout(&context.device)?,
+            create_tlas_layout(context.clone())?,
+            create_camera_layout(context.clone())?,
+            create_render_image_layout(context.clone())?,
+            create_mesh_data_layout(context.clone())?,
+            create_sampler_and_image_textures_layout(context.clone())?,
+            create_constant_colour_textures_layout(context.clone())?,
+            create_materials_layout(context.clone())?,
+            create_other_textures_layout(context.clone())?,
+            create_sky_layout(context.clone())?,
         ];
 
         let push_constant_ranges = [
@@ -81,8 +81,10 @@ impl RtPipeline {
                 .size(size_of::<ClosestHitPushConstants>() as _),
         ];
 
+        let layouts: Vec<_> = set_layouts.iter().map(|layout| layout.get()).collect();
+
         let pipeline_layout_create_info = vk::PipelineLayoutCreateInfo::default()
-            .set_layouts(&set_layouts)
+            .set_layouts(&layouts)
             .push_constant_ranges(&push_constant_ranges);
 
         let pipeline_layout = unsafe {
@@ -290,7 +292,10 @@ impl RtPipeline {
 
 impl Drop for RtPipeline {
     fn drop(&mut self) {
+        debug!("RtPipeline::drop()");
         unsafe {
+            self.context.device.device_wait_idle().unwrap();
+
             self.context.device.destroy_pipeline(self.pipeline, None);
 
             self.context
@@ -300,27 +305,10 @@ impl Drop for RtPipeline {
     }
 }
 
-fn create_descriptor_set_layout(
-    device: &ash::Device,
-    bindings: &[vk::DescriptorSetLayoutBinding],
-    binding_flags: &[vk::DescriptorBindingFlags],
-) -> Result<vk::DescriptorSetLayout> {
-    let mut binding_flags_info =
-        vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(binding_flags);
-
-    let create_info = vk::DescriptorSetLayoutCreateInfo::default()
-        .bindings(bindings)
-        .push_next(&mut binding_flags_info);
-
-    let descriptor_set_layout = unsafe { device.create_descriptor_set_layout(&create_info, None)? };
-
-    Ok(descriptor_set_layout)
-}
-
 /// Create a pipeline layout for top level acceleration structure.
-fn create_tlas_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
-    create_descriptor_set_layout(
-        device,
+fn create_tlas_layout(context: Arc<VulkanContext>) -> Result<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        context,
         &[vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::ACCELERATION_STRUCTURE_KHR)
@@ -331,9 +319,9 @@ fn create_tlas_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
 }
 
 /// Create a pipeline layout for uniform buffer containing camera matrices.
-fn create_camera_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
-    create_descriptor_set_layout(
-        device,
+fn create_camera_layout(context: Arc<VulkanContext>) -> Result<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        context,
         &[vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
@@ -344,9 +332,9 @@ fn create_camera_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout>
 }
 
 /// Create a pipeline layout for the render image storage buffer.
-fn create_render_image_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
-    create_descriptor_set_layout(
-        device,
+fn create_render_image_layout(context: Arc<VulkanContext>) -> Result<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        context,
         &[vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
@@ -357,7 +345,7 @@ fn create_render_image_layout(device: &ash::Device) -> Result<vk::DescriptorSetL
 }
 
 /// Create a pipeline layout for mesh data references storage buffer.
-fn create_mesh_data_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+fn create_mesh_data_layout(context: Arc<VulkanContext>) -> Result<DescriptorSetLayout> {
     // 0 - Vertex buffer.
     // 1 - Index buffer.
     // 2 - Meshes.
@@ -370,15 +358,15 @@ fn create_mesh_data_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayo
                 .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR)
         })
         .collect();
-    create_descriptor_set_layout(device, &bindings, &[])
+    DescriptorSetLayout::new(context, &bindings, &[])
 }
 
 /// Create a pipeline layout for sampler and image textures.
 fn create_sampler_and_image_textures_layout(
-    device: &ash::Device,
-) -> Result<vk::DescriptorSetLayout> {
-    create_descriptor_set_layout(
-        device,
+    context: Arc<VulkanContext>,
+) -> Result<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        context,
         &[
             vk::DescriptorSetLayoutBinding::default()
                 .binding(0)
@@ -400,9 +388,11 @@ fn create_sampler_and_image_textures_layout(
 }
 
 /// Create a pipeline layout for constant colour textures (this is just unique colour values).
-fn create_constant_colour_textures_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
-    create_descriptor_set_layout(
-        device,
+fn create_constant_colour_textures_layout(
+    context: Arc<VulkanContext>,
+) -> Result<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        context,
         &[vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
@@ -413,7 +403,7 @@ fn create_constant_colour_textures_layout(device: &ash::Device) -> Result<vk::De
 }
 
 /// Create a pipeline layout for material references storage buffer.
-fn create_materials_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+fn create_materials_layout(context: Arc<VulkanContext>) -> Result<DescriptorSetLayout> {
     // 0 - Lambertian materials.
     // 1 - Metal materials.
     // 2 - Dielectric materials.
@@ -428,11 +418,11 @@ fn create_materials_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayo
         })
         .collect();
 
-    create_descriptor_set_layout(device, &bindings, &[])
+    DescriptorSetLayout::new(context, &bindings, &[])
 }
 
 /// Create a pipeline layout for storage buffer used for other textures besides image and constant colour.
-fn create_other_textures_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
+fn create_other_textures_layout(context: Arc<VulkanContext>) -> Result<DescriptorSetLayout> {
     // 0 - Checker textures.
     // 1 - Noise textures.
     let bindings: Vec<_> = (0..2)
@@ -445,13 +435,13 @@ fn create_other_textures_layout(device: &ash::Device) -> Result<vk::DescriptorSe
         })
         .collect();
 
-    create_descriptor_set_layout(device, &bindings, &[])
+    DescriptorSetLayout::new(context, &bindings, &[])
 }
 
 /// Create a pipeline layout for uniform buffer containing sky.
-fn create_sky_layout(device: &ash::Device) -> Result<vk::DescriptorSetLayout> {
-    create_descriptor_set_layout(
-        device,
+fn create_sky_layout(context: Arc<VulkanContext>) -> Result<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        context,
         &[vk::DescriptorSetLayoutBinding::default()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)

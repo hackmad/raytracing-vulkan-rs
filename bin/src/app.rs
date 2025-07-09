@@ -22,7 +22,7 @@ pub struct App {
     window: Option<Window>,
 
     /// Vulkan context.
-    vk: Option<Arc<VulkanContext>>,
+    context: Option<Arc<VulkanContext>>,
 
     /// The render engine.
     render_engine: Option<RenderEngine>,
@@ -41,7 +41,7 @@ impl App {
     pub fn new(initial_file_path: &str) -> Result<Self> {
         Ok(Self {
             window: None,
-            vk: None,
+            context: None,
             render_engine: None,
             current_file_path: initial_file_path.to_string(),
             new_file_path: None,
@@ -68,22 +68,22 @@ impl ApplicationHandler for App {
             )
             .expect("Failed to create window");
 
-        let vk = Arc::new(VulkanContext::new(app_name, &window).unwrap());
+        let context = Arc::new(VulkanContext::new(app_name, &window).unwrap());
 
         // Create the render engine.
         let render_engine =
-            RenderEngine::new(vk.clone(), &scene_file, &window, &window_size).unwrap();
+            RenderEngine::new(context.clone(), &scene_file, &window, &window_size).unwrap();
 
         self.window = Some(window);
         self.render_engine = Some(render_engine);
-        self.vk = Some(vk);
+        self.context = Some(context);
         self.recreate_swapchain = false;
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
+                info!("The close button was pressed; stopping");
                 event_loop.exit();
             }
 
@@ -100,6 +100,7 @@ impl ApplicationHandler for App {
                     info!("Q was pressed; stopping.");
                     event_loop.exit();
                 }
+
                 Key::Character("o") => {
                     // Handle File > Open.
                     let current_file_path_buf = PathBuf::from(&self.current_file_path);
@@ -170,18 +171,46 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: winit::event::StartCause) {
-        if self.recreate_swapchain
-            && let Some(render_engine) = self.render_engine.as_mut()
-            && let Some(window) = self.window.as_ref()
-        {
-            render_engine
-                .recreate_swapchain(window)
-                .expect("failed to recreate swapchain");
-
-            self.recreate_swapchain = false;
-
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Some(window) = self.window.as_ref() {
             window.request_redraw();
+        }
+    }
+
+    fn new_events(&mut self, _event_loop: &ActiveEventLoop, _cause: winit::event::StartCause) {
+        if let Some(window) = self.window.as_ref() {
+            // Handle swapchain recreation.
+            if self.recreate_swapchain
+                && let Some(render_engine) = self.render_engine.as_mut()
+            {
+                render_engine
+                    .recreate_swapchain(window)
+                    .expect("failed to recreate swapchain");
+
+                self.recreate_swapchain = false;
+
+                window.request_redraw();
+            }
+
+            // Handle loading a new scene.
+            if let Some(new_path) = self.new_file_path.take()
+                && let Ok(scene_file) = SceneFile::load_json(&new_path)
+                && let Some(context) = self.context.as_ref()
+            {
+                let window_size = window.inner_size();
+                let size = [window_size.width as f32, window_size.height as f32];
+
+                // Drop the old engine and create a new one.
+                self.render_engine = None;
+                self.render_engine = Some(
+                    RenderEngine::new(context.clone(), &scene_file, window, &size)
+                        .expect("failed to create render engine"),
+                );
+
+                self.current_file_path = new_path;
+
+                window.request_redraw();
+            }
         }
     }
 }

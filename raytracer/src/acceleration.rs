@@ -6,6 +6,7 @@ use ash::{
     khr,
     vk::{self, Packed24_8},
 };
+use log::debug;
 use vulkan::{Buffer, CommandBuffer, NO_FENCE, VulkanContext};
 
 #[rustfmt::skip]
@@ -81,6 +82,7 @@ impl AccelerationStructures {
 }
 
 pub struct AccelerationStructure {
+    context: Arc<VulkanContext>,
     as_loader: Arc<khr::acceleration_structure::Device>,
     pub acceleration_structure: vk::AccelerationStructureKHR,
     handle: u64,
@@ -181,6 +183,7 @@ impl AccelerationStructure {
         };
 
         Ok(Self {
+            context,
             as_loader,
             acceleration_structure,
             handle,
@@ -276,7 +279,10 @@ impl AccelerationStructure {
 
 impl Drop for AccelerationStructure {
     fn drop(&mut self) {
+        debug!("AccelerationStructure::drop()");
         unsafe {
+            self.context.device.device_wait_idle().unwrap();
+
             self.as_loader
                 .destroy_acceleration_structure(self.acceleration_structure, None);
         }

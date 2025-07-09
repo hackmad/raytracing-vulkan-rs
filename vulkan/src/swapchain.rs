@@ -132,6 +132,8 @@ impl Swapchain {
 
 impl Drop for Swapchain {
     fn drop(&mut self) {
+        debug!("Swapchain::drop()");
+
         // This is for when application exits and drops the swapchain without us getting a chance
         // to call destroy.
         if !self.is_destroyed {

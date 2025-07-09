@@ -175,7 +175,7 @@ impl RenderEngine {
 
         let tlas_descriptor_set = new_tlas_ds(
             context.clone(),
-            rt_pipeline.set_layouts[RtPipeline::TLAS_LAYOUT],
+            &rt_pipeline.set_layouts[RtPipeline::TLAS_LAYOUT],
             acceleration_structures.tlas.acceleration_structure,
         )?;
 
@@ -189,7 +189,7 @@ impl RenderEngine {
 
         let mesh_data_descriptor_set = new_buffers_ds(
             context.clone(),
-            rt_pipeline.set_layouts[RtPipeline::MESH_DATA_LAYOUT],
+            &rt_pipeline.set_layouts[RtPipeline::MESH_DATA_LAYOUT],
             DescriptorSetBufferType::Storage,
             vec![vertex_buffer, index_buffer, mesh_buffer],
         )?;
@@ -205,7 +205,7 @@ impl RenderEngine {
 
         let image_textures_descriptor_set = new_sampler_and_textures_ds(
             context.clone(),
-            rt_pipeline.set_layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT],
+            &rt_pipeline.set_layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT],
             texture_sampler,
             texture_image_views,
         )?;
@@ -233,7 +233,7 @@ impl RenderEngine {
 
         let constant_colour_textures_descriptor_set = new_buffer_ds(
             context.clone(),
-            rt_pipeline.set_layouts[RtPipeline::MATERIAL_COLOURS_LAYOUT],
+            &rt_pipeline.set_layouts[RtPipeline::MATERIAL_COLOURS_LAYOUT],
             DescriptorSetBufferType::Storage,
             constant_colour_textures_buffer,
         )?;
@@ -243,7 +243,7 @@ impl RenderEngine {
 
         let materials_descriptor_set = new_buffers_ds(
             context.clone(),
-            rt_pipeline.set_layouts[RtPipeline::MATERIALS_LAYOUT],
+            &rt_pipeline.set_layouts[RtPipeline::MATERIALS_LAYOUT],
             DescriptorSetBufferType::Storage,
             vec![
                 material_buffers.lambertian,
@@ -258,7 +258,7 @@ impl RenderEngine {
 
         let other_textures_descriptor_set = new_buffers_ds(
             context.clone(),
-            rt_pipeline.set_layouts[RtPipeline::OTHER_TEXTURES_LAYOUT],
+            &rt_pipeline.set_layouts[RtPipeline::OTHER_TEXTURES_LAYOUT],
             DescriptorSetBufferType::Storage,
             vec![texture_buffers.checker, texture_buffers.noise],
         )?;
@@ -274,7 +274,7 @@ impl RenderEngine {
 
         let sky_descriptor_set = new_buffer_ds(
             context.clone(),
-            rt_pipeline.set_layouts[RtPipeline::SKY_LAYOUT],
+            &rt_pipeline.set_layouts[RtPipeline::SKY_LAYOUT],
             DescriptorSetBufferType::Uniform,
             sky_buffer,
         )?;
@@ -356,7 +356,7 @@ impl RenderEngine {
 
         let camera_buffer_descriptor_set = new_buffer_ds(
             self.context.clone(),
-            self.rt_pipeline.set_layouts[RtPipeline::CAMERA_BUFFER_LAYOUT],
+            &self.rt_pipeline.set_layouts[RtPipeline::CAMERA_BUFFER_LAYOUT],
             DescriptorSetBufferType::Uniform,
             camera_buffer,
         )
@@ -365,7 +365,7 @@ impl RenderEngine {
         debug!("Creating render image descriptor set");
         let render_image_descriptor_set = new_storage_image_ds(
             self.context.clone(),
-            self.rt_pipeline.set_layouts[RtPipeline::RENDER_IMAGE_LAYOUT],
+            &self.rt_pipeline.set_layouts[RtPipeline::RENDER_IMAGE_LAYOUT],
             &self.render_image,
         )
         .unwrap();
@@ -524,5 +524,11 @@ impl RenderEngine {
             }
             Err(e) => Err(anyhow!("{e:?}")),
         }
+    }
+}
+
+impl Drop for RenderEngine {
+    fn drop(&mut self) {
+        debug!("RenderEngine: drop");
     }
 }

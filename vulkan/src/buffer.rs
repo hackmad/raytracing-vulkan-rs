@@ -2,6 +2,7 @@ use std::{ffi::c_void, sync::Arc};
 
 use anyhow::Result;
 use ash::{util::Align, vk};
+use log::debug;
 
 use crate::{CommandBuffer, NO_FENCE, VulkanContext};
 
@@ -150,7 +151,9 @@ impl Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
+        debug!("Buffer::drop()");
         unsafe {
+            self.context.device.device_wait_idle().unwrap();
             self.context.device.destroy_buffer(self.buffer, None);
             self.context.device.free_memory(self.memory, None);
         }

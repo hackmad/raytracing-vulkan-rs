@@ -162,6 +162,7 @@ impl VulkanContext {
 
 impl Drop for VulkanContext {
     fn drop(&mut self) {
+        debug!("VulkanContext::drop()");
         unsafe {
             self.device.device_wait_idle().unwrap();
 

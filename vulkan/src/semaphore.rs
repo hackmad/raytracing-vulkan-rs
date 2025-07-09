@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use ash::vk;
+use log::debug;
 
 use crate::VulkanContext;
 
@@ -24,7 +25,9 @@ impl Semaphore {
 
 impl Drop for Semaphore {
     fn drop(&mut self) {
+        debug!("Semaphore::drop()");
         unsafe {
+            self.context.device.device_wait_idle().unwrap();
             self.context.device.destroy_semaphore(self.semaphore, None);
         }
     }

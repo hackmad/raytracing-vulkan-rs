@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use ash::vk;
+use log::debug;
 
 use crate::VulkanContext;
 
@@ -28,7 +29,9 @@ impl Sampler {
 
 impl Drop for Sampler {
     fn drop(&mut self) {
+        debug!("Sampler::drop()");
         unsafe {
+            self.context.device.device_wait_idle().unwrap();
             self.context.device.destroy_sampler(self.sampler, None);
         }
     }
