@@ -311,6 +311,8 @@ impl RenderEngine {
             window_size[1] as u32,
         )?;
 
+        self.push_constants.ray_gen_pc.resolution = [window_size[0] as u32, window_size[1] as u32];
+
         Ok(())
     }
 
