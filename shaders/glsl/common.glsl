@@ -70,7 +70,6 @@ struct Sky {
     vec3 vTop;      // Vertical gradient top colour;
     float vFactor;  // Vertical gradient factor.
     vec3 vBottom;   // Vertical gradient bottom colour;
-
 };
 
 // --------------------------------------------------------------------------------

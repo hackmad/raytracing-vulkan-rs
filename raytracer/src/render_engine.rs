@@ -338,14 +338,13 @@ impl RenderEngine {
         let camera = self.camera.read().unwrap();
 
         // Create the descriptor sets for the raytracing pipeline.
-        let camera = shaders::Camera {
-            view_proj: (camera.get_projection_matrix() * camera.get_view_matrix())
-                .to_cols_array_2d(),
-            view_inverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
-            proj_inverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
-            focal_length: camera.get_focal_length(),
-            aperture_size: camera.get_aperture_size(),
-        };
+        let camera = shaders::Camera::new(
+            (camera.get_projection_matrix() * camera.get_view_matrix()).to_cols_array_2d(),
+            camera.get_view_inverse_matrix().to_cols_array_2d(),
+            camera.get_projection_inverse_matrix().to_cols_array_2d(),
+            camera.get_focal_length(),
+            camera.get_aperture_size(),
+        );
 
         debug!("Creating camera buffer");
         let camera_buffer = Buffer::new_device_local_storage_buffer(
