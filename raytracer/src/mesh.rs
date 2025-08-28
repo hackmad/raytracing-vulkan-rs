@@ -10,32 +10,6 @@ use vulkan::{Buffer, VulkanContext};
 
 use crate::Materials;
 
-// This is used for cleaner code and it represents the data that the shader's MeshVertex structure needs.
-#[derive(Clone, Copy, Debug)]
-pub struct Vertex {
-    pub p: [f32; 3],
-    pub n: [f32; 3],
-    pub uv: [f32; 2],
-}
-
-impl Vertex {
-    pub fn new(p: [f32; 3], n: [f32; 3], uv: [f32; 2]) -> Self {
-        Self { p, n, uv }
-    }
-}
-
-impl From<&Vertex> for MeshVertex {
-    // Convert Vertex to shader struct.
-    fn from(value: &Vertex) -> Self {
-        Self {
-            p: value.p,
-            n: value.n,
-            u: value.uv[0],
-            v: value.uv[1],
-        }
-    }
-}
-
 pub struct MeshGeometryBuffers {
     pub vertex_buffer: Buffer,
     pub vertex_count: usize,
@@ -47,7 +21,7 @@ pub struct MeshGeometryBuffers {
 #[derive(Debug)]
 pub struct Mesh {
     pub name: String,
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<MeshVertex>,
     pub indices: Vec<u32>,
     pub material: String,
 }
@@ -120,7 +94,7 @@ impl From<&Primitive> for Mesh {
                 let vertices: Vec<_> = points
                     .iter()
                     .enumerate()
-                    .map(|(i, p)| Vertex::new(*p, *normal, uv[i]))
+                    .map(|(i, p)| MeshVertex::new(*p, *normal, uv[i]))
                     .collect();
                 Mesh {
                     name: name.clone(),
@@ -140,7 +114,7 @@ impl From<&Primitive> for Mesh {
                 let vertices: Vec<_> = points
                     .iter()
                     .enumerate()
-                    .map(|(i, p)| Vertex::new(*p, *normal, uv[i]))
+                    .map(|(i, p)| MeshVertex::new(*p, *normal, uv[i]))
                     .collect();
                 Mesh {
                     name: name.clone(),
@@ -175,7 +149,7 @@ fn uv_sphere_vertex(
     du: f32,
     dv: f32,
     top_or_bottom: bool,
-) -> Vertex {
+) -> MeshVertex {
     let shift_u = if top_or_bottom { du / 2.0 } else { 0.0 };
     let u = segment as f32 * du + shift_u;
     let v = ring as f32 * dv;
@@ -190,7 +164,7 @@ fn uv_sphere_vertex(
     );
     let p = center + radius * n;
 
-    Vertex::new(p.into(), n.into(), [u, v])
+    MeshVertex::new(p.into(), n.into(), [u, v])
 }
 
 fn generate_uv_sphere(
@@ -198,7 +172,7 @@ fn generate_uv_sphere(
     radius: f32,
     rings: u32,
     segments: u32,
-) -> (Vec<Vertex>, Vec<u32>) {
+) -> (Vec<MeshVertex>, Vec<u32>) {
     let mut vertices = vec![];
 
     let c = Vec3::from_slice(center);
@@ -288,7 +262,7 @@ fn uv_rect(col: usize, row: usize, cols: usize, rows: usize) -> [[f32; 2]; 4] {
 }
 
 #[rustfmt::skip]
-fn generate_box(corners: &[[f32; 3]; 2]) -> (Vec<Vertex>, Vec<u32>) {
+fn generate_box(corners: &[[f32; 3]; 2]) -> (Vec<MeshVertex>, Vec<u32>) {
     let a = Vec3::from_slice(&corners[0]);
     let b = Vec3::from_slice(&corners[1]);
 
@@ -308,40 +282,40 @@ fn generate_box(corners: &[[f32; 3]; 2]) -> (Vec<Vertex>, Vec<u32>) {
 
     let vertices = vec![
         // Front (+Z)
-        Vertex::new([lx, ly, hz], [ 0.0,  0.0,  1.0],  uv_front[0]),
-        Vertex::new([hx, ly, hz], [ 0.0,  0.0,  1.0],  uv_front[1]),
-        Vertex::new([hx, hy, hz], [ 0.0,  0.0,  1.0],  uv_front[2]),
-        Vertex::new([lx, hy, hz], [ 0.0,  0.0,  1.0],  uv_front[3]),
+        MeshVertex::new([lx, ly, hz], [ 0.0,  0.0,  1.0],  uv_front[0]),
+        MeshVertex::new([hx, ly, hz], [ 0.0,  0.0,  1.0],  uv_front[1]),
+        MeshVertex::new([hx, hy, hz], [ 0.0,  0.0,  1.0],  uv_front[2]),
+        MeshVertex::new([lx, hy, hz], [ 0.0,  0.0,  1.0],  uv_front[3]),
 
         // Back (-Z)
-        Vertex::new([hx, ly, lz], [ 0.0,  0.0, -1.0],   uv_back[0]),
-        Vertex::new([lx, ly, lz], [ 0.0,  0.0, -1.0],   uv_back[1]),
-        Vertex::new([lx, hy, lz], [ 0.0,  0.0, -1.0],   uv_back[2]),
-        Vertex::new([hx, hy, lz], [ 0.0,  0.0, -1.0],   uv_back[3]),
+        MeshVertex::new([hx, ly, lz], [ 0.0,  0.0, -1.0],   uv_back[0]),
+        MeshVertex::new([lx, ly, lz], [ 0.0,  0.0, -1.0],   uv_back[1]),
+        MeshVertex::new([lx, hy, lz], [ 0.0,  0.0, -1.0],   uv_back[2]),
+        MeshVertex::new([hx, hy, lz], [ 0.0,  0.0, -1.0],   uv_back[3]),
                                                                  
         // Left (-X)                                             
-        Vertex::new([lx, ly, lz], [-1.0,  0.0,  0.0],   uv_left[0]),
-        Vertex::new([lx, ly, hz], [-1.0,  0.0,  0.0],   uv_left[1]),
-        Vertex::new([lx, hy, hz], [-1.0,  0.0,  0.0],   uv_left[2]),
-        Vertex::new([lx, hy, lz], [-1.0,  0.0,  0.0],   uv_left[3]),
+        MeshVertex::new([lx, ly, lz], [-1.0,  0.0,  0.0],   uv_left[0]),
+        MeshVertex::new([lx, ly, hz], [-1.0,  0.0,  0.0],   uv_left[1]),
+        MeshVertex::new([lx, hy, hz], [-1.0,  0.0,  0.0],   uv_left[2]),
+        MeshVertex::new([lx, hy, lz], [-1.0,  0.0,  0.0],   uv_left[3]),
                                                                  
         // Right (+X)                                            
-        Vertex::new([hx, ly, hz], [ 1.0,  0.0,  0.0],  uv_right[0]),
-        Vertex::new([hx, ly, lz], [ 1.0,  0.0,  0.0],  uv_right[1]),
-        Vertex::new([hx, hy, lz], [ 1.0,  0.0,  0.0],  uv_right[2]),
-        Vertex::new([hx, hy, hz], [ 1.0,  0.0,  0.0],  uv_right[3]),
+        MeshVertex::new([hx, ly, hz], [ 1.0,  0.0,  0.0],  uv_right[0]),
+        MeshVertex::new([hx, ly, lz], [ 1.0,  0.0,  0.0],  uv_right[1]),
+        MeshVertex::new([hx, hy, lz], [ 1.0,  0.0,  0.0],  uv_right[2]),
+        MeshVertex::new([hx, hy, hz], [ 1.0,  0.0,  0.0],  uv_right[3]),
 
         // Top (-Y)
-        Vertex::new([lx, hy, hz], [ 0.0, -1.0,  0.0],    uv_top[0]),
-        Vertex::new([hx, hy, hz], [ 0.0, -1.0,  0.0],    uv_top[1]),
-        Vertex::new([hx, hy, lz], [ 0.0, -1.0,  0.0],    uv_top[2]),
-        Vertex::new([lx, hy, lz], [ 0.0, -1.0,  0.0],    uv_top[3]),
+        MeshVertex::new([lx, hy, hz], [ 0.0, -1.0,  0.0],    uv_top[0]),
+        MeshVertex::new([hx, hy, hz], [ 0.0, -1.0,  0.0],    uv_top[1]),
+        MeshVertex::new([hx, hy, lz], [ 0.0, -1.0,  0.0],    uv_top[2]),
+        MeshVertex::new([lx, hy, lz], [ 0.0, -1.0,  0.0],    uv_top[3]),
 
         // Bottom (+Y)
-        Vertex::new([lx, ly, lz], [ 0.0,  1.0,  0.0], uv_bottom[0]),
-        Vertex::new([hx, ly, lz], [ 0.0,  1.0,  0.0], uv_bottom[1]),
-        Vertex::new([hx, ly, hz], [ 0.0,  1.0,  0.0], uv_bottom[2]),
-        Vertex::new([lx, ly, hz], [ 0.0,  1.0,  0.0], uv_bottom[3]),
+        MeshVertex::new([lx, ly, lz], [ 0.0,  1.0,  0.0], uv_bottom[0]),
+        MeshVertex::new([hx, ly, lz], [ 0.0,  1.0,  0.0], uv_bottom[1]),
+        MeshVertex::new([hx, ly, hz], [ 0.0,  1.0,  0.0], uv_bottom[2]),
+        MeshVertex::new([lx, ly, hz], [ 0.0,  1.0,  0.0], uv_bottom[3]),
     ];
 
     // 6 faces, each with 2 triangles = 6 indices per face
@@ -425,7 +399,7 @@ pub fn create_mesh_storage_buffer(
 pub fn create_mesh_vertex_buffer(context: Arc<VulkanContext>, meshes: &[Mesh]) -> Result<Buffer> {
     let vertex_buffer_data: Vec<_> = meshes
         .iter()
-        .flat_map(|mesh| mesh.vertices.iter().map(MeshVertex::from))
+        .flat_map(|mesh| mesh.vertices.clone()) // TODO don't clone entire mesh vertex data
         .collect();
 
     debug!("Creating vertex buffer");
