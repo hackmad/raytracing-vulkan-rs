@@ -20,11 +20,11 @@ impl NoiseTextures {
         let mut indices = HashMap::new();
 
         for texture in all_textures.values() {
-            if let Texture::Noise { name, scale } = texture {
-                if let Entry::Vacant(e) = indices.entry(name.clone()) {
-                    e.insert(textures.len() as u32);
-                    textures.push(NoiseTexture { scale: *scale });
-                }
+            if let Texture::Noise { name, scale } = texture
+                && let Entry::Vacant(e) = indices.entry(name.clone())
+            {
+                e.insert(textures.len() as u32);
+                textures.push(NoiseTexture { scale: *scale });
             }
         }
 

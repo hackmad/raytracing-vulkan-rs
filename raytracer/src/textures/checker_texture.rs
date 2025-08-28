@@ -29,16 +29,15 @@ impl CheckerTextures {
                 odd,
                 even,
             } = texture
+                && let Entry::Vacant(e) = indices.entry(name.clone())
             {
-                if let Entry::Vacant(e) = indices.entry(name.clone()) {
-                    e.insert(textures.len() as u32);
+                e.insert(textures.len() as u32);
 
-                    textures.push(CheckerTexture {
-                        scale: *scale,
-                        odd: odd.clone(),
-                        even: even.clone(),
-                    });
-                }
+                textures.push(CheckerTexture {
+                    scale: *scale,
+                    odd: odd.clone(),
+                    even: even.clone(),
+                });
             }
         }
 

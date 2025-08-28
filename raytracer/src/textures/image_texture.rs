@@ -29,12 +29,12 @@ impl ImageTextures {
         let mut indices = HashMap::new();
 
         for texture in textures.values() {
-            if let Texture::Image { name, path } = texture {
-                if let Entry::Vacant(e) = indices.entry(name.clone()) {
-                    let texture = load_texture(context.clone(), path)?;
-                    e.insert(images.len() as u32);
-                    images.push(texture);
-                }
+            if let Texture::Image { name, path } = texture
+                && let Entry::Vacant(e) = indices.entry(name.clone())
+            {
+                let texture = load_texture(context.clone(), path)?;
+                e.insert(images.len() as u32);
+                images.push(texture);
             }
         }
 

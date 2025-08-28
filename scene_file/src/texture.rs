@@ -106,16 +106,16 @@ impl Texture {
                 }
                 seen.push(name.clone());
 
-                if let Some(tex) = all_textures.get(odd) {
-                    if tex.find_cycles_internal(all_textures, seen) {
-                        return true;
-                    }
+                if let Some(tex) = all_textures.get(odd)
+                    && tex.find_cycles_internal(all_textures, seen)
+                {
+                    return true;
                 }
 
-                if let Some(tex) = all_textures.get(even) {
-                    if tex.find_cycles_internal(all_textures, seen) {
-                        return true;
-                    }
+                if let Some(tex) = all_textures.get(even)
+                    && tex.find_cycles_internal(all_textures, seen)
+                {
+                    return true;
                 }
 
                 seen.pop();
