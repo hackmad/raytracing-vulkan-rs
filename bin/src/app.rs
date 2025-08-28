@@ -197,13 +197,14 @@ impl ApplicationHandler for App {
                 && let Ok(scene_file) = SceneFile::load_json(&new_path)
                 && let Some(context) = self.context.as_ref()
             {
-                let window_size = window.inner_size();
-                let size = [window_size.width as f32, window_size.height as f32];
+                let window_size =
+                    adjust_window_size(INITIAL_WINDOW_SIZE, scene_file.render.aspect_ratio);
+                let _ = window.request_inner_size(LogicalSize::new(window_size[0], window_size[1]));
 
                 // Drop the old engine and create a new one.
                 self.render_engine = None;
                 self.render_engine = Some(
-                    RenderEngine::new(context.clone(), &scene_file, window, &size)
+                    RenderEngine::new(context.clone(), &scene_file, window, &window_size)
                         .expect("failed to create render engine"),
                 );
 
