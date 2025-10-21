@@ -38,11 +38,13 @@ impl Image {
         }
     }
 
-    pub fn new_rgba_image(context: Arc<VulkanContext>, rgba_image: &RgbaImage) -> Result<Self> {
-        let (width, height) = rgba_image.dimensions();
-        let format = vk::Format::R8G8B8A8_SRGB;
-        let buffer_size = (width * height * 4) as vk::DeviceSize;
-
+    fn create_image(
+        context: Arc<VulkanContext>,
+        pixels: &[u8],
+        width: u32,
+        height: u32,
+        format: vk::Format,
+    ) -> Result<Self> {
         let image_info = vk::ImageCreateInfo::default()
             .image_type(vk::ImageType::TYPE_2D)
             .format(format)
@@ -66,10 +68,10 @@ impl Image {
         let alloc_info = vk::MemoryAllocateInfo::default()
             .allocation_size(mem_requirements.size)
             .memory_type_index(get_memory_type_index(
-                context.device_memory_properties,
                 mem_requirements.memory_type_bits,
-                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
-            ));
+                vk::MemoryPropertyFlags::DEVICE_LOCAL,
+                context.device_memory_properties,
+            )?);
 
         let image_memory = unsafe { context.device.allocate_memory(&alloc_info, None)? };
 
@@ -79,29 +81,94 @@ impl Image {
 
         let mut staging_buffer = Buffer::new(
             context.clone(),
-            buffer_size,
+            pixels.len() as _,
             vk::BufferUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
         )?;
-        staging_buffer.store(rgba_image.as_raw())?;
+        staging_buffer.store(pixels)?;
 
-        transition_image_layout(
-            context.clone(),
+        let command_buffer = CommandBuffer::new(context.clone(), "image_transfer")?;
+
+        command_buffer.begin_one_time_submit()?;
+
+        let barrier_to_transfer_dst = vk::ImageMemoryBarrier::default()
+            .old_layout(vk::ImageLayout::UNDEFINED)
+            .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(image)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            )
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE);
+
+        command_buffer.pipeline_image_memory_barrier(
+            barrier_to_transfer_dst,
+            vk::PipelineStageFlags::TOP_OF_PIPE,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::DependencyFlags::empty(),
+        );
+
+        let region = vk::BufferImageCopy::default()
+            .buffer_offset(0)
+            .buffer_row_length(0)
+            .buffer_image_height(0)
+            .image_subresource(
+                vk::ImageSubresourceLayers::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .mip_level(0)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            )
+            .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
+            .image_extent(vk::Extent3D {
+                width,
+                height,
+                depth: 1,
+            });
+
+        command_buffer.copy_buffer_to_image(
+            &staging_buffer,
             image,
-            vk::ImageLayout::UNDEFINED,
             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        )?;
+            &[region],
+        );
 
-        copy_buffer_to_image(context.clone(), staging_buffer, image, width, height)?;
+        let barrier_to_shader_read = vk::ImageMemoryBarrier::default()
+            .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+            .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(image)
+            .subresource_range(
+                vk::ImageSubresourceRange::default()
+                    .aspect_mask(vk::ImageAspectFlags::COLOR)
+                    .base_mip_level(0)
+                    .level_count(1)
+                    .base_array_layer(0)
+                    .layer_count(1),
+            )
+            .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ);
 
-        transition_image_layout(
-            context.clone(),
-            image,
-            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        )?;
+        command_buffer.pipeline_image_memory_barrier(
+            barrier_to_shader_read,
+            vk::PipelineStageFlags::TRANSFER,
+            vk::PipelineStageFlags::RAY_TRACING_SHADER_KHR,
+            vk::DependencyFlags::empty(),
+        );
 
-        let view_info = vk::ImageViewCreateInfo::default()
+        command_buffer.end()?;
+
+        command_buffer.submit_and_wait(None, &NO_FENCE)?;
+
+        let image_view_info = vk::ImageViewCreateInfo::default()
             .image(image)
             .view_type(vk::ImageViewType::TYPE_2D)
             .format(format)
@@ -114,7 +181,7 @@ impl Image {
                     .layer_count(1),
             );
 
-        let image_view = unsafe { context.device.create_image_view(&view_info, None)? };
+        let image_view = unsafe { context.device.create_image_view(&image_view_info, None)? };
 
         Ok(Self {
             context,
@@ -125,6 +192,16 @@ impl Image {
             image_memory: Some(image_memory),
             is_external_alloc: false,
         })
+    }
+
+    pub fn new_dummy_image(context: Arc<VulkanContext>) -> Result<Self> {
+        Self::create_image(context, &[0], 1, 1, vk::Format::R8G8B8A8_SRGB)
+    }
+
+    pub fn new_rgba_image(context: Arc<VulkanContext>, rgba_image: &RgbaImage) -> Result<Self> {
+        let pixels = rgba_image.as_raw();
+        let (width, height) = rgba_image.dimensions();
+        Self::create_image(context, pixels, width, height, vk::Format::R8G8B8A8_SRGB)
     }
 
     pub fn new_render_image(context: Arc<VulkanContext>, width: u32, height: u32) -> Result<Self> {
@@ -157,10 +234,10 @@ impl Image {
         let alloc_info = vk::MemoryAllocateInfo::default()
             .allocation_size(mem_requirements.size)
             .memory_type_index(get_memory_type_index(
-                context.device_memory_properties,
                 mem_requirements.memory_type_bits,
                 vk::MemoryPropertyFlags::DEVICE_LOCAL,
-            ));
+                context.device_memory_properties,
+            )?);
 
         let image_memory = unsafe { context.device.allocate_memory(&alloc_info, None)? };
 
@@ -249,101 +326,4 @@ impl Drop for Image {
             }
         }
     }
-}
-
-fn transition_image_layout(
-    context: Arc<VulkanContext>,
-    image: vk::Image,
-    old_layout: vk::ImageLayout,
-    new_layout: vk::ImageLayout,
-) -> Result<()> {
-    let command_buffer = CommandBuffer::new(context.clone(), "transition_image_layout")?;
-
-    command_buffer.begin_one_time_submit()?;
-
-    let (src_access_mask, dst_access_mask, src_stage, dst_stage) = match (old_layout, new_layout) {
-        (vk::ImageLayout::UNDEFINED, vk::ImageLayout::TRANSFER_DST_OPTIMAL) => (
-            vk::AccessFlags::empty(),
-            vk::AccessFlags::TRANSFER_WRITE,
-            vk::PipelineStageFlags::TOP_OF_PIPE,
-            vk::PipelineStageFlags::TRANSFER,
-        ),
-        (vk::ImageLayout::TRANSFER_DST_OPTIMAL, vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL) => (
-            vk::AccessFlags::TRANSFER_WRITE,
-            vk::AccessFlags::SHADER_READ,
-            vk::PipelineStageFlags::TRANSFER,
-            vk::PipelineStageFlags::FRAGMENT_SHADER,
-        ),
-        _ => panic!("Unsupported layout transition!"),
-    };
-
-    let barrier = vk::ImageMemoryBarrier::default()
-        .old_layout(old_layout)
-        .new_layout(new_layout)
-        .image(image)
-        .subresource_range(
-            vk::ImageSubresourceRange::default()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .base_mip_level(0)
-                .level_count(1)
-                .base_array_layer(0)
-                .layer_count(1),
-        )
-        .src_access_mask(src_access_mask)
-        .dst_access_mask(dst_access_mask);
-
-    command_buffer.pipeline_image_memory_barrier(
-        barrier,
-        src_stage,
-        dst_stage,
-        vk::DependencyFlags::empty(),
-    );
-
-    command_buffer.end()?;
-
-    command_buffer.submit_and_wait(None, &NO_FENCE)?;
-
-    Ok(())
-}
-
-fn copy_buffer_to_image(
-    context: Arc<VulkanContext>,
-    buffer: Buffer,
-    image: vk::Image,
-    width: u32,
-    height: u32,
-) -> Result<()> {
-    let command_buffer = CommandBuffer::new(context.clone(), "copy_buffer_to_image")?;
-    command_buffer.begin_one_time_submit()?;
-
-    let region = vk::BufferImageCopy::default()
-        .buffer_offset(0)
-        .buffer_row_length(0)
-        .buffer_image_height(0)
-        .image_subresource(
-            vk::ImageSubresourceLayers::default()
-                .aspect_mask(vk::ImageAspectFlags::COLOR)
-                .mip_level(0)
-                .base_array_layer(0)
-                .layer_count(1),
-        )
-        .image_offset(vk::Offset3D { x: 0, y: 0, z: 0 })
-        .image_extent(vk::Extent3D {
-            width,
-            height,
-            depth: 1,
-        });
-
-    command_buffer.copy_buffer_to_image(
-        &buffer,
-        image,
-        vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-        &[region],
-    );
-
-    command_buffer.end()?;
-
-    command_buffer.submit_and_wait(None, &NO_FENCE)?;
-
-    Ok(())
 }

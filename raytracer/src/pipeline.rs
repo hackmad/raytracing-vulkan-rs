@@ -7,6 +7,7 @@ use shaders::{ClosestHitPushConstants, RayGenPushConstants, ShaderModules, Unifi
 use vulkan::{Buffer, CommandBuffer, DescriptorSetLayout, VulkanContext};
 
 const ENTRY_POINT: &core::ffi::CStr = c"main";
+pub const MAX_TEXTURE_COUNT: u32 = 128;
 
 /// The raytracing pipeline.
 pub struct RtPipeline {
@@ -376,7 +377,7 @@ fn create_sampler_and_image_textures_layout(
             vk::DescriptorSetLayoutBinding::default()
                 .binding(1)
                 .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
-                .descriptor_count(1)
+                .descriptor_count(MAX_TEXTURE_COUNT)
                 .stage_flags(vk::ShaderStageFlags::CLOSEST_HIT_KHR),
         ],
         &[

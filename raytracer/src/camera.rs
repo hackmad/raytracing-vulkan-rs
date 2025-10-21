@@ -1,5 +1,3 @@
-use std::sync::{Arc, RwLock};
-
 use glam::{Mat4, Vec3};
 
 /// Camera interface.
@@ -109,7 +107,7 @@ pub fn create_camera(
     scene_camera: &scene_file::Camera,
     image_width: u32,
     image_height: u32,
-) -> Arc<RwLock<dyn crate::Camera>> {
+) -> Box<dyn crate::Camera> {
     match scene_camera {
         scene_file::Camera::Perspective {
             name: _,
@@ -121,7 +119,7 @@ pub fn create_camera(
             z_far,
             focal_length,
             aperture_size,
-        } => Arc::new(RwLock::new(PerspectiveCamera::new(
+        } => Box::new(PerspectiveCamera::new(
             Vec3::from_slice(eye),
             Vec3::from_slice(look_at),
             Vec3::from_slice(up),
@@ -132,6 +130,6 @@ pub fn create_camera(
             *aperture_size,
             image_width,
             image_height,
-        ))),
+        )),
     }
 }

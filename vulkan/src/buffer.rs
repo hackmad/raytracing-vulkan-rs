@@ -1,6 +1,6 @@
 use std::{ffi::c_void, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use ash::{util::Align, vk};
 use log::debug;
 
@@ -32,10 +32,10 @@ impl Buffer {
             let memory_req = context.device.get_buffer_memory_requirements(buffer);
 
             let memory_index = get_memory_type_index(
-                context.device_memory_properties,
                 memory_req.memory_type_bits,
                 memory_properties,
-            );
+                context.device_memory_properties,
+            )?;
 
             let mut memory_allocate_flags_info = vk::MemoryAllocateFlagsInfo::default()
                 .flags(vk::MemoryAllocateFlags::DEVICE_ADDRESS);
@@ -161,18 +161,16 @@ impl Drop for Buffer {
 }
 
 pub fn get_memory_type_index(
+    memory_type_bits: u32,
+    required_properties: vk::MemoryPropertyFlags,
     device_memory_properties: vk::PhysicalDeviceMemoryProperties,
-    mut type_bits: u32,
-    properties: vk::MemoryPropertyFlags,
-) -> u32 {
-    for i in 0..device_memory_properties.memory_type_count {
-        if (type_bits & 1) == 1
-            && (device_memory_properties.memory_types[i as usize].property_flags & properties)
-                == properties
+) -> Result<u32> {
+    for (index, memory_type) in device_memory_properties.memory_types.iter().enumerate() {
+        if (memory_type_bits & (1 << index)) != 0
+            && memory_type.property_flags.contains(required_properties)
         {
-            return i;
+            return Ok(index as _);
         }
-        type_bits >>= 1;
     }
-    0
+    Err(anyhow!("Memory type not found"))
 }

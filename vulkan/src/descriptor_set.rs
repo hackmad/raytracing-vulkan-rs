@@ -4,7 +4,7 @@ use anyhow::Result;
 use ash::vk;
 use log::debug;
 
-use crate::{Buffer, Descriptor, DescriptorSetLayout, Sampler, VulkanContext, image::Image};
+use crate::{Buffer, Descriptor, DescriptorSetLayout, Sampler, VulkanContext};
 
 pub enum DescriptorSetBufferType {
     Uniform,
@@ -69,11 +69,51 @@ fn new_ds(
     context: Arc<VulkanContext>,
     descriptor_set_layout: &DescriptorSetLayout,
     descriptors: &[Descriptor],
-    variable_descriptor_count: u32, // Use > 0 for variable descriptors.
 ) -> Result<(vk::DescriptorPool, vk::DescriptorSet)> {
     let descriptor_sizes: Vec<_> = descriptors
         .iter()
         .map(vk::DescriptorPoolSize::from)
+        .collect();
+
+    let descriptor_pool_info = vk::DescriptorPoolCreateInfo::default()
+        .flags(vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET)
+        .pool_sizes(&descriptor_sizes)
+        .max_sets(1);
+
+    let descriptor_pool = unsafe {
+        context
+            .device
+            .create_descriptor_pool(&descriptor_pool_info, None)?
+    };
+
+    let layouts = [descriptor_set_layout.get()];
+
+    let alloc_info = vk::DescriptorSetAllocateInfo::default()
+        .descriptor_pool(descriptor_pool)
+        .set_layouts(&layouts);
+
+    let descriptor_set = unsafe { context.device.allocate_descriptor_sets(&alloc_info)? }[0];
+
+    Ok((descriptor_pool, descriptor_set))
+}
+
+fn new_variable_ds(
+    context: Arc<VulkanContext>,
+    descriptor_set_layout: &DescriptorSetLayout,
+    descriptors: &[Descriptor], // Last descriptor is variable.
+    variable_descriptor_count: u32,
+) -> Result<(vk::DescriptorPool, vk::DescriptorSet)> {
+    let descriptor_sizes: Vec<_> = descriptors
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let descriptor_count = if i < descriptors.len() - 1 {
+                1_u32
+            } else {
+                variable_descriptor_count
+            };
+            vk::DescriptorPoolSize::from(d).descriptor_count(descriptor_count)
+        })
         .collect();
 
     let descriptor_pool_info = vk::DescriptorPoolCreateInfo::default()
@@ -95,13 +135,10 @@ fn new_ds(
         vk::DescriptorSetVariableDescriptorCountAllocateInfo::default()
             .descriptor_counts(&variable_descriptor_counts);
 
-    let mut alloc_info = vk::DescriptorSetAllocateInfo::default()
+    let alloc_info = vk::DescriptorSetAllocateInfo::default()
         .descriptor_pool(descriptor_pool)
-        .set_layouts(&layouts);
-
-    if variable_descriptor_count > 0 {
-        alloc_info = alloc_info.push_next(&mut variable_descriptor_count_alloc_info);
-    }
+        .set_layouts(&layouts)
+        .push_next(&mut variable_descriptor_count_alloc_info);
 
     let descriptor_set = unsafe { context.device.allocate_descriptor_sets(&alloc_info)? }[0];
 
@@ -119,7 +156,7 @@ pub fn new_tlas_ds(
     )];
 
     let (descriptor_pool, descriptor_set) =
-        new_ds(context.clone(), descriptor_set_layout, &descriptors, 0)?;
+        new_ds(context.clone(), descriptor_set_layout, &descriptors)?;
 
     let accel_structs = [data];
     let mut accel_info = vk::WriteDescriptorSetAccelerationStructureKHR::default()
@@ -148,19 +185,19 @@ pub fn new_tlas_ds(
     ))
 }
 
-pub fn new_storage_image_ds<'a>(
+pub fn new_storage_image_view_ds(
     context: Arc<VulkanContext>,
-    descriptor_set_layout: &'a DescriptorSetLayout,
-    data: &'a Image,
-) -> Result<DescriptorSet<&'a Image>> {
+    descriptor_set_layout: &DescriptorSetLayout,
+    data: vk::ImageView,
+) -> Result<DescriptorSet<vk::ImageView>> {
     let descriptors = [Descriptor::new(vk::DescriptorType::STORAGE_IMAGE, 1)];
 
     let (descriptor_pool, descriptor_set) =
-        new_ds(context.clone(), descriptor_set_layout, &descriptors, 0)?;
+        new_ds(context.clone(), descriptor_set_layout, &descriptors)?;
 
     let image_info = [vk::DescriptorImageInfo::default()
         .image_layout(vk::ImageLayout::GENERAL)
-        .image_view(data.image_view)];
+        .image_view(data)];
 
     let descriptor_writes = [vk::WriteDescriptorSet::default()
         .dst_set(descriptor_set)
@@ -192,7 +229,7 @@ pub fn new_buffer_ds(
     let descriptors = [Descriptor::new(ty.to_shader(), 1)];
 
     let (descriptor_pool, descriptor_set) =
-        new_ds(context.clone(), descriptor_set_layout, &descriptors, 0)?;
+        new_ds(context.clone(), descriptor_set_layout, &descriptors)?;
 
     let buffer_info = [vk::DescriptorBufferInfo::default()
         .buffer(data.buffer)
@@ -231,7 +268,7 @@ pub fn new_buffers_ds(
     let descriptors = [Descriptor::new(ty.to_shader(), data.len() as _)];
 
     let (descriptor_pool, descriptor_set) =
-        new_ds(context.clone(), descriptor_set_layout, &descriptors, 0)?;
+        new_ds(context.clone(), descriptor_set_layout, &descriptors)?;
 
     let buffer_infos: Vec<_> = data
         .iter()
@@ -277,22 +314,33 @@ pub fn new_sampler_and_textures_ds<I>(
     descriptor_set_layout: &DescriptorSetLayout,
     sampler: Sampler,
     texture_image_views: I,
+    max_texture_count: u32,
 ) -> Result<DescriptorSet<Sampler>>
 where
     I: IntoIterator<Item = vk::ImageView> + ExactSizeIterator,
 {
+    assert!(max_texture_count > 0, "Maximum texture count is 0");
+
     let image_count = texture_image_views.len() as u32;
+    assert!(
+        image_count > 0,
+        "Texture count is 0. Use at least one dummy texture."
+    );
+    assert!(
+        image_count <= max_texture_count,
+        "Number of textures {image_count} exceeds maximum {max_texture_count}"
+    );
 
     let descriptors = vec![
         Descriptor::new(vk::DescriptorType::SAMPLER, 1),
-        Descriptor::new(vk::DescriptorType::SAMPLED_IMAGE, image_count.max(1)),
+        Descriptor::new(vk::DescriptorType::SAMPLED_IMAGE, max_texture_count),
     ];
 
-    let (descriptor_pool, descriptor_set) = new_ds(
+    let (descriptor_pool, descriptor_set) = new_variable_ds(
         context.clone(),
         descriptor_set_layout,
         &descriptors,
-        image_count,
+        max_texture_count,
     )?;
 
     let sampler_info = [vk::DescriptorImageInfo {
@@ -312,21 +360,19 @@ where
     let image_infos: Vec<_> = texture_image_views
         .into_iter()
         .map(|image_view| vk::DescriptorImageInfo {
-            sampler: vk::Sampler::null(),
+            sampler: vk::Sampler::null(), // not used for image view
             image_view,
             image_layout: vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
         })
         .collect();
 
-    if image_count > 0 {
-        descriptor_writes.push(
-            vk::WriteDescriptorSet::default()
-                .dst_set(descriptor_set)
-                .dst_binding(1)
-                .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
-                .image_info(&image_infos),
-        );
-    }
+    descriptor_writes.push(
+        vk::WriteDescriptorSet::default()
+            .dst_set(descriptor_set)
+            .dst_binding(1)
+            .descriptor_type(vk::DescriptorType::SAMPLED_IMAGE)
+            .image_info(&image_infos),
+    );
 
     unsafe {
         context

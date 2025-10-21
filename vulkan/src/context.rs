@@ -308,7 +308,8 @@ fn create_device(
         .runtime_descriptor_array(true)
         .descriptor_binding_partially_bound(true)
         .descriptor_binding_variable_descriptor_count(true)
-        .buffer_device_address(true);
+        .buffer_device_address(true)
+        .shader_sampled_image_array_non_uniform_indexing(true);
 
     let mut features2 = vk::PhysicalDeviceFeatures2::default()
         .features(features)

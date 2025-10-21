@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{Buffer, Fence, VulkanContext};
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use ash::vk::{self, Handle};
 use log::debug;
 
@@ -67,17 +67,22 @@ impl CommandBuffer {
                 .unwrap_or_default()
                 .command_buffers(&command_buffers);
 
-            let submit_result =
-                self.context
-                    .device
-                    .queue_submit(graphics_queue, &[submit_info], fence.get());
-
-            submit_result?;
+            self.context
+                .device
+                .queue_submit(graphics_queue, &[submit_info], fence.get())?;
 
             if !fence.get().is_null() {
-                self.context
+                match self
+                    .context
                     .device
-                    .wait_for_fences(&[fence.get()], true, u64::MAX)?;
+                    .wait_for_fences(&[fence.get()], true, u64::MAX)
+                {
+                    Ok(()) => {}
+                    Err(e) => {
+                        debug!("CommandBuffer {}. wait_for_fences failed {e:?}", &self.name);
+                        return Err(anyhow!("{e:}"));
+                    }
+                }
             } else {
                 self.context.device.queue_wait_idle(graphics_queue)?;
             }

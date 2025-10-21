@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow};
 use ash::vk;
@@ -8,13 +8,14 @@ use shaders::{ClosestHitPushConstants, RayGenPushConstants, UnifiedPushConstants
 use vulkan::{
     Buffer, CommandBuffer, DescriptorSet, DescriptorSetBufferType, Fence, Image, NO_FENCE, Sampler,
     Semaphore, Swapchain, SwapchainNextImage, VulkanContext, new_buffer_ds, new_buffers_ds,
-    new_sampler_and_textures_ds, new_storage_image_ds, new_tlas_ds,
+    new_sampler_and_textures_ds, new_storage_image_view_ds, new_tlas_ds,
 };
 use winit::window::Window;
 
 use crate::{
-    Camera, Materials, Mesh, RtPipeline, Textures, acceleration::AccelerationStructures,
-    create_camera, create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
+    Camera, MAX_TEXTURE_COUNT, Materials, Mesh, RtPipeline, Textures,
+    acceleration::AccelerationStructures, create_camera, create_mesh_index_buffer,
+    create_mesh_storage_buffer, create_mesh_vertex_buffer,
 };
 
 struct FrameSyncObjects {
@@ -40,10 +41,16 @@ pub struct RenderEngine {
     render_image: Image,
 
     /// Camera.
-    camera: Arc<RwLock<dyn Camera>>,
+    camera: Box<dyn Camera>,
 
     /// Descriptor set for binding the top-level acceleration structure for the scene.
     tlas_descriptor_set: DescriptorSet<vk::AccelerationStructureKHR>,
+
+    /// Descriptor set for binding the render image.
+    render_image_descriptor_set: DescriptorSet<vk::ImageView>,
+
+    /// Descriptor set for binding the camera uniform buffer.
+    camera_buffer_descriptor_set: DescriptorSet<Buffer>,
 
     /// Descriptor set for binding mesh data.
     mesh_data_descriptor_set: DescriptorSet<Vec<Buffer>>,
@@ -91,23 +98,14 @@ impl RenderEngine {
         let max_frames_in_flight = swapchain.num_images().min(2);
 
         let mut frame_sync_objects = Vec::with_capacity(max_frames_in_flight);
-        for _ in 0..max_frames_in_flight {
+        for i in 0..max_frames_in_flight {
+            let name = format!("Frame Sync Fence {i}");
             frame_sync_objects.push(FrameSyncObjects {
                 image_available_semaphore: Semaphore::new(context.clone())?,
                 render_finished_semaphore: Semaphore::new(context.clone())?,
-                fence: Fence::new(context.clone(), true)?,
+                fence: Fence::new(context.clone(), &name, true)?,
             });
         }
-
-        let render_camera = &scene_file.render.camera;
-
-        let scene_camera = scene_file
-            .cameras
-            .iter()
-            .find(|&cam| cam.get_name() == render_camera)
-            .with_context(|| format!("Camera ${render_camera} is no specified in cameras"))?;
-
-        let camera = create_camera(scene_camera, window_size[0] as u32, window_size[1] as u32);
 
         let render_image = Image::new_render_image(
             context.clone(),
@@ -160,7 +158,7 @@ impl RenderEngine {
         // Create the raytracing pipeline.
         let rt_pipeline = RtPipeline::new(context.clone())?;
 
-        // Create descriptor sets for non-changing data.
+        // Create descriptor sets.
 
         // Acceleration structures.
         let mesh_geometry_buffers = meshes
@@ -171,13 +169,35 @@ impl RenderEngine {
         let acceleration_structures =
             AccelerationStructures::new(context.clone(), &mesh_geometry_buffers)?;
 
-        // Descriptors.
-
         let tlas_descriptor_set = new_tlas_ds(
             context.clone(),
             &rt_pipeline.set_layouts[RtPipeline::TLAS_LAYOUT],
             acceleration_structures.tlas.acceleration_structure,
         )?;
+
+        let render_image_descriptor_set = new_storage_image_view_ds(
+            context.clone(),
+            &rt_pipeline.set_layouts[RtPipeline::RENDER_IMAGE_LAYOUT],
+            render_image.image_view,
+        )?;
+
+        // Camera.
+        let scene_camera = scene_file
+            .cameras
+            .iter()
+            .find(|&cam| cam.get_name() == scene_file.render.camera)
+            .with_context(|| {
+                format!(
+                    "Camera ${} is no specified in cameras",
+                    scene_file.render.camera
+                )
+            })?;
+
+        let camera = create_camera(scene_camera, window_size[0] as u32, window_size[1] as u32);
+
+        let camera_buffer_descriptor_set =
+            create_camera_uniform_buffer_ds(context.clone(), &rt_pipeline, camera.as_ref())
+                .unwrap();
 
         // Mesh data.
         // NOTE: The 3 buffers below pack the respective data into a single buffer each where as the
@@ -197,17 +217,24 @@ impl RenderEngine {
         // Sampler + Textures.
         let texture_sampler = Sampler::new(context.clone())?;
 
-        let texture_image_views = textures
-            .image_textures
-            .images
-            .iter()
-            .map(|image| image.image_view);
+        let texture_image_views = if image_texture_count > 0 {
+            textures
+                .image_textures
+                .images
+                .iter()
+                .map(|image| image.image_view)
+                .collect()
+        } else {
+            let dummy_image = Image::new_dummy_image(context.clone())?;
+            vec![dummy_image.image_view]
+        };
 
         let image_textures_descriptor_set = new_sampler_and_textures_ds(
             context.clone(),
             &rt_pipeline.set_layouts[RtPipeline::SAMPLERS_AND_TEXTURES_LAYOUT],
             texture_sampler,
-            texture_image_views,
+            texture_image_views.into_iter(),
+            MAX_TEXTURE_COUNT,
         )?;
 
         // Constant colour textures.
@@ -283,9 +310,11 @@ impl RenderEngine {
         Ok(Self {
             context,
             swapchain,
-            camera,
             render_image,
+            camera,
             tlas_descriptor_set,
+            render_image_descriptor_set,
+            camera_buffer_descriptor_set,
             mesh_data_descriptor_set,
             image_textures_descriptor_set,
             constant_colour_textures_descriptor_set,
@@ -302,13 +331,19 @@ impl RenderEngine {
 
     /// Updates the camera image size to match a new window size.
     pub fn update_window_size(&mut self, window_size: [f32; 2]) -> Result<()> {
-        let mut camera = self.camera.write().unwrap();
-        camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
+        self.camera
+            .update_image_size(window_size[0] as u32, window_size[1] as u32);
 
         self.render_image = Image::new_render_image(
             self.context.clone(),
             window_size[0] as u32,
             window_size[1] as u32,
+        )?;
+
+        self.render_image_descriptor_set = new_storage_image_view_ds(
+            self.context.clone(),
+            &self.rt_pipeline.set_layouts[RtPipeline::RENDER_IMAGE_LAYOUT],
+            self.render_image.image_view,
         )?;
 
         self.push_constants.ray_gen_pc.resolution = [window_size[0] as u32, window_size[1] as u32];
@@ -331,45 +366,9 @@ impl RenderEngine {
     /// future for the rendering operation.
     pub fn render(&mut self) -> Result<RenderResult> {
         // Wait for fence to ensure this frame’s work is done.
+        debug!("RenderEngine::render() - Waiting and resetting fence...");
         let sync = &self.frame_sync_objects[self.current_frame];
         sync.fence.wait_and_reset()?;
-
-        // Create the uniform buffer for the camera.
-        let camera = self.camera.read().unwrap();
-
-        // Create the descriptor sets for the raytracing pipeline.
-        let camera = shaders::Camera::new(
-            (camera.get_projection_matrix() * camera.get_view_matrix()).to_cols_array_2d(),
-            camera.get_view_inverse_matrix().to_cols_array_2d(),
-            camera.get_projection_inverse_matrix().to_cols_array_2d(),
-            camera.get_focal_length(),
-            camera.get_aperture_size(),
-        );
-
-        debug!("Creating camera buffer");
-        let camera_buffer = Buffer::new_device_local_storage_buffer(
-            self.context.clone(),
-            vk::BufferUsageFlags::UNIFORM_BUFFER,
-            &[camera],
-            "camera_buffer",
-        )
-        .unwrap();
-
-        let camera_buffer_descriptor_set = new_buffer_ds(
-            self.context.clone(),
-            &self.rt_pipeline.set_layouts[RtPipeline::CAMERA_BUFFER_LAYOUT],
-            DescriptorSetBufferType::Uniform,
-            camera_buffer,
-        )
-        .unwrap();
-
-        debug!("Creating render image descriptor set");
-        let render_image_descriptor_set = new_storage_image_ds(
-            self.context.clone(),
-            &self.rt_pipeline.set_layouts[RtPipeline::RENDER_IMAGE_LAYOUT],
-            &self.render_image,
-        )
-        .unwrap();
 
         // Acquire the swapchain image to render to.
         let acquire_result =
@@ -411,8 +410,8 @@ impl RenderEngine {
                 &command_buffer,
                 &[
                     self.tlas_descriptor_set.set,
-                    camera_buffer_descriptor_set.set,
-                    render_image_descriptor_set.set,
+                    self.camera_buffer_descriptor_set.set,
+                    self.render_image_descriptor_set.set,
                     self.mesh_data_descriptor_set.set,
                     self.image_textures_descriptor_set.set,
                     self.constant_colour_textures_descriptor_set.set,
@@ -532,4 +531,34 @@ impl Drop for RenderEngine {
     fn drop(&mut self) {
         debug!("RenderEngine: drop");
     }
+}
+
+fn create_camera_uniform_buffer_ds(
+    context: Arc<VulkanContext>,
+    rt_pipeline: &RtPipeline,
+    camera: &dyn Camera,
+) -> Result<DescriptorSet<Buffer>> {
+    let shader_camera = shaders::Camera::new(
+        (camera.get_projection_matrix() * camera.get_view_matrix()).to_cols_array_2d(),
+        camera.get_view_inverse_matrix().to_cols_array_2d(),
+        camera.get_projection_inverse_matrix().to_cols_array_2d(),
+        camera.get_focal_length(),
+        camera.get_aperture_size(),
+    );
+
+    let camera_buffer = Buffer::new_device_local_storage_buffer(
+        context.clone(),
+        vk::BufferUsageFlags::UNIFORM_BUFFER,
+        &[shader_camera],
+        "camera_buffer",
+    )?;
+
+    let ds = new_buffer_ds(
+        context.clone(),
+        &rt_pipeline.set_layouts[RtPipeline::CAMERA_BUFFER_LAYOUT],
+        DescriptorSetBufferType::Uniform,
+        camera_buffer,
+    )?;
+
+    Ok(ds)
 }
