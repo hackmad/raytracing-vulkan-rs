@@ -24,6 +24,13 @@
 - Windows: Untested
 - MacOS: [Needs MoltenVK support for acceleration structures](https://github.com/KhronosGroup/MoltenVK/issues/1956).
 
+## Prerequisites
+
+```bash
+sudo apt install cmake
+sudo apt install vulkan-validationlayers
+```
+
 ## Running
 
 Main binary:
