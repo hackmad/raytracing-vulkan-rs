@@ -91,7 +91,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     materials.push(ground_material);
     instances.push(Instance {
         name: "ground_sphere".to_string(),
-        transform: None,
+        transforms: None,
     });
 
     let center_sphere_1 = Vec3::new(0.0, -1.0, 0.0);
@@ -184,7 +184,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
             });
             instances.push(Instance {
                 name,
-                transform: None,
+                transforms: None,
             });
 
             textures.extend_from_slice(&tex);
@@ -207,7 +207,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     materials.push(material1);
     instances.push(Instance {
         name: "sphere1".to_string(),
-        transform: None,
+        transforms: None,
     });
 
     let texture2 = Texture::Constant {
@@ -230,7 +230,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     materials.push(material2);
     instances.push(Instance {
         name: "sphere2".to_string(),
-        transform: None,
+        transforms: None,
     });
 
     let texture3 = Texture::Constant {
@@ -259,7 +259,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     materials.push(material3);
     instances.push(Instance {
         name: "sphere3".to_string(),
-        transform: None,
+        transforms: None,
     });
 
     cameras.push(Camera::Perspective {

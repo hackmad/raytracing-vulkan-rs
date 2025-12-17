@@ -101,12 +101,7 @@ impl Renderer {
                 .get(&instance.name)
                 .with_context(|| format!("Mesh {} not found", instance.name))?;
             let mesh = meshes[*mesh_index].clone();
-            mesh_instances.push(MeshInstance::new(
-                mesh,
-                &instance
-                    .transform
-                    .unwrap_or([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
-            ));
+            mesh_instances.push(MeshInstance::new(mesh, instance.get_transform()));
         }
 
         // Get materials.
