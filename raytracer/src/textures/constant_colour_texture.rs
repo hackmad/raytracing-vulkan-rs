@@ -25,11 +25,11 @@ impl ConstantColourTextures {
         let mut indices = HashMap::new();
 
         for texture in textures.values() {
-            if let Texture::Constant { name, rgb } = texture {
-                if let Entry::Vacant(e) = indices.entry(name.clone()) {
-                    e.insert(colours.len() as _);
-                    colours.push(*rgb);
-                }
+            if let Texture::Constant { name, rgb } = texture
+                && let Entry::Vacant(e) = indices.entry(name.clone())
+            {
+                e.insert(colours.len() as _);
+                colours.push(*rgb);
             }
         }
 

@@ -79,7 +79,7 @@ where
     let scratch_buffer_address: u64 = scratch_buffer.device_address()?.into();
     debug!(
         "Scratch buffer device addr: {scratch_buffer_address} is {}",
-        if (scratch_buffer_address % min_scratch_offset) == 0 {
+        if scratch_buffer_address.is_multiple_of(min_scratch_offset) {
             "aligned"
         } else {
             "NOT ALIGNED"
@@ -103,7 +103,7 @@ where
     let device_local_buffer_address: u64 = device_local_buffer.device_address()?.into();
     debug!(
         "Device local buffer device addr: {device_local_buffer_address} is {}",
-        if (device_local_buffer_address % min_scratch_offset) == 0 {
+        if device_local_buffer_address.is_multiple_of(min_scratch_offset) {
             "aligned"
         } else {
             "NOT ALIGNED"

@@ -131,7 +131,7 @@ fn build_acceleration_structure_common(
     let scratch_buffer_device_address: u64 = scratch_buffer.device_address().unwrap().into();
     debug!(
         "AS scratch buffer device addr: {scratch_buffer_device_address} is {}",
-        if (scratch_buffer_device_address % min_scratch_offset) == 0 {
+        if scratch_buffer_device_address.is_multiple_of(min_scratch_offset) {
             "aligned"
         } else {
             "NOT ALIGNED"
