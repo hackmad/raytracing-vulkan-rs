@@ -70,6 +70,12 @@
       }
     }
   ],
+  "instances": [
+    { "name": "center sphere" },
+    { "name": "left sphere" },
+    { "name": "right sphere" },
+    { "name": "ground sphere" }
+  ],
   "sky": {
     "vertical_gradient" : {
         "factor": 0.5,

@@ -364,7 +364,7 @@ fn generate_box(corners: &[[f32; 3]; 2]) -> (Vec<Vertex>, Vec<u32>) {
 /// This will create a storage buffer to hold the mesh related data.
 pub fn create_mesh_storage_buffer(
     vk: Arc<Vk>,
-    meshes: &[Mesh],
+    meshes: &[Arc<Mesh>],
     materials: &Materials,
 ) -> Result<Subbuffer<[closest_hit::Mesh]>> {
     let vertex_buffer_sizes = meshes.iter().map(|mesh| mesh.vertices.len());
@@ -418,7 +418,7 @@ pub fn create_mesh_storage_buffer(
 /// of meshes.
 pub fn create_mesh_vertex_buffer(
     vk: Arc<Vk>,
-    meshes: &[Mesh],
+    meshes: &[Arc<Mesh>],
 ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
     let vertex_buffer_data: Vec<_> = meshes
         .iter()
@@ -444,7 +444,7 @@ pub fn create_mesh_vertex_buffer(
 
 /// Create a storage buffer for accessing indices in shader code. This will pack indices in order
 /// of meshes.
-pub fn create_mesh_index_buffer(vk: Arc<Vk>, meshes: &[Mesh]) -> Result<Subbuffer<[u32]>> {
+pub fn create_mesh_index_buffer(vk: Arc<Vk>, meshes: &[Arc<Mesh>]) -> Result<Subbuffer<[u32]>> {
     let index_buffer_data: Vec<_> = meshes
         .iter()
         .flat_map(|mesh| mesh.indices.clone())

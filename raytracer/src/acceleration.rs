@@ -1,4 +1,4 @@
-use std::{iter, mem::size_of, sync::Arc};
+use std::{collections::HashMap, iter, mem::size_of, sync::Arc};
 
 use anyhow::{Context, Result};
 use log::debug;
@@ -19,7 +19,7 @@ use vulkano::{
     sync::GpuFuture,
 };
 
-use crate::{Mesh, Vk};
+use crate::{Mesh, MeshInstance, Vk};
 
 /// Stores the acceleration structures.
 pub struct AccelerationStructures {
@@ -28,37 +28,57 @@ pub struct AccelerationStructures {
 
     /// The bottom-level acceleration structure is required to be kept alive even though renderer will not
     /// directly use it. The top-level acceleration structure needs it.
-    _blas_vec: Vec<Arc<AccelerationStructure>>,
+    _blas_vec: HashMap<String, Arc<AccelerationStructure>>,
 }
 
 impl AccelerationStructures {
     /// Create new acceleration structures for the given model.
-    pub fn new(vk: Arc<Vk>, meshes: &[Mesh]) -> Result<Self> {
-        let vertex_buffers = meshes
-            .iter()
-            .map(|mesh| mesh.create_blas_vertex_buffer(vk.clone()))
-            .collect::<Result<Vec<_>>>()?;
+    pub fn new(vk: Arc<Vk>, mesh_instances: &[MeshInstance]) -> Result<Self> {
+        let mut meshes: HashMap<String, Arc<Mesh>> = HashMap::new();
+        for mesh_instance in mesh_instances.iter() {
+            meshes
+                .entry(mesh_instance.mesh.name.clone())
+                .or_insert_with(|| mesh_instance.mesh.clone());
+        }
 
-        let index_buffers = meshes
-            .iter()
-            .map(|model| model.create_blas_index_buffer(vk.clone()))
-            .collect::<Result<Vec<_>>>()?;
+        let mut vertex_buffers: HashMap<String, Subbuffer<[MeshVertex]>> = HashMap::new();
+        for (name, mesh) in meshes.iter() {
+            let buf = mesh.create_blas_vertex_buffer(vk.clone())?;
+            vertex_buffers.insert(name.clone(), buf);
+        }
 
-        let blas_vec = vertex_buffers
-            .into_iter()
-            .zip(index_buffers)
-            .map(|(vertex_buffer, index_buffer)| {
-                build_acceleration_structure_triangles(vk.clone(), vertex_buffer, index_buffer)
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let mut index_buffers: HashMap<String, Subbuffer<[u32]>> = HashMap::new();
+        for (name, mesh) in meshes.iter() {
+            let buf = mesh.create_blas_index_buffer(vk.clone())?;
+            index_buffers.insert(name.clone(), buf);
+        }
 
-        let blas_instances = blas_vec
-            .iter()
-            .map(|blas| AccelerationStructureInstance {
+        let mut blas_vec: HashMap<String, Arc<AccelerationStructure>> = HashMap::new();
+        for (name, vertex_buffer) in vertex_buffers.iter() {
+            let index_buffer = index_buffers
+                .get(name)
+                .with_context(|| format!("Index buffer {name} not found"))?;
+
+            let acc =
+                build_acceleration_structure_triangles(vk.clone(), vertex_buffer, index_buffer)?;
+            blas_vec.insert(name.clone(), acc);
+        }
+
+        let mut blas_instances: Vec<_> = Vec::new();
+        for mesh_instance in mesh_instances.iter() {
+            let name = &mesh_instance.mesh.name;
+
+            let blas = blas_vec
+                .get(name)
+                .with_context(|| format!("BLAS not found {name}"))?;
+
+            let acc = AccelerationStructureInstance {
+                transform: mesh_instance.transform,
                 acceleration_structure_reference: blas.device_address().into(),
                 ..Default::default()
-            })
-            .collect();
+            };
+            blas_instances.push(acc);
+        }
 
         // Build the top-level acceleration structure.
         let tlas = unsafe { build_top_level_acceleration_structure(vk.clone(), blas_instances) }?;
@@ -189,15 +209,17 @@ fn build_acceleration_structure_common(
 /// Builds a bottom level accerlation strucuture for a set of triangles.
 fn build_acceleration_structure_triangles(
     vk: Arc<Vk>,
-    vertex_buffer: Subbuffer<[MeshVertex]>,
-    index_buffer: Subbuffer<[u32]>,
+    vertex_buffer: &Subbuffer<[MeshVertex]>,
+    index_buffer: &Subbuffer<[u32]>,
 ) -> Result<Arc<AccelerationStructure>> {
     let primitive_count = (index_buffer.len() / 3) as u32;
 
+    // NOTE: Unfortunately the clone of vertex_buffer/index_buffer is unavoidable because of
+    // AccelerationStructureGeometryTrianglesData Would be nice if we could share this data.
     let as_geometry_triangles_data = AccelerationStructureGeometryTrianglesData {
         max_vertex: vertex_buffer.len() as _,
-        vertex_data: Some(vertex_buffer.into_bytes()),
-        index_data: Some(IndexBuffer::U32(index_buffer)),
+        vertex_data: Some(vertex_buffer.clone().into_bytes()),
+        index_data: Some(IndexBuffer::U32(index_buffer.clone())),
         vertex_stride: size_of::<MeshVertex>() as _,
         ..AccelerationStructureGeometryTrianglesData::new(Format::R32G32B32_SFLOAT)
     };

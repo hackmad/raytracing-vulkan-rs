@@ -63,6 +63,12 @@
       }
     }
   ],
+  "instances": [
+    { "name": "top sphere" },
+    { "name": "bottom sphere" },
+    { "name": "side-quad-light" },
+    { "name": "top-sphere-light" }
+  ],
   "sky": {
     "solid" : { "rgb": [0, 0, 0] }
   },

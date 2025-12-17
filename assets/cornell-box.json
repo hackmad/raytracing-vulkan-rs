@@ -96,6 +96,16 @@
       }
     }
   ],
+  "instances": [
+    { "name": "left-green" },
+    { "name": "right-red" },
+    { "name": "top-light" },
+    { "name": "bottom-white" },
+    { "name": "top-white" },
+    { "name": "back-white" },
+    { "name": "box1" },
+    { "name": "box2" }
+  ],
   "sky": {
     "solid" : { "rgb": [0, 0, 0] }
   },

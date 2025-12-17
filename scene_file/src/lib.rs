@@ -1,4 +1,5 @@
 mod camera;
+mod instance;
 mod material;
 mod primitive;
 mod render;
@@ -6,6 +7,7 @@ mod sky;
 mod texture;
 
 pub use camera::*;
+pub use instance::*;
 pub use material::*;
 pub use primitive::*;
 pub use render::*;
@@ -28,6 +30,7 @@ pub struct SceneFile {
     pub textures: Vec<Texture>,
     pub materials: Vec<Material>,
     pub primitives: Vec<Primitive>,
+    pub instances: Vec<Instance>,
     pub sky: Sky,
     pub render: Render,
 }

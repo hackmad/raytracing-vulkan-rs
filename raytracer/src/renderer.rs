@@ -1,6 +1,9 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use scene_file::SceneFile;
 use shaders::{ShaderModules, closest_hit, ray_gen};
 use vulkano::{
@@ -17,9 +20,9 @@ use vulkano::{
 };
 
 use crate::{
-    Camera, Materials, Vk, acceleration::AccelerationStructures, create_mesh_index_buffer,
-    create_mesh_storage_buffer, create_mesh_vertex_buffer, pipeline::RtPipeline,
-    textures::Textures,
+    Camera, Materials, Mesh, MeshInstance, Vk, acceleration::AccelerationStructures,
+    create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
+    pipeline::RtPipeline, textures::Textures,
 };
 
 #[repr(C)]
@@ -82,7 +85,29 @@ impl Renderer {
         let noise_texture_count = textures.noise_textures.textures.len();
 
         // Get meshes.
-        let meshes: Vec<_> = scene_file.primitives.iter().map(|o| o.into()).collect();
+        let mut meshes: Vec<Arc<Mesh>> = Vec::new();
+        let mut mesh_map: HashMap<String, usize> = HashMap::new();
+        for primitive in scene_file.primitives.iter() {
+            let mesh = Arc::new(primitive.into());
+            mesh_map.insert(primitive.get_name().into(), meshes.len());
+            meshes.push(mesh);
+        }
+        let mesh_count = meshes.len();
+
+        // Get instances.
+        let mut mesh_instances: Vec<MeshInstance> = Vec::new();
+        for instance in scene_file.instances.iter() {
+            let mesh_index = mesh_map
+                .get(&instance.name)
+                .with_context(|| format!("Mesh {} not found", instance.name))?;
+            let mesh = meshes[*mesh_index].clone();
+            mesh_instances.push(MeshInstance::new(
+                mesh,
+                &instance
+                    .transform
+                    .unwrap_or([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+            ));
+        }
 
         // Get materials.
         let materials = Materials::new(&scene_file.materials, &textures);
@@ -96,7 +121,7 @@ impl Renderer {
         // data we need for now.
         let push_constants = UnifiedPushConstants {
             closest_hit_pc: closest_hit::ClosestHitPushConstants {
-                meshCount: meshes.len() as _,
+                meshCount: mesh_count as _,
                 imageTextureCount: image_texture_count as _,
                 constantColourCount: constant_colour_count as _,
                 checkerTextureCount: checker_texture_count as _,
@@ -129,7 +154,7 @@ impl Renderer {
         // Create descriptor sets for non-changing data.
 
         // Acceleration structures.
-        let acceleration_structures = AccelerationStructures::new(vk.clone(), &meshes)?;
+        let acceleration_structures = AccelerationStructures::new(vk.clone(), &mesh_instances)?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),

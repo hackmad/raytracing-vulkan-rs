@@ -42,6 +42,10 @@
       }
     }
   ],
+  "instances": [
+    { "name": "top sphere" },
+    { "name": "bottom sphere" }
+  ],
   "sky": {
     "vertical_gradient" : {
         "factor": 0.5,

@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use glam::Vec3;
 use random::Random;
-use scene_file::{Camera, Material, Primitive, Render, SceneFile, Sky, Texture};
+use scene_file::{Camera, Instance, Material, Primitive, Render, SceneFile, Sky, Texture};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -49,6 +49,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     println!("Generating Raytracing in One Weekend final scene file");
 
     let mut primitives = vec![];
+    let mut instances = vec![];
     let mut textures = vec![];
     let mut materials = vec![];
     let mut cameras = vec![];
@@ -84,11 +85,14 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         segments: 256,
         material: ground_material.get_name().to_string(),
     });
-
     textures.push(green_texture);
     textures.push(white_texture);
     textures.push(green_and_white_checker_texture);
     materials.push(ground_material);
+    instances.push(Instance {
+        name: "ground_sphere".to_string(),
+        transform: None,
+    });
 
     let center_sphere_1 = Vec3::new(0.0, -1.0, 0.0);
     let center_sphere_2 = Vec3::from_array(make_sphere_touch_ground(
@@ -169,13 +173,18 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                 (vec![], mat)
             };
 
+            let name = format!("sphere_{a}_{b}").to_string();
             primitives.push(Primitive::UvSphere {
-                name: format!("sphere_{a}_{b}").to_string(),
+                name: name.clone(),
                 center,
                 radius,
                 rings: 32,
                 segments: 64,
                 material: material.get_name().to_string(),
+            });
+            instances.push(Instance {
+                name,
+                transform: None,
             });
 
             textures.extend_from_slice(&tex);
@@ -196,6 +205,10 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         material: material1.get_name().to_string(),
     });
     materials.push(material1);
+    instances.push(Instance {
+        name: "sphere1".to_string(),
+        transform: None,
+    });
 
     let texture2 = Texture::Constant {
         name: "texture2".to_string(),
@@ -215,6 +228,10 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     });
     textures.push(texture2);
     materials.push(material2);
+    instances.push(Instance {
+        name: "sphere2".to_string(),
+        transform: None,
+    });
 
     let texture3 = Texture::Constant {
         name: "texture3".to_string(),
@@ -240,6 +257,10 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     textures.push(texture3);
     textures.push(texture4);
     materials.push(material3);
+    instances.push(Instance {
+        name: "sphere3".to_string(),
+        transform: None,
+    });
 
     cameras.push(Camera::Perspective {
         name: "default".to_string(),
@@ -269,9 +290,10 @@ fn generate_final_one_weekend_scene() -> Result<()> {
 
     let scene_file = SceneFile {
         cameras,
-        textures,
+        instances,
         materials,
         primitives,
+        textures,
         sky,
         render,
     };
