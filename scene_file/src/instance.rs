@@ -29,16 +29,23 @@ pub enum Transform {
     RotateX(f32),
     RotateY(f32),
     RotateZ(f32),
+    Scale([f32; 3]),
 }
 
 impl Transform {
-    #[rustfmt::skip]
     pub fn to_matrix(&self) -> Mat4 {
         match self {
-            Self::Translate (d) => Mat4::from_translation(Vec3::new(d[0], d[1], d[2])),
-            Self::RotateX(degrees) => Mat4::from_axis_angle(Vec3::new(1.0, 0.0, 0.0), degrees.to_radians()),
-            Self::RotateY(degrees) => Mat4::from_axis_angle(Vec3::new(0.0, 1.0, 0.0), degrees.to_radians()),
-            Self::RotateZ(degrees) => Mat4::from_axis_angle(Vec3::new(0.0, 0.0, 1.0), degrees.to_radians()),
+            Self::Translate(d) => Mat4::from_translation(Vec3::new(d[0], d[1], d[2])),
+            Self::RotateX(degrees) => {
+                Mat4::from_axis_angle(Vec3::new(1.0, 0.0, 0.0), degrees.to_radians())
+            }
+            Self::RotateY(degrees) => {
+                Mat4::from_axis_angle(Vec3::new(0.0, 1.0, 0.0), degrees.to_radians())
+            }
+            Self::RotateZ(degrees) => {
+                Mat4::from_axis_angle(Vec3::new(0.0, 0.0, 1.0), degrees.to_radians())
+            }
+            Self::Scale(s) => Mat4::from_scale(Vec3::new(s[0], s[1], s[2])),
         }
     }
 }
