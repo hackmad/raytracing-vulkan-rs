@@ -33,6 +33,9 @@
       }
     }
   ],
+  "instances": [
+    { "name": "triangle" }
+  ],
   "sky": {
     "vertical_gradient" : {
         "factor": 0.5,

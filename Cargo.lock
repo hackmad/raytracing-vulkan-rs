@@ -2551,6 +2551,7 @@ name = "scene_file"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "glam",
  "log",
  "serde",
  "serde_json",

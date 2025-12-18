@@ -75,6 +75,13 @@
       }
     }
   ],
+  "instances": [
+    { "name": "left" },
+    { "name": "back" },
+    { "name": "right" },
+    { "name": "upper" },
+    { "name": "lower" }
+  ],
   "sky": {
     "vertical_gradient" : {
         "factor": 0.5,

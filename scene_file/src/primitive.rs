@@ -31,3 +31,14 @@ pub enum Primitive {
         material: String,
     },
 }
+
+impl Primitive {
+    pub fn get_name(&self) -> &str {
+        match self {
+            Self::UvSphere { name, .. } => name,
+            Self::Triangle { name, .. } => name,
+            Self::Quad { name, .. } => name,
+            Self::Box { name, .. } => name,
+        }
+    }
+}
