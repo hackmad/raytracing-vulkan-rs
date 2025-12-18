@@ -1,9 +1,10 @@
 use std::{collections::HashMap, iter, mem::size_of, sync::Arc};
 
 use anyhow::{Context, Result};
-use log::debug;
+use log::{debug, warn};
 use shaders::closest_hit::MeshVertex;
 use vulkano::{
+    Packed24_8,
     acceleration_structure::{
         AccelerationStructure, AccelerationStructureBuildGeometryInfo,
         AccelerationStructureBuildRangeInfo, AccelerationStructureBuildType,
@@ -33,7 +34,11 @@ pub struct AccelerationStructures {
 
 impl AccelerationStructures {
     /// Create new acceleration structures for the given model.
-    pub fn new(vk: Arc<Vk>, mesh_instances: &[MeshInstance]) -> Result<Self> {
+    pub fn new(
+        vk: Arc<Vk>,
+        mesh_instances: &[MeshInstance],
+        mesh_name_to_index: &HashMap<String, usize>,
+    ) -> Result<Self> {
         let mut meshes: HashMap<String, Arc<Mesh>> = HashMap::new();
         for mesh_instance in mesh_instances.iter() {
             meshes
@@ -68,6 +73,17 @@ impl AccelerationStructures {
         for mesh_instance in mesh_instances.iter() {
             let name = &mesh_instance.mesh.name;
 
+            let mesh_index = mesh_name_to_index
+                .get(name)
+                .with_context(|| format!("Mesh index for {name} not found"))?;
+            if *mesh_index >= 16_777_216 {
+                warn!("Mesh count exceeds 24 bit storage for instance_custom_index_and_mask");
+            }
+
+            // Ideally we should use this to point to materials directly. For now, just use it to
+            // point to the mesh index we should be using to extract material data in the shader.
+            let instance_custom_index_and_mask = Packed24_8::new(*mesh_index as u32, 0xFF);
+
             let blas = blas_vec
                 .get(name)
                 .with_context(|| format!("BLAS not found {name}"))?;
@@ -75,6 +91,7 @@ impl AccelerationStructures {
             let acc = AccelerationStructureInstance {
                 transform: mesh_instance.transform,
                 acceleration_structure_reference: blas.device_address().into(),
+                instance_custom_index_and_mask,
                 ..Default::default()
             };
             blas_instances.push(acc);

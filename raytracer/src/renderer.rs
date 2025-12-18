@@ -86,10 +86,10 @@ impl Renderer {
 
         // Get meshes.
         let mut meshes: Vec<Arc<Mesh>> = Vec::new();
-        let mut mesh_map: HashMap<String, usize> = HashMap::new();
+        let mut mesh_name_to_index: HashMap<String, usize> = HashMap::new();
         for primitive in scene_file.primitives.iter() {
             let mesh = Arc::new(primitive.into());
-            mesh_map.insert(primitive.get_name().into(), meshes.len());
+            mesh_name_to_index.insert(primitive.get_name().into(), meshes.len());
             meshes.push(mesh);
         }
         let mesh_count = meshes.len();
@@ -97,7 +97,7 @@ impl Renderer {
         // Get instances.
         let mut mesh_instances: Vec<MeshInstance> = Vec::new();
         for instance in scene_file.instances.iter() {
-            let mesh_index = mesh_map
+            let mesh_index = mesh_name_to_index
                 .get(&instance.name)
                 .with_context(|| format!("Mesh {} not found", instance.name))?;
             let mesh = meshes[*mesh_index].clone();
@@ -149,7 +149,8 @@ impl Renderer {
         // Create descriptor sets for non-changing data.
 
         // Acceleration structures.
-        let acceleration_structures = AccelerationStructures::new(vk.clone(), &mesh_instances)?;
+        let acceleration_structures =
+            AccelerationStructures::new(vk.clone(), &mesh_instances, &mesh_name_to_index)?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),

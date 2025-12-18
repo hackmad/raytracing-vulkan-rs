@@ -307,8 +307,8 @@ void calculateEmission(MeshMaterial material, HitRecord rec) {
 }
 
 void main() {
-    HitRecord rec = unpackInstanceVertex(gl_InstanceID, gl_PrimitiveID);
-    MeshMaterial material = unpackInstanceMaterial(gl_InstanceID);
+    HitRecord rec = unpackInstanceVertex(gl_InstanceCustomIndexEXT, gl_PrimitiveID);
+    MeshMaterial material = unpackInstanceMaterial(gl_InstanceCustomIndexEXT);
 
     calculateScatter(material, rec);
     calculateEmission(material, rec);
