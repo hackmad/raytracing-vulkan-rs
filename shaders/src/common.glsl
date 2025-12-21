@@ -106,12 +106,16 @@ struct HitRecord {
 // --------------------------------------------------------------------------------
 // Ray payload
 
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
 struct RayPayload {
     uint rngState;
     bool isMissed;
     bool isScattered;
-    vec3 scatteredRayOrigin;
-    vec3 scatteredRayDirection;
+    Ray scatteredRay;
     vec3 scatterColour;
     vec3 emissionColour;
 };
@@ -121,8 +125,8 @@ RayPayload initRayPayload(uint rngState) {
     rp.rngState = rngState;
     rp.isMissed = false;
     rp.isScattered = false;
-    rp.scatteredRayOrigin = vec3(0.0);
-    rp.scatteredRayDirection = vec3(0.0);
+    rp.scatteredRay.origin = vec3(0.0);
+    rp.scatteredRay.direction = vec3(0.0);
     rp.scatterColour = vec3(0.0);
     rp.emissionColour = vec3(0.0);
     return rp;
@@ -286,6 +290,13 @@ vec2 sampleUniformDiskConcentric(inout uint rngState) {
     return r * vec2(cos(theta), sin(theta));
 }
 
+// Returns the vector to a random point in the square sub-pixel specified by grid
+// indices s_i and s_j, for an idealized unit square pixel [-.5,-.5] to [+.5,+.5].
+vec2 sampleSquareStratified(inout uint rngState, int si, int sj, float recipSqrtSpp) {
+    float px = ((si + randomFloat(rngState)) * recipSqrtSpp) - 0.5;
+    float py = ((sj + randomFloat(rngState)) * recipSqrtSpp) - 0.5;
+    return vec2(px, py);
+}
 
 // --------------------------------------------------------------------------------
 // Colour space conversions.

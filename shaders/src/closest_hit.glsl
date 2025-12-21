@@ -213,8 +213,8 @@ void lambertianMaterialScatter(uint materialIndex, HitRecord rec) {
 
         rayPayload.scatterColour = albedo;
         rayPayload.isScattered = true;
-        rayPayload.scatteredRayDirection = scatterDirection;
-        rayPayload.scatteredRayOrigin = rec.meshVertex.p;
+        rayPayload.scatteredRay.direction = scatterDirection;
+        rayPayload.scatteredRay.origin = rec.meshVertex.p;
     }
 }
 
@@ -231,8 +231,8 @@ void metalMaterialScatter(uint materialIndex, HitRecord rec) {
 
         rayPayload.scatterColour = albedo;
         rayPayload.isScattered = (dot(scatteredDirection, rec.normal) > 0);
-        rayPayload.scatteredRayDirection = scatteredDirection;
-        rayPayload.scatteredRayOrigin = rec.meshVertex.p;
+        rayPayload.scatteredRay.direction = scatteredDirection;
+        rayPayload.scatteredRay.origin = rec.meshVertex.p;
     }
 }
 
@@ -259,8 +259,8 @@ void dielectricMaterialScatter(uint materialIndex, HitRecord rec) {
 
         rayPayload.scatterColour = attenuation;
         rayPayload.isScattered = true;
-        rayPayload.scatteredRayDirection = refractedDirection;
-        rayPayload.scatteredRayOrigin = rec.meshVertex.p;
+        rayPayload.scatteredRay.direction = refractedDirection;
+        rayPayload.scatteredRay.origin = rec.meshVertex.p;
     }
 }
 

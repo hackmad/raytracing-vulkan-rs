@@ -30,7 +30,7 @@ layout(push_constant) uniform RayGenPushConstants {
     layout(offset = 20) uint maxRayDepth;
 } pc;
 
-vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, float tMax, uint rayFlags) {
+vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFlags) {
     uint rayDepth = 0;
     vec3 attenuation = vec3(1.0);
 
@@ -51,9 +51,9 @@ vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, flo
                 0,             // sbtRecordOffset
                 0,             // sbtRecordStride
                 0,             // missIndex
-                origin.xyz,    // ray origin
+                ray.origin,    // ray origin
                 tMin,          // ray min range
-                direction.xyz, // ray direction
+                ray.direction, // ray direction
                 tMax,          // ray max range
                 0);            // payload (location = 0)
 
@@ -64,7 +64,7 @@ vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, flo
             attenuation *= (rayPayload.emissionColour + rayPayload.scatterColour);
             if (!rayPayload.isScattered) break;
         } else {
-            vec3 unitDirection = normalize(direction.xyz);
+            vec3 unitDirection = normalize(ray.direction);
             float a = 0.5 * (unitDirection.y + 1.0);
 
             switch (sky.value.skyType) {
@@ -82,12 +82,38 @@ vec3 rayColour(inout uint rngState, vec4 origin, vec4 direction, float tMin, flo
             break;
         } 
 
-        origin = vec4(rayPayload.scatteredRayOrigin, 1.0);
-        direction = vec4(rayPayload.scatteredRayDirection, 1.0);
+        ray = rayPayload.scatteredRay;
         rayDepth++;
     }
 
     return attenuation;
+}
+
+
+Ray getRay(inout uint rngState, vec2 pixelCenter, int si, int sj, float recipSqrtSpp) {
+    const vec2 offset = sampleSquareStratified(rngState, si, sj, recipSqrtSpp);
+    const vec2 offsetPixelCenter = pixelCenter + offset;
+
+    const vec2 screenUV = offsetPixelCenter / vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = screenUV * 2.0 - 1.0;
+
+    vec4 origin = camera.viewInverse * vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 target = camera.projInverse * vec4(d.x, d.y, 1.0, 1.0);
+    vec4 direction = camera.viewInverse * vec4(normalize(target.xyz), 0.0);
+
+    if (camera.apertureSize > 0.0) {
+        vec4 focalPoint = vec4(camera.focalLength * normalize(target.xyz), 1.0);
+
+        vec2 randomLensPos = sampleUniformDiskConcentric(rngState) * camera.apertureSize / 2.0;
+        origin.xy += vec2(randomLensPos.x * d.x, randomLensPos.y * d.y);
+
+        direction = vec4((normalize((camera.viewInverse * focalPoint) - origin).xyz), 0.0);
+    }
+
+    Ray ray;
+    ray.origin = origin.xyz;
+    ray.direction = direction.xyz;
+    return ray;
 }
 
 void main() {
@@ -101,28 +127,16 @@ void main() {
 
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
+    float sqrtSpp = sqrt(float(pc.samplesPerPixel));
+    float recipSqrtSpp = 1.0 / sqrtSpp;
+
     vec3 summedPixelColour = vec3(0.0);
-    for (int i = 0; i < pc.samplesPerPixel; ++i) {
-        const vec2 randomPixelCenter = pixelCenter + (0.375 * randomGaussian(rngState));
-
-        const vec2 screenUV = randomPixelCenter / vec2(gl_LaunchSizeEXT.xy);
-        vec2 d = screenUV * 2.0 - 1.0;
-
-        vec4 origin = camera.viewInverse * vec4(0.0, 0.0, 0.0, 1.0);
-        vec4 target = camera.projInverse * vec4(d.x, d.y, 1.0, 1.0);
-        vec4 direction = camera.viewInverse * vec4(normalize(target.xyz), 0.0);
-
-        if (camera.apertureSize > 0.0) {
-            vec4 focalPoint = vec4(camera.focalLength * normalize(target.xyz), 1.0);
-
-            vec2 randomLensPos = sampleUniformDiskConcentric(rngState) * camera.apertureSize / 2.0;
-            origin.xy += vec2(randomLensPos.x * d.x, randomLensPos.y * d.y);
-
-            direction = vec4((normalize((camera.viewInverse * focalPoint) - origin).xyz), 0.0);
+    for (int sj = 0; sj < sqrtSpp; ++sj) {
+        for (int si = 0; si < sqrtSpp; ++si) {
+            Ray ray = getRay(rngState, pixelCenter, si, sj, recipSqrtSpp);
+            vec3 attenuation = rayColour(rngState, ray, tMin, tMax, rayFlags);
+            summedPixelColour += attenuation;
         }
-
-        vec3 attenuation = rayColour(rngState, origin, direction, tMin, tMax, rayFlags);
-        summedPixelColour += attenuation;
     }
 
     // Blend with the averaged image in the buffer:
