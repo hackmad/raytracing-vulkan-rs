@@ -399,7 +399,7 @@ impl Renderer {
                     ],
                 )
                 .unwrap()
-                .push_constants(pipeline_layout.clone(), 0, self.push_constants)
+                .push_constants(pipeline_layout.clone(), 0, push_constants)
                 .unwrap()
                 .bind_pipeline_ray_tracing(self.rt_pipeline.get())
                 .unwrap();
@@ -414,8 +414,10 @@ impl Renderer {
                     .unwrap();
             }
 
+            // Build the command buffer.
             let command_buffer = builder.build().unwrap();
 
+            // Execute command buffer.
             let next_future = future
                 .then_execute(vk.queue.clone(), command_buffer)
                 .unwrap();
