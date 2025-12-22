@@ -129,6 +129,7 @@ void main() {
 
     float sqrtSpp = sqrt(float(pc.samplesPerPixel));
     float recipSqrtSpp = 1.0 / sqrtSpp;
+    float spp = int(sqrtSpp) * int(sqrtSpp); // In case pc.samplesPerPixel is not a perfect square.
 
     vec3 summedPixelColour = vec3(0.0);
     for (int sj = 0; sj < sqrtSpp; ++sj) {
@@ -140,7 +141,7 @@ void main() {
     }
 
     // Blend with the averaged image in the buffer:
-    vec3 averagePixelColour = summedPixelColour / pc.samplesPerPixel;
+    vec3 averagePixelColour = summedPixelColour / spp;
     if (pc.sampleBatch != 0) {
         vec3 imageData = sRGBToLinear(imageLoad(image, ivec2(pixel)).xyz);
         averagePixelColour = (pc.sampleBatch * imageData + averagePixelColour) / (pc.sampleBatch + 1);
