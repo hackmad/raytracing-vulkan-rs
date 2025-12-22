@@ -67,6 +67,9 @@ pub struct Renderer {
     /// Combined push constants for all shaders.
     push_constants: UnifiedPushConstants,
 
+    /// Number of batches to use when rendering.
+    sample_batches: u32,
+
     /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
     _acceleration_structures: AccelerationStructures,
 }
@@ -130,7 +133,6 @@ impl Renderer {
             ray_gen_pc: ray_gen::RayGenPushConstants {
                 resolution: [window_size[0] as u32, window_size[1] as u32],
                 samplesPerPixel: scene_file.render.samples_per_pixel,
-                sampleBatches: scene_file.render.sample_batches,
                 sampleBatch: 0,
                 maxRayDepth: scene_file.render.max_ray_depth,
             },
@@ -304,6 +306,7 @@ impl Renderer {
             shader_binding_table,
             rt_pipeline,
             push_constants,
+            sample_batches: scene_file.render.sample_batches,
             _acceleration_structures: acceleration_structures,
         })
     }
@@ -330,8 +333,7 @@ impl Renderer {
 
         let mut future = before_future;
 
-        let sample_batches = self.push_constants.ray_gen_pc.sampleBatches;
-        for sample_batch in 0..sample_batches {
+        for sample_batch in 0..self.sample_batches {
             let mut push_constants = self.push_constants;
             push_constants.ray_gen_pc.sampleBatch = sample_batch as _;
 

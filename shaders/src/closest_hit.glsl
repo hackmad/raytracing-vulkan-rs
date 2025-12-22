@@ -53,15 +53,15 @@ layout(set = 7, binding = 1, scalar) buffer NoiseTextures {
 
 // If RayGenPushConstants in ray_gen.glsl changes, make sure to update layouts here.
 layout(push_constant) uniform ClosestHitPushConstants {
-    layout(offset = 24) uint meshCount;
-    layout(offset = 28) uint imageTextureCount;
-    layout(offset = 32) uint constantColourCount;
-    layout(offset = 36) uint checkerTextureCount;
-    layout(offset = 40) uint noiseTextureCount;
-    layout(offset = 44) uint lambertianMaterialCount;
-    layout(offset = 48) uint metalMaterialCount;
-    layout(offset = 52) uint dielectricMaterialCount;
-    layout(offset = 56) uint diffuseLightMaterialCount;
+    layout(offset = 20) uint meshCount;
+    layout(offset = 24) uint imageTextureCount;
+    layout(offset = 28) uint constantColourCount;
+    layout(offset = 32) uint checkerTextureCount;
+    layout(offset = 36) uint noiseTextureCount;
+    layout(offset = 40) uint lambertianMaterialCount;
+    layout(offset = 44) uint metalMaterialCount;
+    layout(offset = 48) uint dielectricMaterialCount;
+    layout(offset = 52) uint diffuseLightMaterialCount;
 } pc;
 
 struct MeshMaterial {

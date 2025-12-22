@@ -25,9 +25,8 @@ layout(set = 8, binding = 0) uniform SkyData {
 layout(push_constant) uniform RayGenPushConstants {
     layout(offset =  0) uvec2 resolution;
     layout(offset =  8) uint samplesPerPixel; // Don't exceed 64. See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
-    layout(offset = 12) uint sampleBatches;   // Don't exceed 32.
-    layout(offset = 16) uint sampleBatch;
-    layout(offset = 20) uint maxRayDepth;
+    layout(offset = 12) uint sampleBatch;
+    layout(offset = 16) uint maxRayDepth;
 } pc;
 
 vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFlags) {
