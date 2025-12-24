@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use anyhow::{Context, Result};
 use log::debug;
 use scene_file::SceneFile;
-use vulkano::{image::view::ImageView, sync::GpuFuture};
+use vulkano::{format::Format, image::view::ImageView, sync::GpuFuture};
 
 use crate::{Camera, Vk, create_camera, renderer::Renderer};
 
@@ -25,7 +25,7 @@ impl Scene {
         vk: Arc<Vk>,
         scene_file: &SceneFile,
         window_size: &[f32; 2],
-        swapchain_image_views: &[Arc<ImageView>],
+        swapchain_format: Format,
     ) -> Result<Self> {
         let render_camera = &scene_file.render.camera;
 
@@ -38,7 +38,7 @@ impl Scene {
 
         let camera = create_camera(scene_camera, window_size[0] as u32, window_size[1] as u32);
 
-        Renderer::new(vk.clone(), scene_file, window_size, swapchain_image_views).map(|resources| {
+        Renderer::new(vk.clone(), scene_file, window_size, swapchain_format).map(|resources| {
             Scene {
                 vk,
                 resources: Some(resources),

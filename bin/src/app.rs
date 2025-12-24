@@ -176,19 +176,15 @@ impl ApplicationHandler for App {
             .get_primary_renderer_mut()
             .expect("Failed to get primary renderer");
 
-        info!("Swapchain image format: {:?}", renderer.swapchain_format());
+        let swapchain_format = renderer.swapchain_format();
+        info!("Swapchain image format: {swapchain_format:?}");
 
         // Refetch window size from renderer because window creation will account for fractional scaling.
         window_size = renderer.window_size();
 
         // Create scene.
-        let scene = Scene::new(
-            self.vk.clone(),
-            &scene_file,
-            &window_size,
-            renderer.swapchain_image_views(),
-        )
-        .unwrap();
+        let scene =
+            Scene::new(self.vk.clone(), &scene_file, &window_size, swapchain_format).unwrap();
         self.scene = Some(scene);
     }
 
@@ -219,7 +215,7 @@ impl ApplicationHandler for App {
                         self.vk.clone(),
                         &scene_file,
                         &window_size,
-                        renderer.swapchain_image_views(),
+                        renderer.swapchain_format(),
                     ) {
                         Ok(new_scene) => {
                             *scene = new_scene;

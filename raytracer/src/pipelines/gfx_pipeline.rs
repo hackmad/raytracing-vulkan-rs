@@ -7,7 +7,7 @@ use vulkano::{
         DescriptorType,
     },
     device::Device,
-    image::view::ImageView,
+    format::Format,
     pipeline::{
         GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
         graphics::{
@@ -25,10 +25,8 @@ use vulkano::{
     shader::ShaderStages,
 };
 
-/// The fullscreen quad rendering pipeline.
-///
-/// Used for copying rendered image from RayTracingPipeline which is in
-/// linear space to the Swapchain which is using sRGB.
+/// The graphics pipeline used for copying rendered image from RayTracingPipeline which is in
+/// linear colour space to the Swapchain which is using sRGB colour space.
 pub struct GfxPipeline {
     /// The pipeline.
     pipeline: Arc<GraphicsPipeline>,
@@ -61,22 +59,17 @@ impl GfxPipeline {
         self.render_pass.clone()
     }
 
+    /// Create a new graphics pipeline.
     pub fn new(
         device: Arc<Device>,
         stages: &[PipelineShaderStageCreateInfo],
-        swapchain_image_views: &[Arc<ImageView>],
+        width: f32,
+        height: f32,
+        swapchain_format: Format,
     ) -> Result<Self> {
-        let first_swapchain_image = swapchain_image_views
-            .first()
-            .with_context(|| "Cannot create graphics pipeline. No swapchain image views found")?
-            .image();
-
-        let extent = first_swapchain_image.extent();
-        let format = first_swapchain_image.format();
-
         let viewport = Viewport {
             offset: [0.0, 0.0],
-            extent: [extent[0] as _, extent[1] as _],
+            extent: [width, height],
             depth_range: 0.0..=1.0,
         };
 
@@ -88,7 +81,7 @@ impl GfxPipeline {
             device.clone(),
             attachments: {
                 color: {
-                    format: format,
+                    format: swapchain_format,
                     samples: 1,
                     load_op: Clear,
                     store_op: Store,
@@ -144,6 +137,7 @@ impl GfxPipeline {
     }
 }
 
+/// Create a pipeline layout for the combined image + sampler for the render image.
 fn create_render_image_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
     DescriptorSetLayout::new(
         device.clone(),

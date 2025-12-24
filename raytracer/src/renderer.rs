@@ -9,8 +9,8 @@ use shaders::{GfxShaderModules, RtShaderModules, closest_hit, ray_gen};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{
-        AutoCommandBufferBuilder, CommandBufferUsage, RenderPassBeginInfo, SubpassBeginInfo,
-        SubpassContents, SubpassEndInfo,
+        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
+        RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo,
     },
     descriptor_set::{DescriptorSet, WriteDescriptorSet},
     format::Format,
@@ -98,7 +98,7 @@ impl Renderer {
         vk: Arc<Vk>,
         scene_file: &SceneFile,
         window_size: &[f32; 2],
-        swapchain_image_views: &[Arc<ImageView>],
+        swapchain_format: Format,
     ) -> Result<Self> {
         // Load shader modules.
         let rt_shader_modules = RtShaderModules::load(vk.device.clone());
@@ -166,7 +166,9 @@ impl Renderer {
         let gfx_pipeline = GfxPipeline::new(
             vk.device.clone(),
             &gfx_shader_modules.stages,
-            swapchain_image_views,
+            window_size[0],
+            window_size[1],
+            swapchain_format,
         )?;
 
         // Create the raytracing pipeline.
@@ -352,8 +354,8 @@ impl Renderer {
         })
     }
 
-    /// Renders an image view after the given future completes. This will return a new
-    /// future for the rendering operation.
+    /// Renders to the given swapchain image view after the given future completes.
+    /// This will return a new future for the rendering operation.
     ///
     /// # Panics
     ///
@@ -373,103 +375,140 @@ impl Renderer {
         )
         .unwrap();
 
-        // ─────────────────────────────────────────────
-        // Raytracing Pass
-        // ─────────────────────────────────────────────
+        // Perform the rendering passes.
+        self.render_raytracing_pass(vk.clone(), camera, &mut builder);
+        self.render_graphics_pass(vk.clone(), swapchain_image_view, &mut builder);
 
-        if self.current_sample_batch < self.sample_batches {
-            // Create the uniform buffer for the camera.
-            let camera = camera.read().unwrap();
+        // Build the command buffer.
+        let command_buffer = builder.build().unwrap();
 
-            // Create the descriptor sets for the raytracing pipeline.
-            let pipeline_layout = self.rt_pipeline.get_layout();
-            let layouts = pipeline_layout.set_layouts();
-
-            // Load current sample batch to push constants.
-            let mut push_constants = self.push_constants;
-            push_constants.ray_gen_pc.sampleBatch = self.current_sample_batch;
-
-            let camera_buffer = Buffer::from_data(
-                vk.memory_allocator.clone(),
-                BufferCreateInfo {
-                    usage: BufferUsage::UNIFORM_BUFFER,
-                    ..Default::default()
-                },
-                AllocationCreateInfo {
-                    memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
-                        | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
-                    ..Default::default()
-                },
-                ray_gen::Camera {
-                    viewProj: (camera.get_projection_matrix() * camera.get_view_matrix())
-                        .to_cols_array_2d(),
-                    viewInverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
-                    projInverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
-                    focalLength: camera.get_focal_length(),
-                    apertureSize: camera.get_aperture_size(),
-                },
-            )
+        // Execute command buffer.
+        let next_future = before_future
+            .then_execute(vk.queue.clone(), command_buffer)
             .unwrap();
 
-            let camera_buffer_descriptor_set = DescriptorSet::new(
-                vk.descriptor_set_allocator.clone(),
-                layouts[RtPipeline::CAMERA_BUFFER_LAYOUT].clone(),
-                [WriteDescriptorSet::buffer(0, camera_buffer)],
-                [],
+        next_future.boxed()
+    }
+
+    /// Render the next batch of samples using raytracing. If all batches are complete, it returns
+    /// early.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if any Vulkan resources fail to create.
+    fn render_raytracing_pass(
+        &mut self,
+        vk: Arc<Vk>,
+        camera: Arc<RwLock<dyn Camera>>,
+        builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+    ) {
+        if self.current_sample_batch >= self.sample_batches {
+            return;
+        }
+        // Create the uniform buffer for the camera.
+        let camera = camera.read().unwrap();
+
+        // Create the descriptor sets for the raytracing pipeline.
+        let pipeline_layout = self.rt_pipeline.get_layout();
+        let layouts = pipeline_layout.set_layouts();
+
+        // Load current sample batch to push constants.
+        let mut push_constants = self.push_constants;
+        push_constants.ray_gen_pc.sampleBatch = self.current_sample_batch;
+
+        let camera_buffer = Buffer::from_data(
+            vk.memory_allocator.clone(),
+            BufferCreateInfo {
+                usage: BufferUsage::UNIFORM_BUFFER,
+                ..Default::default()
+            },
+            AllocationCreateInfo {
+                memory_type_filter: MemoryTypeFilter::PREFER_DEVICE
+                    | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
+                ..Default::default()
+            },
+            ray_gen::Camera {
+                viewProj: (camera.get_projection_matrix() * camera.get_view_matrix())
+                    .to_cols_array_2d(),
+                viewInverse: camera.get_view_inverse_matrix().to_cols_array_2d(),
+                projInverse: camera.get_projection_inverse_matrix().to_cols_array_2d(),
+                focalLength: camera.get_focal_length(),
+                apertureSize: camera.get_aperture_size(),
+            },
+        )
+        .unwrap();
+
+        let camera_buffer_descriptor_set = DescriptorSet::new(
+            vk.descriptor_set_allocator.clone(),
+            layouts[RtPipeline::CAMERA_BUFFER_LAYOUT].clone(),
+            [WriteDescriptorSet::buffer(0, camera_buffer)],
+            [],
+        )
+        .unwrap();
+
+        let render_image_descriptor_set = DescriptorSet::new(
+            vk.descriptor_set_allocator.clone(),
+            layouts[RtPipeline::RENDER_IMAGE_LAYOUT].clone(),
+            [WriteDescriptorSet::image_view(
+                0,
+                self.accum_image_view.clone(),
+            )],
+            [],
+        )
+        .unwrap();
+
+        builder
+            .bind_descriptor_sets(
+                PipelineBindPoint::RayTracing,
+                pipeline_layout.clone(),
+                0,
+                vec![
+                    self.tlas_descriptor_set.clone(),
+                    camera_buffer_descriptor_set,
+                    render_image_descriptor_set,
+                    self.mesh_data_descriptor_set.clone(),
+                    self.image_textures_descriptor_set.clone(),
+                    self.constant_colour_textures_descriptor_set.clone(),
+                    self.materials_descriptor_set.clone(),
+                    self.other_textures_descriptor_set.clone(),
+                    self.sky_descriptor_set.clone(),
+                ],
             )
+            .unwrap()
+            .push_constants(pipeline_layout.clone(), 0, push_constants)
+            .unwrap()
+            .bind_pipeline_ray_tracing(self.rt_pipeline.get())
             .unwrap();
 
-            let render_image_descriptor_set = DescriptorSet::new(
-                vk.descriptor_set_allocator.clone(),
-                layouts[RtPipeline::RENDER_IMAGE_LAYOUT].clone(),
-                [WriteDescriptorSet::image_view(
-                    0,
-                    self.accum_image_view.clone(),
-                )],
-                [],
-            )
-            .unwrap();
-
+        // https://docs.rs/vulkano/latest/vulkano/shader/index.html#safety
+        unsafe {
             builder
-                .bind_descriptor_sets(
-                    PipelineBindPoint::RayTracing,
-                    pipeline_layout.clone(),
-                    0,
-                    vec![
-                        self.tlas_descriptor_set.clone(),
-                        camera_buffer_descriptor_set,
-                        render_image_descriptor_set,
-                        self.mesh_data_descriptor_set.clone(),
-                        self.image_textures_descriptor_set.clone(),
-                        self.constant_colour_textures_descriptor_set.clone(),
-                        self.materials_descriptor_set.clone(),
-                        self.other_textures_descriptor_set.clone(),
-                        self.sky_descriptor_set.clone(),
-                    ],
+                .trace_rays(
+                    self.shader_binding_table.addresses().clone(),
+                    self.accum_image_view.image().extent(),
                 )
-                .unwrap()
-                .push_constants(pipeline_layout.clone(), 0, push_constants)
-                .unwrap()
-                .bind_pipeline_ray_tracing(self.rt_pipeline.get())
                 .unwrap();
-
-            // https://docs.rs/vulkano/latest/vulkano/shader/index.html#safety
-            unsafe {
-                builder
-                    .trace_rays(
-                        self.shader_binding_table.addresses().clone(),
-                        self.accum_image_view.image().extent(),
-                    )
-                    .unwrap();
-            }
-
-            self.current_sample_batch += 1; // Increment for next render.
         }
 
-        // ─────────────────────────────────────────────
-        // Full screeen quad presentation pass
-        // ─────────────────────────────────────────────
+        // Increment for next batch.
+        self.current_sample_batch += 1;
+    }
 
+    /// Perform the graphics pass to copy rendered image to the swapchain image view using a
+    /// big triangle that covers the viewport.
+    ///
+    /// It will convert the accumulated sample batches that are linear space to the swapchain
+    /// image format which should be sRGB.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if any Vulkan resources fail to create.
+    fn render_graphics_pass(
+        &mut self,
+        vk: Arc<Vk>,
+        swapchain_image_view: Arc<ImageView>,
+        builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
+    ) {
         let gfx_pipeline_layout = self.gfx_pipeline.get_layout();
         let gfx_layouts = gfx_pipeline_layout.set_layouts();
         let gfx_render_pass = self.gfx_pipeline.get_render_pass();
@@ -523,19 +562,10 @@ impl Renderer {
         unsafe { builder.draw(3, 1, 0, 0).unwrap() };
 
         builder.end_render_pass(SubpassEndInfo::default()).unwrap();
-
-        // Build the command buffer.
-        let command_buffer = builder.build().unwrap();
-
-        // Execute command buffer.
-        let next_future = before_future
-            .then_execute(vk.queue.clone(), command_buffer)
-            .unwrap();
-
-        next_future.boxed()
     }
 }
 
+/// Create a new image to hold the accumulated sample batches.
 fn create_accumulated_render_image_view(
     vk: Arc<Vk>,
     width: u32,
