@@ -29,12 +29,28 @@ pub mod ray_miss {
     }
 }
 
-pub struct ShaderModules {
+pub mod vertex {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "src/vertex.glsl",
+        vulkan_version: "1.3",
+    }
+}
+
+pub mod fragment {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "src/fragment.glsl",
+        vulkan_version: "1.3",
+    }
+}
+
+pub struct RtShaderModules {
     pub stages: Vec<PipelineShaderStageCreateInfo>,
     pub groups: Vec<RayTracingShaderGroupCreateInfo>,
 }
 
-impl ShaderModules {
+impl RtShaderModules {
     pub fn load(device: Arc<Device>) -> Self {
         let ray_gen = ray_gen::load(device.clone())
             .unwrap()
@@ -73,6 +89,31 @@ impl ShaderModules {
     }
 }
 
+pub struct GfxShaderModules {
+    pub stages: Vec<PipelineShaderStageCreateInfo>,
+}
+
+impl GfxShaderModules {
+    pub fn load(device: Arc<Device>) -> Self {
+        let vertex = vertex::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+
+        let fragment = fragment::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+
+        // Make a list of the shader stages that the pipeline will have.
+        let stages = vec![
+            PipelineShaderStageCreateInfo::new(vertex),
+            PipelineShaderStageCreateInfo::new(fragment),
+        ];
+
+        Self { stages }
+    }
+}
 impl fmt::Debug for closest_hit::ClosestHitPushConstants {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("closest_hit::ClosestHitPushConstants")

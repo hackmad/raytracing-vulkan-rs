@@ -21,7 +21,12 @@ pub struct Scene {
 
 impl Scene {
     /// Create a new scene from the given models and camera.
-    pub fn new(vk: Arc<Vk>, scene_file: &SceneFile, window_size: &[f32; 2]) -> Result<Self> {
+    pub fn new(
+        vk: Arc<Vk>,
+        scene_file: &SceneFile,
+        window_size: &[f32; 2],
+        swapchain_image_views: &[Arc<ImageView>],
+    ) -> Result<Self> {
         let render_camera = &scene_file.render.camera;
 
         let scene_camera = scene_file
@@ -33,10 +38,12 @@ impl Scene {
 
         let camera = create_camera(scene_camera, window_size[0] as u32, window_size[1] as u32);
 
-        Renderer::new(vk.clone(), scene_file, window_size).map(|resources| Scene {
-            vk,
-            resources: Some(resources),
-            camera,
+        Renderer::new(vk.clone(), scene_file, window_size, swapchain_image_views).map(|resources| {
+            Scene {
+                vk,
+                resources: Some(resources),
+                camera,
+            }
         })
     }
 
@@ -55,13 +62,13 @@ impl Scene {
     pub fn render(
         &mut self,
         before_future: Box<dyn GpuFuture>,
-        image_view: Arc<ImageView>,
+        swapchain_image_view: Arc<ImageView>,
     ) -> Box<dyn GpuFuture> {
         if let Some(resources) = self.resources.as_mut() {
             resources.render(
                 self.vk.clone(),
                 before_future,
-                image_view,
+                swapchain_image_view,
                 self.camera.clone(),
             )
         } else {

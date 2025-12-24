@@ -4,7 +4,7 @@ mod material;
 mod mesh;
 mod mesh_instance;
 mod obj_loader;
-mod pipeline;
+mod pipelines;
 mod renderer;
 mod scene;
 mod textures;
