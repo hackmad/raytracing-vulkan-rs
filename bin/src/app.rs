@@ -166,7 +166,7 @@ impl ApplicationHandler for App {
                 ..Default::default()
             },
             |ci| {
-                ci.image_usage = ImageUsage::STORAGE;
+                ci.image_usage = ImageUsage::COLOR_ATTACHMENT | ImageUsage::TRANSFER_DST; // ImageUsage::STORAGE;
                 ci.min_image_count = ci.min_image_count.max(2);
             },
         );
@@ -176,13 +176,15 @@ impl ApplicationHandler for App {
             .get_primary_renderer_mut()
             .expect("Failed to get primary renderer");
 
-        info!("Swapchain image format: {:?}", renderer.swapchain_format());
+        let swapchain_format = renderer.swapchain_format();
+        info!("Swapchain image format: {swapchain_format:?}");
 
         // Refetch window size from renderer because window creation will account for fractional scaling.
         window_size = renderer.window_size();
 
         // Create scene.
-        let scene = Scene::new(self.vk.clone(), &scene_file, &window_size).unwrap();
+        let scene =
+            Scene::new(self.vk.clone(), &scene_file, &window_size, swapchain_format).unwrap();
         self.scene = Some(scene);
     }
 
@@ -209,7 +211,12 @@ impl ApplicationHandler for App {
                     // Refetch window size from renderer because window creation will account for fractional scaling.
                     window_size = renderer.window_size();
 
-                    match Scene::new(self.vk.clone(), &scene_file, &window_size) {
+                    match Scene::new(
+                        self.vk.clone(),
+                        &scene_file,
+                        &window_size,
+                        renderer.swapchain_format(),
+                    ) {
                         Ok(new_scene) => {
                             *scene = new_scene;
                             self.current_file_path = new_scene_path.clone();

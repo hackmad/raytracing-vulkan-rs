@@ -17378,8 +17378,8 @@
   },
   "render": {
     "camera": "default",
-    "samples_per_pixel": 64,
-    "sample_batches": 2,
+    "samples_per_pixel": 4,
+    "sample_batches": 32,
     "max_ray_depth": 50,
     "aspect_ratio": 1.7777778
   }

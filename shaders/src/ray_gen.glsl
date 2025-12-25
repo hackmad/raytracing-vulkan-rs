@@ -22,9 +22,14 @@ layout(set = 8, binding = 0) uniform SkyData {
 } sky;
 
 // If this changes, make sure to update layouts for ClosestHitPushConstants in closest_hit.glsl.
+//
+// NOTE: See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
+// It explains not exceeding 64 samples per pixel and 32 batches to avoid timeouts and long renders.
+// We now do progressive rendering so 64 samples per pixel is still good and you can do higher number
+// of batches. However, at some point it will be diminishing returns.
 layout(push_constant) uniform RayGenPushConstants {
     layout(offset =  0) uvec2 resolution;
-    layout(offset =  8) uint samplesPerPixel; // Don't exceed 64. See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
+    layout(offset =  8) uint samplesPerPixel;
     layout(offset = 12) uint sampleBatch;
     layout(offset = 16) uint maxRayDepth;
 } pc;
@@ -142,9 +147,9 @@ void main() {
     // Blend with the averaged image in the buffer:
     vec3 averagePixelColour = summedPixelColour / spp;
     if (pc.sampleBatch != 0) {
-        vec3 imageData = sRGBToLinear(imageLoad(image, ivec2(pixel)).xyz);
+        vec3 imageData = imageLoad(image, ivec2(pixel)).rgb;
         averagePixelColour = (pc.sampleBatch * imageData + averagePixelColour) / (pc.sampleBatch + 1);
     }
 
-    imageStore(image, ivec2(pixel), vec4(linearTosRGB(averagePixelColour), 1.0));
+    imageStore(image, ivec2(pixel), vec4(averagePixelColour, 1.0));
 }
