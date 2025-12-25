@@ -2387,6 +2387,7 @@ name = "raytracer"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "foldhash",
  "glam",
  "image",
  "log",

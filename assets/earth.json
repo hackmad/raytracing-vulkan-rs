@@ -42,8 +42,8 @@
   },
   "render": {
     "camera": "default",
-    "samples_per_pixel": 64,
-    "sample_batches": 1,
+    "samples_per_pixel": 4,
+    "sample_batches": 16,
     "max_ray_depth": 50,
     "aspect_ratio": 1
   }

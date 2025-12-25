@@ -48,9 +48,23 @@ impl Scene {
     }
 
     /// Updates the camera image size to match a new window size.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the render_engine fails to update image size.
     pub fn update_window_size(&mut self, window_size: [f32; 2]) {
         let mut camera = self.camera.write().unwrap();
         camera.update_image_size(window_size[0] as u32, window_size[1] as u32);
+
+        if let Some(render_engine) = self.render_engine.as_mut() {
+            render_engine
+                .update_image_size(
+                    self.vk.clone(),
+                    window_size[0] as u32,
+                    window_size[1] as u32,
+                )
+                .unwrap();
+        }
     }
 
     /// Renders a scene to an image view after the given future completes. This will return a new
@@ -58,14 +72,14 @@ impl Scene {
     ///
     /// # Panics
     ///
-    /// - Panics if any Vulkan resources fail to create.
+    /// - Panics if the render_engine fails to create.
     pub fn render(
         &mut self,
         before_future: Box<dyn GpuFuture>,
         swapchain_image_view: Arc<ImageView>,
     ) -> Box<dyn GpuFuture> {
-        if let Some(resources) = self.render_engine.as_mut() {
-            resources.render(
+        if let Some(render_engine) = self.render_engine.as_mut() {
+            render_engine.render(
                 self.vk.clone(),
                 before_future,
                 swapchain_image_view,

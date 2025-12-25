@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use foldhash::{HashSet, fast::RandomState};
 use vulkano::{
     descriptor_set::layout::{
         DescriptorSetLayout, DescriptorSetLayoutBinding, DescriptorSetLayoutCreateInfo,
@@ -9,7 +10,7 @@ use vulkano::{
     device::Device,
     format::Format,
     pipeline::{
-        GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
         graphics::{
             GraphicsPipelineCreateInfo,
             color_blend::{ColorBlendAttachmentState, ColorBlendState},
@@ -63,13 +64,12 @@ impl GfxPipeline {
     pub fn new(
         device: Arc<Device>,
         stages: &[PipelineShaderStageCreateInfo],
-        width: f32,
-        height: f32,
+        window_size: &[f32; 2],
         swapchain_format: Format,
     ) -> Result<Self> {
         let viewport = Viewport {
             offset: [0.0, 0.0],
-            extent: [width, height],
+            extent: *window_size,
             depth_range: 0.0..=1.0,
         };
 
@@ -107,6 +107,9 @@ impl GfxPipeline {
             },
         )?;
 
+        let mut dynamic_state = HashSet::with_hasher(RandomState::default());
+        dynamic_state.insert(DynamicState::Viewport);
+
         let pipeline = GraphicsPipeline::new(
             device.clone(),
             None,
@@ -118,6 +121,7 @@ impl GfxPipeline {
                     viewports: [viewport].into_iter().collect(),
                     ..Default::default()
                 }),
+                dynamic_state,
                 rasterization_state: Some(RasterizationState::default()),
                 multisample_state: Some(MultisampleState::default()),
                 color_blend_state: Some(ColorBlendState::with_attachment_states(

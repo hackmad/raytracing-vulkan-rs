@@ -9,6 +9,7 @@ scene_file = { path = "../scene_file" }
 shaders = { path = "../shaders" }
 
 anyhow = { workspace = true }
+foldhash = { workspace = true }
 glam = { workspace = true }
 image = { workspace = true }
 log = { workspace = true }

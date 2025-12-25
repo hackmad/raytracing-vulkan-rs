@@ -21,7 +21,7 @@ use vulkano::{
         view::{ImageView, ImageViewCreateInfo, ImageViewType},
     },
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
-    pipeline::{PipelineBindPoint, ray_tracing::ShaderBindingTable},
+    pipeline::{PipelineBindPoint, graphics::viewport::Viewport, ray_tracing::ShaderBindingTable},
     render_pass::{Framebuffer, FramebufferCreateInfo},
     sync::GpuFuture,
 };
@@ -44,7 +44,7 @@ pub struct UnifiedPushConstants {
     pub closest_hit_pc: closest_hit::ClosestHitPushConstants,
 }
 
-/// Stores resources specific to the rendering pipeline and renders an image progressively.
+/// Stores resources specific to the rendering pipelines and renders an image progressively.
 /// Each frame renders a batch of samples with a given number of samplers per pixel and accumulates
 /// the result over successive calls to its render function.
 pub struct RenderEngine {
@@ -168,8 +168,7 @@ impl RenderEngine {
         let gfx_pipeline = GfxPipeline::new(
             vk.device.clone(),
             &gfx_shader_modules.stages,
-            window_size[0],
-            window_size[1],
+            window_size,
             swapchain_format,
         )?;
 
@@ -356,12 +355,32 @@ impl RenderEngine {
         })
     }
 
+    /// Updates the resolution for rendering the image.
+    pub fn update_image_size(
+        &mut self,
+        vk: Arc<Vk>,
+        image_width: u32,
+        image_height: u32,
+    ) -> Result<()> {
+        // Update resolution for camera.
+        self.push_constants.ray_gen_pc.resolution = [image_width, image_height];
+
+        // Update resolution for rendering the accumulated image.
+        self.accum_image_view =
+            create_accumulated_render_image_view(vk, image_width, image_height)?;
+
+        // Reset the sample batches to restart rendering sample batches again.
+        self.current_sample_batch = 0;
+
+        Ok(())
+    }
+
     /// Renders to the given swapchain image view after the given future completes.
     /// This will return a new future for the rendering operation.
     ///
     /// # Panics
     ///
-    /// - Panics if any Vulkan resources fail to create.
+    /// - Panics if render fails for any reason.
     pub fn render(
         &mut self,
         vk: Arc<Vk>,
@@ -397,7 +416,7 @@ impl RenderEngine {
     ///
     /// # Panics
     ///
-    /// - Panics if any Vulkan resources fail to create.
+    /// - Panics if render fails for any reason.
     fn render_raytracing_pass(
         &mut self,
         vk: Arc<Vk>,
@@ -504,13 +523,15 @@ impl RenderEngine {
     ///
     /// # Panics
     ///
-    /// - Panics if any Vulkan resources fail to create.
+    /// - Panics if render fails for any reason.
     fn render_graphics_pass(
         &mut self,
         vk: Arc<Vk>,
         swapchain_image_view: Arc<ImageView>,
         builder: &mut AutoCommandBufferBuilder<PrimaryAutoCommandBuffer>,
     ) {
+        let extent = swapchain_image_view.image().extent();
+
         let gfx_pipeline_layout = self.gfx_pipeline.get_layout();
         let gfx_layouts = gfx_pipeline_layout.set_layouts();
         let gfx_render_pass = self.gfx_pipeline.get_render_pass();
@@ -559,6 +580,18 @@ impl RenderEngine {
             )
             .unwrap()
             .bind_pipeline_graphics(self.gfx_pipeline.get())
+            .unwrap();
+
+        builder
+            .set_viewport(
+                0,
+                vec![Viewport {
+                    offset: [0.0, 0.0],
+                    extent: [extent[0] as _, extent[1] as _],
+                    depth_range: 0.0..=1.0,
+                }]
+                .into(),
+            )
             .unwrap();
 
         unsafe { builder.draw(3, 1, 0, 0).unwrap() };
