@@ -5,7 +5,7 @@ mod mesh;
 mod mesh_instance;
 mod obj_loader;
 mod pipelines;
-mod renderer;
+mod render_engine;
 mod scene;
 mod textures;
 mod vk;

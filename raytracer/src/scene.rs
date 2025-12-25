@@ -5,7 +5,7 @@ use log::debug;
 use scene_file::SceneFile;
 use vulkano::{format::Format, image::view::ImageView, sync::GpuFuture};
 
-use crate::{Camera, Vk, create_camera, renderer::Renderer};
+use crate::{Camera, Vk, create_camera, render_engine::RenderEngine};
 
 /// Describes the scene for raytracing.
 pub struct Scene {
@@ -15,8 +15,8 @@ pub struct Scene {
     /// Camera.
     camera: Arc<RwLock<dyn Camera>>,
 
-    /// Vulkano resources specific to the rendering pipeline.
-    resources: Option<Renderer>,
+    /// The render engine to use.
+    render_engine: Option<RenderEngine>,
 }
 
 impl Scene {
@@ -38,13 +38,13 @@ impl Scene {
 
         let camera = create_camera(scene_camera, window_size[0] as u32, window_size[1] as u32);
 
-        Renderer::new(vk.clone(), scene_file, window_size, swapchain_format).map(|resources| {
-            Scene {
+        RenderEngine::new(vk.clone(), scene_file, window_size, swapchain_format).map(
+            |render_engine| Scene {
                 vk,
-                resources: Some(resources),
+                render_engine: Some(render_engine),
                 camera,
-            }
-        })
+            },
+        )
     }
 
     /// Updates the camera image size to match a new window size.
@@ -64,7 +64,7 @@ impl Scene {
         before_future: Box<dyn GpuFuture>,
         swapchain_image_view: Arc<ImageView>,
     ) -> Box<dyn GpuFuture> {
-        if let Some(resources) = self.resources.as_mut() {
+        if let Some(resources) = self.render_engine.as_mut() {
             resources.render(
                 self.vk.clone(),
                 before_future,

@@ -44,8 +44,10 @@ pub struct UnifiedPushConstants {
     pub closest_hit_pc: closest_hit::ClosestHitPushConstants,
 }
 
-/// Stores resources specific to the rendering pipeline and renders a frame.
-pub struct Renderer {
+/// Stores resources specific to the rendering pipeline and renders an image progressively.
+/// Each frame renders a batch of samples with a given number of samplers per pixel and accumulates
+/// the result over successive calls to its render function.
+pub struct RenderEngine {
     /// Descriptor set for binding the top-level acceleration structure for the scene.
     tlas_descriptor_set: Arc<DescriptorSet>,
 
@@ -92,7 +94,7 @@ pub struct Renderer {
     _acceleration_structures: AccelerationStructures,
 }
 
-impl Renderer {
+impl RenderEngine {
     /// Create vulkano resources for rendering a new scene with given models.
     pub fn new(
         vk: Arc<Vk>,
@@ -335,7 +337,7 @@ impl Renderer {
         let shader_binding_table =
             ShaderBindingTable::new(vk.memory_allocator.clone(), &rt_pipeline.get())?;
 
-        Ok(Renderer {
+        Ok(Self {
             tlas_descriptor_set,
             mesh_data_descriptor_set,
             image_textures_descriptor_set,
