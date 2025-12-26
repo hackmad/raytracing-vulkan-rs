@@ -66,7 +66,7 @@ struct Sky {
     vec3 solid;     // Solid colour.
 
     uint skyType;   // Sky type.
-    
+
     vec3 vTop;      // Vertical gradient top colour;
     float vFactor;  // Vertical gradient factor.
     vec3 vBottom;   // Vertical gradient bottom colour;
@@ -134,7 +134,30 @@ RayPayload initRayPayload(uint rngState) {
 
 
 // --------------------------------------------------------------------------------
+// Orthonormal bases
+
+struct ONB {
+    vec3 axis[3];
+};
+
+ONB createOrthonormalBases(vec3 n) {
+    ONB onb;
+    onb.axis[2] = normalize(n);
+    vec3 a = (abs(onb.axis[2].x) > 0.9) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    onb.axis[1] = normalize(cross(onb.axis[2], a));
+    onb.axis[0]=  cross(onb.axis[2], onb.axis[1]);
+    return onb;
+}
+
+// Transform from basis coordinates to local space.
+vec3 onbTransform(ONB onb, vec3 v) {
+    return (v.x * onb.axis[0]) + (v.y * onb.axis[1]) + (v.z * onb.axis[2]);
+}
+
+
+// --------------------------------------------------------------------------------
 // Map a value from [fromMin, fromMax] to [toMin, toMax].
+
 float map(float value, float fromMin, float fromMax, float toMin, float toMax) {
   return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
 }
@@ -263,6 +286,18 @@ vec3 randomVec3OnHemisphere(inout uint rngState, vec3 normal) {
     return -onUnitSphere;
 }
 
+vec3 randomVec3CosineDirection(inout uint rngState) {
+    float r1 = randomFloat(rngState);
+    float r2 = randomFloat(rngState);
+
+    float phi = TWO_PI * r1;
+    float x = cos(phi) * sqrt(r2);
+    float y = sin(phi) * sqrt(r2);
+    float z = sqrt(1.0 - r2);
+
+    return vec3(x, y, z);
+}
+
 // Box filter. Returns the vector to a random point in the [-.5, -.5] - [+.5, +.5] unit square.
 vec2 sampleSquare(inout uint rngState) {
     return randomVec2(rngState) - vec2(0.5);
@@ -297,6 +332,7 @@ vec2 sampleSquareStratified(inout uint rngState, int si, int sj, float recipSqrt
     float py = ((sj + randomFloat(rngState)) * recipSqrtSpp) - 0.5;
     return vec2(px, py);
 }
+
 
 // --------------------------------------------------------------------------------
 // Colour space conversions.

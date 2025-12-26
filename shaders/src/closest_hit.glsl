@@ -184,7 +184,6 @@ vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex ver
                 colour = isEven 
                     ? getBasicTextureValue(texture.even, vertex)
                     : getBasicTextureValue(texture.odd, vertex);
-                
             }
             break;
     }
@@ -204,14 +203,16 @@ void lambertianMaterialScatter(uint materialIndex, HitRecord rec) {
         LambertianMaterial material = lambertianMaterial.values[materialIndex];
         vec3 albedo = getMaterialPropertyValue(material.albedo, rec.meshVertex);
 
-        vec3 scatterDirection = rec.normal + randomUnitVec3(rayPayload.rngState);
+        // Calculate cosine PDF.
+        ONB uvw = createOrthonormalBases(rec.normal);
+        vec3 scatterDirection = onbTransform(uvw, randomVec3CosineDirection(rayPayload.rngState));
 
-        // Catch degenerate scatter direction.
-        if (nearZero(scatterDirection)) {
-            scatterDirection = rec.normal;
-        }
+        float cosTheta = dot(rec.normal, normalize(scatterDirection));
+        float scatteringPdf = max(0.0, cosTheta / PI);
 
-        rayPayload.scatterColour = albedo;
+        float pdf = dot(uvw.axis[2], scatterDirection) / PI;
+
+        rayPayload.scatterColour = scatteringPdf * albedo / pdf;
         rayPayload.isScattered = true;
         rayPayload.scatteredRay.direction = scatterDirection;
         rayPayload.scatteredRay.origin = rec.meshVertex.p;
