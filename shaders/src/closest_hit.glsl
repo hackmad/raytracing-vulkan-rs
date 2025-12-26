@@ -268,7 +268,9 @@ void dielectricMaterialScatter(uint materialIndex, HitRecord rec) {
 void diffuseLightMaterialEmission(uint materialIndex, HitRecord rec) {
     if (materialIndex >= 0 && materialIndex < pc.diffuseLightMaterialCount) {
         DiffuseLightMaterial material = diffuseLightMaterial.values[materialIndex];
-        rayPayload.emissionColour = getMaterialPropertyValue(material.emit, rec.meshVertex);
+        if (rec.isFrontFace) {
+            rayPayload.emissionColour = getMaterialPropertyValue(material.emit, rec.meshVertex);
+        }
     }
 }
 

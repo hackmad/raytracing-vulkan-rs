@@ -47,7 +47,7 @@
       "quad": {
         "name": "side-quad-light",
         "points": [ [3, -1, -2], [5, -1, -2], [5, -3, -2], [3, -3, -2] ],
-        "normal": [0, 0, -1],
+        "normal": [0, 0, 1],
         "uv": [ [0, 0], [1, 0], [1, 1], [0, 1] ],
         "material": "diffuse-light"
       }
