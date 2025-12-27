@@ -9,16 +9,15 @@ pub struct Instance {
 }
 
 impl Instance {
-    /// Returns the 4x3 matrix used in Vulkan transformations for acceleration structures.
-    pub fn get_transform(&self) -> [[f32; 4]; 3] {
-        let mat = match &self.transforms {
+    /// Multiplies all transformation matrices in order to get final transformation for the
+    /// object in world space.
+    pub fn get_object_to_world_space_matrix(&self) -> Mat4 {
+        match &self.transforms {
             None => Mat4::IDENTITY,
             Some(transforms) => transforms.iter().fold(Mat4::IDENTITY, |acc, transform| {
                 acc.mul_mat4(&transform.to_matrix())
             }),
-        };
-        let t = mat.transpose().to_cols_array_2d();
-        [t[0], t[1], t[2]]
+        }
     }
 }
 

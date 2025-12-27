@@ -129,7 +129,10 @@ impl RenderEngine {
             let mesh_index = mesh_name_to_index
                 .get(&instance.name)
                 .with_context(|| format!("Mesh {} not found", instance.name))?;
-            mesh_instances.push(MeshInstance::new(*mesh_index, instance.get_transform()));
+            mesh_instances.push(MeshInstance::new(
+                *mesh_index,
+                instance.get_object_to_world_space_matrix(),
+            ));
         }
 
         // Get materials.

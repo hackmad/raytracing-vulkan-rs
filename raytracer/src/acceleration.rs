@@ -82,7 +82,7 @@ impl AccelerationStructures {
                 .with_context(|| format!("BLAS not found {name}"))?;
 
             let acc = AccelerationStructureInstance {
-                transform: mesh_instance.transform,
+                transform: mesh_instance.get_vulkan_acc_transform(),
                 acceleration_structure_reference: blas.device_address().into(),
                 instance_custom_index_and_mask,
                 ..Default::default()
