@@ -122,9 +122,9 @@ HitRecord unpackInstanceVertex(const int meshInstanceId, const int primitiveId) 
     bool frontFace = isFrontFace(gl_WorldRayDirectionEXT, worldSpaceNormal);
 
     return HitRecord(
-            MeshVertex(worldSpacePosition, u, worldSpaceNormal, v),
-            frontFace,
-            frontFace ? worldSpaceNormal : -worldSpaceNormal
+        MeshVertex(worldSpacePosition, u, worldSpaceNormal, v),
+        frontFace,
+        frontFace ? worldSpaceNormal : -worldSpaceNormal
     );
 }
 
