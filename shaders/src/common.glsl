@@ -104,6 +104,16 @@ struct HitRecord {
 
 
 // --------------------------------------------------------------------------------
+// Light source sample.
+
+struct LightSample {
+    vec3 position;
+    vec3 normal;
+    float pdf;
+};
+
+
+// --------------------------------------------------------------------------------
 // Ray payload
 
 struct Ray {
@@ -131,6 +141,18 @@ RayPayload initRayPayload(uint rngState) {
     rp.emissionColour = vec3(0.0);
     return rp;
 }
+
+
+// --------------------------------------------------------------------------------
+// Light source alias used for Vose's Alias Method to store CDFs based on 
+// proportional area.
+
+struct LightSourceAliasTableEntry {
+    float probability;
+    uint alias;
+    uint meshId;
+    uint primitiveId;
+};
 
 
 // --------------------------------------------------------------------------------
@@ -333,6 +355,18 @@ vec2 sampleSquareStratified(inout uint rngState, int si, int sj, float recipSqrt
     return vec2(px, py);
 }
 
+vec3 sampleTriangleUniform(inout uint rngState, vec3 p0, vec3 p1, vec3 p2) {
+    // Sample a unit square.
+    vec2 r = randomVec2(rngState);
+
+    if (r.x + r.y > 1.0)  {
+        // Reflect across diagonal.
+        r.x = 1.0 - r.x;
+        r.y = 1.0 - r.y;
+    }
+
+    return p0 + r.x * (p1 - p0) + r.y * (p2 - p0);
+}
 
 // --------------------------------------------------------------------------------
 // Colour space conversions.

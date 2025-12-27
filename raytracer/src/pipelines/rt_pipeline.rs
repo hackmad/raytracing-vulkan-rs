@@ -57,6 +57,9 @@ impl RtPipeline {
     /// Uniform buffer for sky.
     pub const SKY_LAYOUT: usize = 8;
 
+    /// Storage buffer for light source alias table.
+    pub const LIGHT_SOURCE_ALIAS_TABLE: usize = 9;
+
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
         self.pipeline.clone()
@@ -88,6 +91,7 @@ impl RtPipeline {
                     create_materials_layout(device.clone()),
                     create_other_textures_layout(device.clone()),
                     create_sky_layout(device.clone()),
+                    create_light_source_alias_table_layout(device.clone()),
                 ],
                 push_constant_ranges: vec![
                     PushConstantRange {
@@ -261,6 +265,20 @@ fn create_sky_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         device,
         DescriptorSetLayoutCreateInfo {
             bindings: [(0, uniform_buffer_binding(ShaderStages::RAYGEN))]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+/// Create a pipeline layout for light source alias table storage buffer.
+fn create_light_source_alias_table_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        device.clone(),
+        DescriptorSetLayoutCreateInfo {
+            bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
                 .into_iter()
                 .collect(),
             ..Default::default()

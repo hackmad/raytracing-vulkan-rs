@@ -51,17 +51,23 @@ layout(set = 7, binding = 1, scalar) buffer NoiseTextures {
     NoiseTexture values[];
 } noiseTexture;
 
+layout(set = 9, binding = 0, scalar) buffer LightSourceAliasTable {
+    LightSourceAliasTableEntry values[];
+} lightSourceAliasTableData;
+
 // If RayGenPushConstants in ray_gen.glsl changes, make sure to update layouts here.
 layout(push_constant) uniform ClosestHitPushConstants {
-    layout(offset = 20) uint meshCount;
-    layout(offset = 24) uint imageTextureCount;
-    layout(offset = 28) uint constantColourCount;
-    layout(offset = 32) uint checkerTextureCount;
-    layout(offset = 36) uint noiseTextureCount;
-    layout(offset = 40) uint lambertianMaterialCount;
-    layout(offset = 44) uint metalMaterialCount;
-    layout(offset = 48) uint dielectricMaterialCount;
-    layout(offset = 52) uint diffuseLightMaterialCount;
+    layout(offset = 20) uint  meshCount;
+    layout(offset = 24) uint  imageTextureCount;
+    layout(offset = 28) uint  constantColourCount;
+    layout(offset = 32) uint  checkerTextureCount;
+    layout(offset = 36) uint  noiseTextureCount;
+    layout(offset = 40) uint  lambertianMaterialCount;
+    layout(offset = 44) uint  metalMaterialCount;
+    layout(offset = 48) uint  dielectricMaterialCount;
+    layout(offset = 52) uint  diffuseLightMaterialCount;
+    layout(offset = 56) uint  lightSourceTriangleCount;
+    layout(offset = 60) float lightSourceTotalArea;
 } pc;
 
 struct MeshMaterial {
@@ -69,20 +75,24 @@ struct MeshMaterial {
     uint index;
 };
 
-MeshMaterial unpackInstanceMaterial(const int meshInstanceId) {
-    Mesh mesh = meshData.values[meshInstanceId];
+struct MeshTriangle {
+    MeshVertex v0;
+    MeshVertex v1;
+    MeshVertex v2;
+};
+
+MeshMaterial unpackInstanceMaterial(const uint meshId) {
+    Mesh mesh = meshData.values[meshId];
     return MeshMaterial(mesh.materialType, mesh.materialIndex);
 }
 
-HitRecord unpackInstanceVertex(const int meshInstanceId, const int primitiveId) {
-    vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
+MeshTriangle unpackInstanceVertex(const uint meshId, const uint primitiveId) {
+    Mesh mesh = meshData.values[meshId];
 
-    Mesh mesh = meshData.values[meshInstanceId];
-
-    // Note if we got here meshInstanceId >= 1 and pc.meshCount >= 1 because there was an intersection.
+    // Note if we got here meshId >= 1 and pc.meshCount >= 1 because there was an intersection.
     uint indexBufferOffset = 0;
     uint vertexBufferOffset = 0;
-    for (uint id = 0; id < meshInstanceId && id < pc.meshCount; id++) {
+    for (uint id = 0; id < meshId && id < pc.meshCount; id++) {
         indexBufferOffset += meshData.values[id].indexBufferSize;
         vertexBufferOffset += meshData.values[id].vertexBufferSize;
     }
@@ -96,25 +106,31 @@ HitRecord unpackInstanceVertex(const int meshInstanceId, const int primitiveId) 
     MeshVertex v1 = meshVertexData.values[vertexBufferOffset + i1];
     MeshVertex v2 = meshVertexData.values[vertexBufferOffset + i2];
 
+    return MeshTriangle(v0, v1, v2);
+}
+
+HitRecord getIntersection(MeshTriangle tri) {
+    vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
+
     const vec3 position =
-        v0.p * barycentricCoords.x +
-        v1.p * barycentricCoords.y +
-        v2.p * barycentricCoords.z;
+        tri.v0.p * barycentricCoords.x +
+        tri.v1.p * barycentricCoords.y +
+        tri.v2.p * barycentricCoords.z;
 
     const vec3 normal =
-        v0.n * barycentricCoords.x +
-        v1.n * barycentricCoords.y +
-        v2.n * barycentricCoords.z;
+        tri.v0.n * barycentricCoords.x +
+        tri.v1.n * barycentricCoords.y +
+        tri.v2.n * barycentricCoords.z;
 
-    const float u = 
-        v0.u * barycentricCoords.x +
-        v1.u * barycentricCoords.y +
-        v2.u * barycentricCoords.z;
+    const float u =
+        tri.v0.u * barycentricCoords.x +
+        tri.v1.u * barycentricCoords.y +
+        tri.v2.u * barycentricCoords.z;
 
-    const float v = 
-        v0.v * barycentricCoords.x +
-        v1.v * barycentricCoords.y +
-        v2.v * barycentricCoords.z;
+    const float v =
+        tri.v0.v * barycentricCoords.x +
+        tri.v1.v * barycentricCoords.y +
+        tri.v2.v * barycentricCoords.z;
 
     const vec3 worldSpacePosition = vec3(gl_ObjectToWorldEXT * vec4(position, 1.0));
     const vec3 worldSpaceNormal = normalize(vec3(normal * gl_WorldToObjectEXT));
@@ -197,6 +213,31 @@ float schlickReflectance(float cosine, float refractionIndex) {
     r0 = r0 * r0;
     return r0 + (1.0 - r0) * pow((1.0 - cosine), 5);
 }
+
+LightSample sampleLightSource(inout uint rngState) {
+    float u1 = randomFloat(rngState);
+    float u2 = randomFloat(rngState);
+
+    uint i = min(uint(u1 * pc.lightSourceTriangleCount), pc.lightSourceTriangleCount - 1);
+
+    uint triangleIndex;
+    if (u2 < lightSourceAliasTableData.values[i].probability) {
+        triangleIndex = i;
+    } else {
+        triangleIndex = lightSourceAliasTableData.values[i].alias;
+    }
+
+    uint meshId        = lightSourceAliasTableData.values[triangleIndex].meshId;
+    uint primitiveId   = lightSourceAliasTableData.values[triangleIndex].primitiveId;
+    MeshTriangle light = unpackInstanceVertex(meshId, primitiveId);
+
+    vec3 position = sampleTriangleUniform(rngState, light.v0.p, light.v1.p, light.v2.p);
+    vec3 normal   = normalize(cross(light.v1.p - light.v0.p, light.v2.p - light.v0.p));
+    float pdf     = 1.0 / pc.lightSourceTotalArea;
+
+    return LightSample(position, normal, pdf);
+}
+
 
 void lambertianMaterialScatter(uint materialIndex, HitRecord rec) {
     if (materialIndex >= 0 && materialIndex < pc.lambertianMaterialCount) {
@@ -310,7 +351,8 @@ void calculateEmission(MeshMaterial material, HitRecord rec) {
 }
 
 void main() {
-    HitRecord rec = unpackInstanceVertex(gl_InstanceCustomIndexEXT, gl_PrimitiveID);
+    MeshTriangle tri = unpackInstanceVertex(gl_InstanceCustomIndexEXT, gl_PrimitiveID);
+    HitRecord rec = getIntersection(tri);
     MeshMaterial material = unpackInstanceMaterial(gl_InstanceCustomIndexEXT);
 
     calculateScatter(material, rec);

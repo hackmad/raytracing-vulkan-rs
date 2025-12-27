@@ -29,9 +29,9 @@ layout(set = 8, binding = 0) uniform SkyData {
 // of batches. However, at some point it will be diminishing returns.
 layout(push_constant) uniform RayGenPushConstants {
     layout(offset =  0) uvec2 resolution;
-    layout(offset =  8) uint samplesPerPixel;
-    layout(offset = 12) uint sampleBatch;
-    layout(offset = 16) uint maxRayDepth;
+    layout(offset =  8) uint  samplesPerPixel;
+    layout(offset = 12) uint  sampleBatch;
+    layout(offset = 16) uint  maxRayDepth;
 } pc;
 
 vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFlags) {
