@@ -305,14 +305,14 @@ fn generate_box(corners: &[[f32; 3]; 2]) -> (Vec<Vertex>, Vec<u32>) {
         Vertex::new([lx, ly, lz], [ 0.0,  0.0, -1.0],   uv_back[1]),
         Vertex::new([lx, hy, lz], [ 0.0,  0.0, -1.0],   uv_back[2]),
         Vertex::new([hx, hy, lz], [ 0.0,  0.0, -1.0],   uv_back[3]),
-                                                                 
-        // Left (-X)                                             
+
+        // Left (-X)
         Vertex::new([lx, ly, lz], [-1.0,  0.0,  0.0],   uv_left[0]),
         Vertex::new([lx, ly, hz], [-1.0,  0.0,  0.0],   uv_left[1]),
         Vertex::new([lx, hy, hz], [-1.0,  0.0,  0.0],   uv_left[2]),
         Vertex::new([lx, hy, lz], [-1.0,  0.0,  0.0],   uv_left[3]),
-                                                                 
-        // Right (+X)                                            
+
+        // Right (+X)
         Vertex::new([hx, ly, hz], [ 1.0,  0.0,  0.0],  uv_right[0]),
         Vertex::new([hx, ly, lz], [ 1.0,  0.0,  0.0],  uv_right[1]),
         Vertex::new([hx, hy, lz], [ 1.0,  0.0,  0.0],  uv_right[2]),

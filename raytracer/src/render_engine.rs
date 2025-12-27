@@ -129,8 +129,7 @@ impl RenderEngine {
             let mesh_index = mesh_name_to_index
                 .get(&instance.name)
                 .with_context(|| format!("Mesh {} not found", instance.name))?;
-            let mesh = meshes[*mesh_index].clone();
-            mesh_instances.push(MeshInstance::new(mesh, instance.get_transform()));
+            mesh_instances.push(MeshInstance::new(*mesh_index, instance.get_transform()));
         }
 
         // Get materials.
@@ -186,7 +185,7 @@ impl RenderEngine {
 
         // Acceleration structures.
         let acceleration_structures =
-            AccelerationStructures::new(vk.clone(), &mesh_instances, &mesh_name_to_index)?;
+            AccelerationStructures::new(vk.clone(), &mesh_instances, &meshes)?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),

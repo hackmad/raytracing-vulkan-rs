@@ -29,36 +29,32 @@ pub struct AccelerationStructures {
 
     /// The bottom-level acceleration structure is required to be kept alive even though renderer will not
     /// directly use it. The top-level acceleration structure needs it.
-    _blas_vec: HashMap<String, Arc<AccelerationStructure>>,
+    _blas_map: HashMap<String, Arc<AccelerationStructure>>,
 }
 
 impl AccelerationStructures {
     /// Create new acceleration structures for the given model.
-    pub fn new(
-        vk: Arc<Vk>,
-        mesh_instances: &[MeshInstance],
-        mesh_name_to_index: &HashMap<String, usize>,
-    ) -> Result<Self> {
-        let mut meshes: HashMap<String, Arc<Mesh>> = HashMap::new();
+    pub fn new(vk: Arc<Vk>, mesh_instances: &[MeshInstance], meshes: &[Arc<Mesh>]) -> Result<Self> {
+        let mut mesh_map: HashMap<String, Arc<Mesh>> = HashMap::new();
         for mesh_instance in mesh_instances.iter() {
-            meshes
-                .entry(mesh_instance.mesh.name.clone())
-                .or_insert_with(|| mesh_instance.mesh.clone());
+            let mesh = meshes[mesh_instance.mesh_index].clone();
+            let name = mesh.name.clone();
+            mesh_map.entry(name).or_insert_with(|| mesh);
         }
 
         let mut vertex_buffers: HashMap<String, Subbuffer<[MeshVertex]>> = HashMap::new();
-        for (name, mesh) in meshes.iter() {
+        for (name, mesh) in mesh_map.iter() {
             let buf = mesh.create_blas_vertex_buffer(vk.clone())?;
             vertex_buffers.insert(name.clone(), buf);
         }
 
         let mut index_buffers: HashMap<String, Subbuffer<[u32]>> = HashMap::new();
-        for (name, mesh) in meshes.iter() {
+        for (name, mesh) in mesh_map.iter() {
             let buf = mesh.create_blas_index_buffer(vk.clone())?;
             index_buffers.insert(name.clone(), buf);
         }
 
-        let mut blas_vec: HashMap<String, Arc<AccelerationStructure>> = HashMap::new();
+        let mut blas_map: HashMap<String, Arc<AccelerationStructure>> = HashMap::new();
         for (name, vertex_buffer) in vertex_buffers.iter() {
             let index_buffer = index_buffers
                 .get(name)
@@ -66,26 +62,23 @@ impl AccelerationStructures {
 
             let acc =
                 build_acceleration_structure_triangles(vk.clone(), vertex_buffer, index_buffer)?;
-            blas_vec.insert(name.clone(), acc);
+            blas_map.insert(name.clone(), acc);
         }
 
         let mut blas_instances: Vec<_> = Vec::new();
         for mesh_instance in mesh_instances.iter() {
-            let name = &mesh_instance.mesh.name;
-
-            let mesh_index = mesh_name_to_index
-                .get(name)
-                .with_context(|| format!("Mesh index for {name} not found"))?;
-            if *mesh_index >= 16_777_216 {
+            let mesh_index = mesh_instance.mesh_index;
+            if mesh_index >= 16_777_216 {
                 warn!("Mesh count exceeds 24 bit storage for instance_custom_index_and_mask");
             }
 
             // Ideally we should use this to point to materials directly. For now, just use it to
             // point to the mesh index we should be using to extract material data in the shader.
-            let instance_custom_index_and_mask = Packed24_8::new(*mesh_index as u32, 0xFF);
+            let instance_custom_index_and_mask = Packed24_8::new(mesh_index as u32, 0xFF);
 
-            let blas = blas_vec
-                .get(name)
+            let name = meshes[mesh_index].name.clone();
+            let blas = blas_map
+                .get(&name)
                 .with_context(|| format!("BLAS not found {name}"))?;
 
             let acc = AccelerationStructureInstance {
@@ -101,7 +94,7 @@ impl AccelerationStructures {
         let tlas = unsafe { build_top_level_acceleration_structure(vk.clone(), blas_instances) }?;
 
         Ok(Self {
-            _blas_vec: blas_vec,
+            _blas_map: blas_map,
             tlas,
         })
     }
