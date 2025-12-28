@@ -270,7 +270,7 @@ LightSample sampleLightSources(inout uint rngState, mat4x3 objectToWorld) {
     return LightSample(position, normal);
 }
 
-float getPdfValue(uint pdfType, vec3 direction, HitRecord rec, vec3 lightNormal) {
+float getPdfValue(uint pdfType, vec3 direction, HitRecord rec, LightSample lightSample) {
     float cosTheta;
     switch (pdfType) {
         case SPHERE_PDF:
@@ -280,7 +280,7 @@ float getPdfValue(uint pdfType, vec3 direction, HitRecord rec, vec3 lightNormal)
             return max(0.0, cosTheta / PI);
         case LIGHT_PDF:
             float distanceSquared = dot(direction, direction);
-            cosTheta = dot(lightNormal, -normalize(direction));
+            cosTheta = abs(dot(lightSample.normal, -normalize(direction)));
             if (cosTheta <= 0.0) {
                 return 0.0;
             }
@@ -290,9 +290,7 @@ float getPdfValue(uint pdfType, vec3 direction, HitRecord rec, vec3 lightNormal)
     }
 }
 
-vec3 genScatterDirection(inout uint rngState, uint pdfType, HitRecord rec, mat4x3 objectToWorld, out vec3 outLightNormal) {
-    outLightNormal = vec3(0.0);
-
+vec3 genScatterDirection(inout uint rngState, uint pdfType, HitRecord rec, mat4x3 objectToWorld, LightSample lightSample) {
     switch (pdfType) {
         case SPHERE_PDF:
             return randomUnitVec3(rngState);
@@ -300,21 +298,19 @@ vec3 genScatterDirection(inout uint rngState, uint pdfType, HitRecord rec, mat4x
             ONB onb = createOrthonormalBases(rec.normal);
             return onbTransform(onb, randomVec3CosineDirection(rngState));
         case LIGHT_PDF:
-            LightSample lightSample = sampleLightSources(rngState, objectToWorld);
-            outLightNormal = lightSample.normal;
             return lightSample.position - rec.meshVertex.p;
         default:
             return vec3(0.0);
     }
 }
 
-uint choosePdf(inout uint rngState, uint matPdfType) {
-    // No lights, fallback to material PDF
+uint chooseMixturePdf(inout uint rngState, uint matPdfType) {
+    // No lights, fallback to material PDF.
     if (pc.lightSourceTriangleCount == 0 || pc.lightSourceTotalArea <= 0.0) {
         return matPdfType;
     }
 
-    // 50-50 mixture
+    // 50-50 mixture.
     float r = randomFloat(rngState);
     return (r < 0.5) ? LIGHT_PDF : matPdfType;
 }
@@ -326,11 +322,10 @@ ScatterRecord lambertianMaterialScatter(inout uint rngState, uint materialIndex,
         LambertianMaterial material = lambertianMaterial.values[materialIndex];
         vec3 albedo = getMaterialPropertyValue(material.albedo, rec.meshVertex);
 
-        srec.attenuation            = albedo;
-        srec.isScattered            = true;
-        srec.scatteredRay.origin    = rec.meshVertex.p;
-        srec.scatteredRay.direction = rec.normal + randomUnitVec3(rngState);;
-        srec.matPdfType             = COSINE_PDF;
+        srec.attenuation = albedo;
+        srec.isScattered = true;
+        srec.skipPdf     = false;
+        srec.matPdfType  = COSINE_PDF;
     }
 
     return srec;
@@ -346,13 +341,11 @@ ScatterRecord metalMaterialScatter(inout uint rngState, uint materialIndex, HitR
 
         vec3 reflectedDirection = reflect(worldRayDirection, rec.normal);
 
-        vec3 scatteredDirection = normalize(reflectedDirection) +
-            (fuzz * randomUnitVec3(rngState));
-
-        srec.attenuation            = albedo;
-        srec.isScattered            = (dot(scatteredDirection, rec.normal) > 0);
-        srec.scatteredRay.direction = scatteredDirection;
-        srec.scatteredRay.origin    = rec.meshVertex.p;
+        srec.attenuation          = albedo;
+        srec.isScattered          = dot(reflectedDirection, rec.normal) > 0;
+        srec.skipPdf              = true;
+        srec.skipPdfRay.origin    = rec.meshVertex.p;
+        srec.skipPdfRay.direction = normalize(reflectedDirection) + (fuzz * randomUnitVec3(rngState));
     }
 
     return srec;
@@ -381,10 +374,11 @@ ScatterRecord dielectricMaterialScatter(inout uint rngState, uint materialIndex,
             ? reflect(unitDirection, rec.normal) // Total internal reflection.
             : refract(unitDirection, rec.normal, ri);
 
-        srec.attenuation            = attenuation;
-        srec.isScattered            = true;
-        srec.scatteredRay.direction = refractedDirection;
-        srec.scatteredRay.origin    = rec.meshVertex.p;
+        srec.attenuation          = attenuation;
+        srec.isScattered          = true;
+        srec.skipPdf              = true;
+        srec.skipPdfRay.origin    = rec.meshVertex.p;
+        srec.skipPdfRay.direction = refractedDirection;
     }
 
     return srec;
@@ -497,10 +491,36 @@ vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFla
             break;
         }
 
-        // Update throughput.
-        throughput *= srec.attenuation;
+        // Return early if we don't have to evaluate scattering PDF.
+        if (srec.skipPdf) {
+            throughput *= srec.attenuation;
+            ray = srec.skipPdfRay;
+            continue;
+        }
 
-        ray = srec.scatteredRay;
+        // Get a the light source sample.
+        LightSample lightSample = sampleLightSources(rngState, rayPayload.objectToWorld);
+
+        // Choose between material and light PDF with a 50-50 chance.
+        uint chosenPdfType = chooseMixturePdf(rngState, srec.matPdfType);
+        vec3 scatterDirection = genScatterDirection(rngState, chosenPdfType, rec, rayPayload.objectToWorld, lightSample);
+
+        // Use material PDFs.
+        float scatteringPdf = getPdfValue(srec.matPdfType, scatterDirection, rec, lightSample);
+        float pdfMat        = scatteringPdf;
+        float pdfValue      = pdfMat;
+
+        // See if we want to use a Mixture PDF.
+        if (pc.lightSourceTriangleCount > 0 && pc.lightSourceTotalArea > 0.0) {
+            float pdfLight = getPdfValue(LIGHT_PDF, scatterDirection, rec, lightSample);
+            pdfValue = 0.5 * pdfLight + 0.5 * pdfMat;
+        }
+
+        // Update throughput.
+        throughput *= srec.attenuation * scatteringPdf / pdfValue;
+
+        // Calculate ray for next depth.
+        ray = Ray(rec.meshVertex.p, normalize(scatterDirection));
     }
 
     return accumulated;

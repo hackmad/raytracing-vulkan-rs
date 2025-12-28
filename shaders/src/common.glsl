@@ -137,20 +137,20 @@ struct RayPayload {
 
 struct ScatterRecord {
     bool isScattered;
-    Ray  scatteredRay;
     vec3 attenuation;
     uint matPdfType;
-    vec3 lightNormal;
+    bool skipPdf;
+    Ray  skipPdfRay;
 };
 
 ScatterRecord initScatterRecord() {
     ScatterRecord rec;
-    rec.isScattered            = false;
-    rec.scatteredRay.origin    = vec3(0.0);
-    rec.scatteredRay.direction = vec3(0.0);
-    rec.attenuation            = vec3(0.0);
-    rec.lightNormal            = vec3(0.0);
-    rec.matPdfType             = NO_PDF;
+    rec.isScattered          = false;
+    rec.attenuation          = vec3(0.0);
+    rec.matPdfType           = NO_PDF;
+    rec.skipPdf              = false;
+    rec.skipPdfRay.origin    = vec3(0.0);
+    rec.skipPdfRay.direction = vec3(0.0);
     return rec;
 }
 
