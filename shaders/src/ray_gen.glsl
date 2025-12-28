@@ -130,33 +130,32 @@ MeshTriangle unpackInstanceVertex(const uint meshId, const uint primitiveId) {
 }
 
 HitRecord getIntersection(
-    MeshTriangle tri,
-    vec2         hitAttribs,
-    mat4x3       objectToWorld,
-    mat4x3       worldToObject,
-    vec3         worldRayDirection
-) {
+        MeshTriangle hitTriangle,
+        vec2         hitAttribs,
+        mat4x3       objectToWorld,
+        mat4x3       worldToObject,
+        vec3         worldRayDirection) {
     vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
 
     const vec3 position =
-        tri.v0.p * barycentricCoords.x +
-        tri.v1.p * barycentricCoords.y +
-        tri.v2.p * barycentricCoords.z;
+        hitTriangle.v0.p * barycentricCoords.x +
+        hitTriangle.v1.p * barycentricCoords.y +
+        hitTriangle.v2.p * barycentricCoords.z;
 
     const vec3 normal =
-        tri.v0.n * barycentricCoords.x +
-        tri.v1.n * barycentricCoords.y +
-        tri.v2.n * barycentricCoords.z;
+        hitTriangle.v0.n * barycentricCoords.x +
+        hitTriangle.v1.n * barycentricCoords.y +
+        hitTriangle.v2.n * barycentricCoords.z;
 
     const float u =
-        tri.v0.u * barycentricCoords.x +
-        tri.v1.u * barycentricCoords.y +
-        tri.v2.u * barycentricCoords.z;
+        hitTriangle.v0.u * barycentricCoords.x +
+        hitTriangle.v1.u * barycentricCoords.y +
+        hitTriangle.v2.u * barycentricCoords.z;
 
     const float v =
-        tri.v0.v * barycentricCoords.x +
-        tri.v1.v * barycentricCoords.y +
-        tri.v2.v * barycentricCoords.z;
+        hitTriangle.v0.v * barycentricCoords.x +
+        hitTriangle.v1.v * barycentricCoords.y +
+        hitTriangle.v2.v * barycentricCoords.z;
 
     const vec3 worldSpacePosition = vec3(objectToWorld * vec4(position, 1.0));
     const vec3 worldSpaceNormal = normalize(vec3(normal * worldToObject));
@@ -240,7 +239,11 @@ float schlickReflectance(float cosine, float refractionIndex) {
     return r0 + (1.0 - r0) * pow((1.0 - cosine), 5);
 }
 
-LightSample sampleLightSource(inout uint rngState) {
+LightSample sampleLightSources(inout uint rngState, mat4x3 objectToWorld) {
+    if (pc.lightSourceTriangleCount == 0) {
+        return LightSample(vec3(0.0), vec3(0.0));
+    }
+
     float u1 = randomFloat(rngState);
     float u2 = randomFloat(rngState);
 
@@ -253,40 +256,89 @@ LightSample sampleLightSource(inout uint rngState) {
         triangleIndex = lightSourceAliasTableData.values[i].alias;
     }
 
-    uint meshId        = lightSourceAliasTableData.values[triangleIndex].meshId;
-    uint primitiveId   = lightSourceAliasTableData.values[triangleIndex].primitiveId;
+    uint meshId = lightSourceAliasTableData.values[triangleIndex].meshId;
+    uint primitiveId = lightSourceAliasTableData.values[triangleIndex].primitiveId;
+
     MeshTriangle light = unpackInstanceVertex(meshId, primitiveId);
+    light.v0.p = vec3(objectToWorld * vec4(light.v0.p, 1.0));
+    light.v1.p = vec3(objectToWorld * vec4(light.v1.p, 1.0));
+    light.v2.p = vec3(objectToWorld * vec4(light.v2.p, 1.0));
 
     vec3 position = sampleTriangleUniform(rngState, light.v0.p, light.v1.p, light.v2.p);
     vec3 normal   = normalize(cross(light.v1.p - light.v0.p, light.v2.p - light.v0.p));
-    float pdf     = 1.0 / pc.lightSourceTotalArea;
 
-    return LightSample(position, normal, pdf);
+    return LightSample(position, normal);
 }
 
+float getPdfValue(uint pdfType, vec3 direction, HitRecord rec, vec3 lightNormal) {
+    float cosTheta;
+    switch (pdfType) {
+        case SPHERE_PDF:
+            return 1.0 / (4.0 * PI);
+        case COSINE_PDF:
+            cosTheta = dot(normalize(direction), rec.normal);
+            return max(0.0, cosTheta / PI);
+        case LIGHT_PDF:
+            float distanceSquared = dot(direction, direction);
+            cosTheta = dot(lightNormal, -normalize(direction));
+            if (cosTheta <= 0.0) {
+                return 0.0;
+            }
+            return (distanceSquared / cosTheta) * (1.0 / pc.lightSourceTotalArea);
+        default:
+            0.0;
+    }
+}
 
-void lambertianMaterialScatter(inout RayPayload2 rp2, uint materialIndex, HitRecord rec) {
+vec3 genScatterDirection(inout uint rngState, uint pdfType, HitRecord rec, mat4x3 objectToWorld, out vec3 outLightNormal) {
+    outLightNormal = vec3(0.0);
+
+    switch (pdfType) {
+        case SPHERE_PDF:
+            return randomUnitVec3(rngState);
+        case COSINE_PDF:
+            ONB onb = createOrthonormalBases(rec.normal);
+            return onbTransform(onb, randomVec3CosineDirection(rngState));
+        case LIGHT_PDF:
+            LightSample lightSample = sampleLightSources(rngState, objectToWorld);
+            outLightNormal = lightSample.normal;
+            return lightSample.position - rec.meshVertex.p;
+        default:
+            return vec3(0.0);
+    }
+}
+
+uint choosePdf(inout uint rngState, uint matPdfType) {
+    // No lights, fallback to material PDF
+    if (pc.lightSourceTriangleCount == 0 || pc.lightSourceTotalArea <= 0.0) {
+        return matPdfType;
+    }
+
+    // 50-50 mixture
+    float r = randomFloat(rngState);
+    return (r < 0.5) ? LIGHT_PDF : matPdfType;
+}
+
+ScatterRecord lambertianMaterialScatter(inout uint rngState, uint materialIndex, HitRecord rec) {
+    ScatterRecord srec = initScatterRecord();
+
     if (materialIndex >= 0 && materialIndex < pc.lambertianMaterialCount) {
         LambertianMaterial material = lambertianMaterial.values[materialIndex];
         vec3 albedo = getMaterialPropertyValue(material.albedo, rec.meshVertex);
 
-        // Calculate cosine PDF.
-        ONB uvw = createOrthonormalBases(rec.normal);
-        vec3 scatterDirection = onbTransform(uvw, randomVec3CosineDirection(rp2.rngState));
-
-        float cosTheta = dot(rec.normal, normalize(scatterDirection));
-        float scatteringPdf = max(0.0, cosTheta / PI);
-
-        float pdf = dot(uvw.axis[2], scatterDirection) / PI;
-
-        rp2.scatterColour = scatteringPdf * albedo / pdf;
-        rp2.isScattered = true;
-        rp2.scatteredRay.direction = scatterDirection;
-        rp2.scatteredRay.origin = rec.meshVertex.p;
+        srec.attenuation            = albedo;
+        srec.isScattered            = true;
+        srec.scatteredRay.origin    = rec.meshVertex.p;
+        srec.scatteredRay.direction = rec.normal + randomUnitVec3(rngState);;
+        srec.matPdfType             = COSINE_PDF;
     }
+
+    return srec;
 }
 
-void metalMaterialScatter(inout RayPayload2 rp2, uint materialIndex, HitRecord rec, vec3 worldRayDirection) {
+ScatterRecord metalMaterialScatter(inout uint rngState, uint materialIndex, HitRecord rec, vec3 worldRayDirection) {
+    ScatterRecord srec = initScatterRecord();
+
     if (materialIndex >= 0 && materialIndex < pc.metalMaterialCount) {
         MetalMaterial material = metalMaterial.values[materialIndex];
         vec3 albedo = getMaterialPropertyValue(material.albedo, rec.meshVertex);
@@ -295,16 +347,20 @@ void metalMaterialScatter(inout RayPayload2 rp2, uint materialIndex, HitRecord r
         vec3 reflectedDirection = reflect(worldRayDirection, rec.normal);
 
         vec3 scatteredDirection = normalize(reflectedDirection) +
-            (fuzz * randomUnitVec3(rp2.rngState));
+            (fuzz * randomUnitVec3(rngState));
 
-        rp2.scatterColour = albedo;
-        rp2.isScattered = (dot(scatteredDirection, rec.normal) > 0);
-        rp2.scatteredRay.direction = scatteredDirection;
-        rp2.scatteredRay.origin = rec.meshVertex.p;
+        srec.attenuation            = albedo;
+        srec.isScattered            = (dot(scatteredDirection, rec.normal) > 0);
+        srec.scatteredRay.direction = scatteredDirection;
+        srec.scatteredRay.origin    = rec.meshVertex.p;
     }
+
+    return srec;
 }
 
-void dielectricMaterialScatter(inout RayPayload2 rp2, uint materialIndex, HitRecord rec, vec3 worldRayDirection) {
+ScatterRecord dielectricMaterialScatter(inout uint rngState, uint materialIndex, HitRecord rec, vec3 worldRayDirection) {
+    ScatterRecord srec = initScatterRecord();
+
     if (materialIndex >= 0 && materialIndex < pc.dielectricMaterialCount) {
         DielectricMaterial material = dielectricMaterial.values[materialIndex];
         float refractionIndex = material.refractionIndex;
@@ -319,81 +375,84 @@ void dielectricMaterialScatter(inout RayPayload2 rp2, uint materialIndex, HitRec
         float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 
         bool cannotRefract = ri * sinTheta > 1.0; 
-        cannotRefract = cannotRefract || schlickReflectance(cosTheta, ri) > randomFloat(rp2.rngState);
+        cannotRefract = cannotRefract || schlickReflectance(cosTheta, ri) > randomFloat(rngState);
 
         vec3 refractedDirection = cannotRefract
             ? reflect(unitDirection, rec.normal) // Total internal reflection.
             : refract(unitDirection, rec.normal, ri);
 
-        rp2.scatterColour = attenuation;
-        rp2.isScattered = true;
-        rp2.scatteredRay.direction = refractedDirection;
-        rp2.scatteredRay.origin = rec.meshVertex.p;
+        srec.attenuation            = attenuation;
+        srec.isScattered            = true;
+        srec.scatteredRay.direction = refractedDirection;
+        srec.scatteredRay.origin    = rec.meshVertex.p;
     }
+
+    return srec;
 }
 
-void diffuseLightMaterialEmission(inout RayPayload2 rp2, uint materialIndex, HitRecord rec) {
+EmissionRecord diffuseLightMaterialEmission(inout uint rngState, uint materialIndex, HitRecord rec) {
+    EmissionRecord erec =  initEmissionRecord();
+
     if (materialIndex >= 0 && materialIndex < pc.diffuseLightMaterialCount) {
         DiffuseLightMaterial material = diffuseLightMaterial.values[materialIndex];
         if (rec.isFrontFace) {
-            rp2.emissionColour = getMaterialPropertyValue(material.emit, rec.meshVertex);
+            erec.emissionColour = getMaterialPropertyValue(material.emit, rec.meshVertex);
         }
     }
+
+    return erec;
 }
 
-void calculateScatter(inout RayPayload2 rp2, MeshMaterial material, HitRecord rec, vec3 worldRayDirection) {
+ScatterRecord calculateScatter(inout uint rngState, MeshMaterial material, HitRecord rec, vec3 worldRayDirection) {
     switch (material.type) {
         case MAT_TYPE_LAMBERTIAN:
-            lambertianMaterialScatter(rp2, material.index, rec);
-            break;
+            return lambertianMaterialScatter(rngState, material.index, rec);
 
         case MAT_TYPE_METAL:
-            metalMaterialScatter(rp2, material.index, rec, worldRayDirection);
-            break;
+            return metalMaterialScatter(rngState, material.index, rec, worldRayDirection);
 
         case MAT_TYPE_DIELECTRIC:
-            dielectricMaterialScatter(rp2, material.index, rec, worldRayDirection);
-            break;
+            return dielectricMaterialScatter(rngState, material.index, rec, worldRayDirection);
 
         default:
             // Materials that don't support scattering.
-            rp2.isScattered = false;
-            rp2.scatterColour = vec3(0.0);
-            break;
+            return initScatterRecord();
     }
 }
 
-void calculateEmission(inout RayPayload2 rp2, MeshMaterial material, HitRecord rec) {
+EmissionRecord calculateEmission(inout uint rngState, MeshMaterial material, HitRecord rec) {
     switch (material.type) {
         case MAT_TYPE_DIFFUSE_LIGHT:
-            diffuseLightMaterialEmission(rp2, material.index, rec);
-            break;
+            return diffuseLightMaterialEmission(rngState, material.index, rec);
 
         default:
             // Non-emissive materials.
-            rp2.emissionColour = vec3(0.0);
-            break;
+            return initEmissionRecord();
     }
 }
 
-RayPayload2 calculate(inout uint rngState, RayPayload rp) {
-    MeshTriangle tri = unpackInstanceVertex(rp.meshId, rp.primitiveId);
-    HitRecord rec = getIntersection(tri, rp.hitAttribs, rp.objectToWorld, rp.worldToObject, rp.worldRayDirection);
-    MeshMaterial material = unpackInstanceMaterial(rp.meshId);
+vec3 getBackgroundColour(Ray ray) {
+    vec3 unitDirection = normalize(ray.direction);
+    float a = 0.5 * (unitDirection.y + 1.0);
 
-    RayPayload2 rp2 = initRayPayload2(rngState);
-    calculateScatter(rp2, material, rec, rp.worldRayDirection);
-    calculateEmission(rp2, material, rec);
-    return rp2;
+    switch (sky.value.skyType) {
+        case SKY_TYPE_SOLID:
+            return sky.value.solid;
+        case SKY_TYPE_VERTICAL_GRADIENT:
+            return mix(sky.value.vTop, sky.value.vBottom, sky.value.vFactor);
+            break;
+        default:
+            return vec3(0.0);
+    }
 }
 
 vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFlags) {
-    uint rayDepth = 0;
-    vec3 attenuation = vec3(1.0);
+    vec3 accumulated = vec3(0.0);
+    vec3 throughput  = vec3(1.0);
 
-    while (rayDepth < pc.maxRayDepth) {
+    for (uint depth = pc.maxRayDepth; depth > 0; --depth) {
         // sbtRecordOffset, sbtRecordStride control how the hitGroupId (VkAccelerationStructureInstanceKHR::
-        // instanceShaderBindingTableRecordOffset) of each instance is used to look up a hit group in the 
+        // instanceShaderBindingTablerecordOffset) of each instance is used to look up a hit group in the 
         // SBT's hit group array. Since we only have one hit group, both are set to 0.
         //
         // missIndex is the index, within the miss shader group array of the SBT to call if no intersection is found.
@@ -410,37 +469,41 @@ vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFla
                 tMax,          // ray max range
                 0);            // payload (location = 0)
 
-        RayPayload2 rp2 = calculate(rngState, rayPayload);
-        rngState = rp2.rngState;
-
-        // Closest hit and miss shader will set rayPayload fields.
-        if (!rayPayload.isMissed) {
-            attenuation *= (rp2.emissionColour + rp2.scatterColour);
-            if (!rp2.isScattered) break;
-        } else {
-            vec3 unitDirection = normalize(ray.direction);
-            float a = 0.5 * (unitDirection.y + 1.0);
-
-            switch (sky.value.skyType) {
-                case SKY_TYPE_SOLID:
-                    attenuation *= sky.value.solid;
-                    break;
-                case SKY_TYPE_VERTICAL_GRADIENT:
-                    attenuation *= mix(sky.value.vTop, sky.value.vBottom, sky.value.vFactor);
-                    break;
-                default:
-                    attenuation *= vec3(0.0);
-                    break;
-            }
-
+        // Closest hit and miss shader will set rayPayload.isMissed.
+        if (rayPayload.isMissed) {
+            vec3 bgColour = getBackgroundColour(ray);
+            accumulated += throughput * bgColour;
             break;
-        } 
+        }
 
-        ray = rp2.scatteredRay;
-        rayDepth++;
+        MeshTriangle hitTriangle = unpackInstanceVertex(rayPayload.meshId, rayPayload.primitiveId);
+
+        HitRecord rec = getIntersection(
+                hitTriangle,
+                rayPayload.hitAttribs,
+                rayPayload.objectToWorld,
+                rayPayload.worldToObject,
+                rayPayload.worldRayDirection);
+
+        MeshMaterial material = unpackInstanceMaterial(rayPayload.meshId);
+
+        // Emission
+        EmissionRecord erec = calculateEmission(rngState, material, rec);
+        accumulated += throughput * erec.emissionColour;
+
+        // Scatter
+        ScatterRecord srec = calculateScatter(rngState, material, rec, rayPayload.worldRayDirection);
+        if (!srec.isScattered) {
+            break;
+        }
+
+        // Update throughput.
+        throughput *= srec.attenuation;
+
+        ray = srec.scatteredRay;
     }
 
-    return attenuation;
+    return accumulated;
 }
 
 Ray getRay(inout uint rngState, vec2 pixelCenter, int si, int sj, float recipSqrtSpp) {

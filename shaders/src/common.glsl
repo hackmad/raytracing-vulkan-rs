@@ -79,12 +79,11 @@ struct Sky {
 // NOTE: The order of fields below will ensure data is aligned/packed correctly and
 // we can avoid having to use padding fields.
 struct MeshVertex {
-    vec3 p;  // position
+    vec3  p; // position
     float u; // u- texture coordinate
-    vec3 n;  // normal
+    vec3  n; // normal
     float v; // v- texture coordinate
 };
-
 
 struct Mesh {
     uint vertexBufferSize;
@@ -98,8 +97,8 @@ struct Mesh {
 
 struct HitRecord {
     MeshVertex meshVertex;
-    bool isFrontFace;
-    vec3 normal; // Points against the incident ray.
+    bool       isFrontFace;
+    vec3       normal; // Points against the incident ray.
 };
 
 
@@ -109,12 +108,17 @@ struct HitRecord {
 struct LightSample {
     vec3 position;
     vec3 normal;
-    float pdf;
 };
 
 
 // --------------------------------------------------------------------------------
 // Ray payload
+
+const uint NO_PDF      = 0;
+const uint SPHERE_PDF  = 1;
+const uint COSINE_PDF  = 2;
+const uint LIGHT_PDF   = 3; // hittable_pdf
+const uint MIXTURE_PDF = 4; // For now COSINE_PDF and LIGHT_PDF 50-50 chance of pick.
 
 struct Ray {
     vec3 origin;
@@ -131,25 +135,34 @@ struct RayPayload {
     vec3   worldRayDirection;
 };
 
-struct RayPayload2 {
-    uint rngState;
+struct ScatterRecord {
     bool isScattered;
-    Ray scatteredRay;
-    vec3 scatterColour;
+    Ray  scatteredRay;
+    vec3 attenuation;
+    uint matPdfType;
+    vec3 lightNormal;
+};
+
+ScatterRecord initScatterRecord() {
+    ScatterRecord rec;
+    rec.isScattered            = false;
+    rec.scatteredRay.origin    = vec3(0.0);
+    rec.scatteredRay.direction = vec3(0.0);
+    rec.attenuation            = vec3(0.0);
+    rec.lightNormal            = vec3(0.0);
+    rec.matPdfType             = NO_PDF;
+    return rec;
+}
+
+struct EmissionRecord {
     vec3 emissionColour;
 };
 
-RayPayload2 initRayPayload2(uint rngState) {
-    RayPayload2 rp;
-    rp.rngState = rngState;
-    rp.isScattered = false;
-    rp.scatteredRay.origin = vec3(0.0);
-    rp.scatteredRay.direction = vec3(0.0);
-    rp.scatterColour = vec3(0.0);
-    rp.emissionColour = vec3(0.0);
-    return rp;
+EmissionRecord initEmissionRecord() {
+    EmissionRecord rec;
+    rec.emissionColour = vec3(0.0);
+    return rec;
 }
-
 
 // --------------------------------------------------------------------------------
 // Light source alias used for Vose's Alias Method to store CDFs based on 
@@ -172,10 +185,13 @@ struct ONB {
 
 ONB createOrthonormalBases(vec3 n) {
     ONB onb;
+
     onb.axis[2] = normalize(n);
+
     vec3 a = (abs(onb.axis[2].x) > 0.9) ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
     onb.axis[1] = normalize(cross(onb.axis[2], a));
-    onb.axis[0]=  cross(onb.axis[2], onb.axis[1]);
+    onb.axis[0] = cross(onb.axis[2], onb.axis[1]);
+
     return onb;
 }
 
@@ -376,6 +392,7 @@ vec3 sampleTriangleUniform(inout uint rngState, vec3 p0, vec3 p1, vec3 p2) {
     return p0 + r.x * (p1 - p0) + r.y * (p2 - p0);
 }
 
+
 // --------------------------------------------------------------------------------
 // Colour space conversions.
 
@@ -420,3 +437,4 @@ vec3 linearToGamma(vec3 linearRGB) {
          clamp(linearToGamma(linearRGB.z), 0, 1)
     ); 
 }
+
