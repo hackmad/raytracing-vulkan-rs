@@ -8,7 +8,7 @@ use anyhow::Result;
 use image::{GenericImageView, ImageReader};
 use log::info;
 use scene_file::Texture;
-use shaders::closest_hit;
+use shaders::ray_gen;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     command_buffer::{
@@ -72,10 +72,10 @@ impl ImageTextures {
         })
     }
 
-    pub fn to_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
+    pub fn to_shader(&self, name: &str) -> Option<ray_gen::MaterialPropertyValue> {
         self.indices
             .get(name)
-            .map(|i| closest_hit::MaterialPropertyValue {
+            .map(|i| ray_gen::MaterialPropertyValue {
                 propValueType: MAT_PROP_VALUE_TYPE_IMAGE,
                 index: *i,
             })

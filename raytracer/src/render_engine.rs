@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use scene_file::SceneFile;
-use shaders::{GfxShaderModules, RtShaderModules, closest_hit, ray_gen};
+use shaders::{GfxShaderModules, RtShaderModules, ray_gen};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{
@@ -29,7 +29,8 @@ use vulkano::{
 use crate::{
     Camera, Materials, Mesh, MeshInstance, Vk,
     acceleration::AccelerationStructures,
-    create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
+    create_light_source_alias_table, create_mesh_index_buffer, create_mesh_storage_buffer,
+    create_mesh_vertex_buffer,
     pipelines::{GfxPipeline, RtPipeline},
     textures::Textures,
 };
@@ -37,11 +38,7 @@ use crate::{
 #[repr(C)]
 #[derive(BufferContents, Clone, Copy)]
 pub struct UnifiedPushConstants {
-    // RayGen: 0–23
     pub ray_gen_pc: ray_gen::RayGenPushConstants,
-
-    // ClosestHit: 24–55
-    pub closest_hit_pc: closest_hit::ClosestHitPushConstants,
 }
 
 /// Stores resources specific to the rendering pipelines and renders an image progressively.
@@ -68,6 +65,9 @@ pub struct RenderEngine {
 
     /// Descriptor set for binding sky.
     sky_descriptor_set: Arc<DescriptorSet>,
+
+    /// Descriptor set for binding the light source alias table.
+    light_source_alias_table_descriptor_set: Arc<DescriptorSet>,
 
     /// The shader binding table.
     shader_binding_table: ShaderBindingTable,
@@ -129,7 +129,10 @@ impl RenderEngine {
             let mesh_index = mesh_name_to_index
                 .get(&instance.name)
                 .with_context(|| format!("Mesh {} not found", instance.name))?;
-            mesh_instances.push(MeshInstance::new(*mesh_index, instance.get_transform()));
+            mesh_instances.push(MeshInstance::new(
+                *mesh_index,
+                instance.get_object_to_world_space_matrix(),
+            ));
         }
 
         // Get materials.
@@ -139,11 +142,19 @@ impl RenderEngine {
         let dielectric_material_count = materials.dielectric_materials.len();
         let diffuse_light_material_count = materials.diffuse_light_materials.len();
 
+        // Get the light source alias table.
+        let light_source_alias_table =
+            create_light_source_alias_table(vk.clone(), &mesh_instances, &meshes, &materials)?;
+
         // Push constants.
         // sampleBatch will need to change in Scene::render() but we can store the push constant
         // data we need for now.
         let push_constants = UnifiedPushConstants {
-            closest_hit_pc: closest_hit::ClosestHitPushConstants {
+            ray_gen_pc: ray_gen::RayGenPushConstants {
+                resolution: [window_size[0] as u32, window_size[1] as u32],
+                samplesPerPixel: scene_file.render.samples_per_pixel,
+                sampleBatch: 0,
+                maxRayDepth: scene_file.render.max_ray_depth,
                 meshCount: mesh_count as _,
                 imageTextureCount: image_texture_count as _,
                 constantColourCount: constant_colour_count as _,
@@ -153,13 +164,8 @@ impl RenderEngine {
                 metalMaterialCount: metal_material_count as _,
                 dielectricMaterialCount: dielectric_material_count as _,
                 diffuseLightMaterialCount: diffuse_light_material_count as _,
-            },
-
-            ray_gen_pc: ray_gen::RayGenPushConstants {
-                resolution: [window_size[0] as u32, window_size[1] as u32],
-                samplesPerPixel: scene_file.render.samples_per_pixel,
-                sampleBatch: 0,
-                maxRayDepth: scene_file.render.max_ray_depth,
+                lightSourceTriangleCount: light_source_alias_table.triangle_count as _,
+                lightSourceTotalArea: light_source_alias_table.total_area as _,
             },
         };
 
@@ -324,6 +330,17 @@ impl RenderEngine {
             [],
         )?;
 
+        // Light source alias table.
+        let light_source_alias_table_descriptor_set = DescriptorSet::new(
+            vk.descriptor_set_allocator.clone(),
+            layouts[RtPipeline::LIGHT_SOURCE_ALIAS_TABLE].clone(),
+            vec![WriteDescriptorSet::buffer(
+                0,
+                light_source_alias_table.buffer,
+            )],
+            [],
+        )?;
+
         // Create render image to accumulate sample batches.
         let accum_image_view = create_accumulated_render_image_view(
             vk.clone(),
@@ -343,6 +360,7 @@ impl RenderEngine {
             other_textures_descriptor_set,
             materials_descriptor_set,
             sky_descriptor_set,
+            light_source_alias_table_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             gfx_pipeline,
@@ -492,6 +510,7 @@ impl RenderEngine {
                     self.materials_descriptor_set.clone(),
                     self.other_textures_descriptor_set.clone(),
                     self.sky_descriptor_set.clone(),
+                    self.light_source_alias_table_descriptor_set.clone(),
                 ],
             )
             .unwrap()

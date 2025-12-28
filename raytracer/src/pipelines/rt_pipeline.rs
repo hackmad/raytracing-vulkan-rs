@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use shaders::{closest_hit, ray_gen};
+use shaders::ray_gen;
 use vulkano::{
     descriptor_set::layout::{
         DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
@@ -57,6 +57,9 @@ impl RtPipeline {
     /// Uniform buffer for sky.
     pub const SKY_LAYOUT: usize = 8;
 
+    /// Storage buffer for light source alias table.
+    pub const LIGHT_SOURCE_ALIAS_TABLE: usize = 9;
+
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
         self.pipeline.clone()
@@ -88,19 +91,13 @@ impl RtPipeline {
                     create_materials_layout(device.clone()),
                     create_other_textures_layout(device.clone()),
                     create_sky_layout(device.clone()),
+                    create_light_source_alias_table_layout(device.clone()),
                 ],
-                push_constant_ranges: vec![
-                    PushConstantRange {
-                        stages: ShaderStages::RAYGEN,
-                        offset: 0,
-                        size: size_of::<ray_gen::RayGenPushConstants>() as _,
-                    },
-                    PushConstantRange {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        offset: size_of::<ray_gen::RayGenPushConstants>() as _,
-                        size: size_of::<closest_hit::ClosestHitPushConstants>() as _,
-                    },
-                ],
+                push_constant_ranges: vec![PushConstantRange {
+                    stages: ShaderStages::RAYGEN,
+                    offset: 0,
+                    size: size_of::<ray_gen::RayGenPushConstants>() as _,
+                }],
                 ..Default::default()
             },
         )?;
@@ -129,7 +126,7 @@ fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         device,
         DescriptorSetLayoutCreateInfo {
             #[rustfmt::skip]
-            bindings: [(0, as_binding(ShaderStages::RAYGEN | ShaderStages::CLOSEST_HIT))]
+            bindings: [(0, as_binding(ShaderStages::RAYGEN))]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -172,9 +169,9 @@ fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Vertex buffer.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Index buffer.
-                (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Meshes.
+                (0, storage_buffer_binding(ShaderStages::RAYGEN)), // Vertex buffer.
+                (1, storage_buffer_binding(ShaderStages::RAYGEN)), // Index buffer.
+                (2, storage_buffer_binding(ShaderStages::RAYGEN)), // Meshes.
             ]
             .into_iter()
             .collect(),
@@ -194,8 +191,8 @@ fn create_sampler_and_image_textures_layout(
         DescriptorSetLayoutCreateInfo {
             #[rustfmt::skip]
             bindings: [
-                (0, sampler_binding(ShaderStages::CLOSEST_HIT)),
-                (1, variable_sampled_image_binding(ShaderStages::CLOSEST_HIT, image_texture_count)),
+                (0, sampler_binding(ShaderStages::RAYGEN)),
+                (1, variable_sampled_image_binding(ShaderStages::RAYGEN, image_texture_count)),
             ]
             .into_iter()
             .collect(),
@@ -210,7 +207,7 @@ fn create_constant_colour_textures_layout(device: Arc<Device>) -> Arc<Descriptor
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
+            bindings: [(0, storage_buffer_binding(ShaderStages::RAYGEN))]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -225,10 +222,10 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Lambertian materials.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Metal materials.
-                (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Dielectric materials.
-                (3, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Diffuse light materials.
+                (0, storage_buffer_binding(ShaderStages::RAYGEN)), // Lambertian materials.
+                (1, storage_buffer_binding(ShaderStages::RAYGEN)), // Metal materials.
+                (2, storage_buffer_binding(ShaderStages::RAYGEN)), // Dielectric materials.
+                (3, storage_buffer_binding(ShaderStages::RAYGEN)), // Diffuse light materials.
             ]
             .into_iter()
             .collect(),
@@ -244,8 +241,8 @@ fn create_other_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout>
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Checker textures.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Noise textures.
+                (0, storage_buffer_binding(ShaderStages::RAYGEN)), // Checker textures.
+                (1, storage_buffer_binding(ShaderStages::RAYGEN)), // Noise textures.
             ]
             .into_iter()
             .collect(),
@@ -261,6 +258,20 @@ fn create_sky_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         device,
         DescriptorSetLayoutCreateInfo {
             bindings: [(0, uniform_buffer_binding(ShaderStages::RAYGEN))]
+                .into_iter()
+                .collect(),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+/// Create a pipeline layout for light source alias table storage buffer.
+fn create_light_source_alias_table_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    DescriptorSetLayout::new(
+        device.clone(),
+        DescriptorSetLayoutCreateInfo {
+            bindings: [(0, storage_buffer_binding(ShaderStages::RAYGEN))]
                 .into_iter()
                 .collect(),
             ..Default::default()
