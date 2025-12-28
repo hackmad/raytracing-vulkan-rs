@@ -122,18 +122,26 @@ struct Ray {
 };
 
 struct RayPayload {
+    uint   meshId;
+    uint   primitiveId;
+    bool   isMissed;
+    vec2   hitAttribs;
+    mat4x3 objectToWorld;
+    mat4x3 worldToObject;
+    vec3   worldRayDirection;
+};
+
+struct RayPayload2 {
     uint rngState;
-    bool isMissed;
     bool isScattered;
     Ray scatteredRay;
     vec3 scatterColour;
     vec3 emissionColour;
 };
 
-RayPayload initRayPayload(uint rngState) {
-    RayPayload rp;
+RayPayload2 initRayPayload2(uint rngState) {
+    RayPayload2 rp;
     rp.rngState = rngState;
-    rp.isMissed = false;
     rp.isScattered = false;
     rp.scatteredRay.origin = vec3(0.0);
     rp.scatteredRay.direction = vec3(0.0);

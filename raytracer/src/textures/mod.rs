@@ -12,7 +12,7 @@ pub use image_texture::*;
 use log::debug;
 pub use noise_texture::*;
 use scene_file::SceneFile;
-use shaders::closest_hit;
+use shaders::ray_gen;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
 use crate::{MAT_PROP_VALUE_TYPE_RGB, Vk, create_device_local_buffer};
@@ -48,7 +48,7 @@ impl Textures {
         })
     }
 
-    pub fn to_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
+    pub fn to_shader(&self, name: &str) -> Option<ray_gen::MaterialPropertyValue> {
         // Texture names will be unique across all texture types.
         if let Some(v) = self.constant_colour_textures.to_shader(name) {
             return Some(v);
@@ -80,20 +80,20 @@ impl Textures {
                 self.checker_textures
                     .textures
                     .iter()
-                    .map(|t| closest_hit::CheckerTexture {
+                    .map(|t| ray_gen::CheckerTexture {
                         scale: t.scale,
                         odd: self.to_shader(&t.odd).unwrap(), // TODO could return Err() when odd/even not found.
                         even: self.to_shader(&t.even).unwrap(),
                     })
                     .collect()
             } else {
-                vec![closest_hit::CheckerTexture {
+                vec![ray_gen::CheckerTexture {
                     scale: 1.0,
-                    odd: closest_hit::MaterialPropertyValue {
+                    odd: ray_gen::MaterialPropertyValue {
                         propValueType: MAT_PROP_VALUE_TYPE_RGB,
                         index: 0,
                     },
-                    even: closest_hit::MaterialPropertyValue {
+                    even: ray_gen::MaterialPropertyValue {
                         propValueType: MAT_PROP_VALUE_TYPE_RGB,
                         index: 0,
                     },
@@ -109,10 +109,10 @@ impl Textures {
                 self.noise_textures
                     .textures
                     .iter()
-                    .map(|t| closest_hit::NoiseTexture { scale: t.scale })
+                    .map(|t| ray_gen::NoiseTexture { scale: t.scale })
                     .collect()
             } else {
-                vec![closest_hit::NoiseTexture { scale: 1.0 }]
+                vec![ray_gen::NoiseTexture { scale: 1.0 }]
             },
         )?;
 
@@ -125,6 +125,6 @@ impl Textures {
 
 /// Holds the storage buffers for the textures other than constant colour and image types.
 pub struct TextureBuffers {
-    pub checker: Subbuffer<[closest_hit::CheckerTexture]>,
-    pub noise: Subbuffer<[closest_hit::NoiseTexture]>,
+    pub checker: Subbuffer<[ray_gen::CheckerTexture]>,
+    pub noise: Subbuffer<[ray_gen::NoiseTexture]>,
 }
