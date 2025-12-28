@@ -344,6 +344,7 @@ ScatterRecord metalMaterialScatter(inout uint rngState, uint materialIndex, HitR
         srec.attenuation          = albedo;
         srec.isScattered          = dot(reflectedDirection, rec.normal) > 0;
         srec.skipPdf              = true;
+        srec.matPdfType           = NO_PDF;
         srec.skipPdfRay.origin    = rec.meshVertex.p;
         srec.skipPdfRay.direction = normalize(reflectedDirection) + (fuzz * randomUnitVec3(rngState));
     }
@@ -377,6 +378,7 @@ ScatterRecord dielectricMaterialScatter(inout uint rngState, uint materialIndex,
         srec.attenuation          = attenuation;
         srec.isScattered          = true;
         srec.skipPdf              = true;
+        srec.matPdfType           = NO_PDF;
         srec.skipPdfRay.origin    = rec.meshVertex.p;
         srec.skipPdfRay.direction = refractedDirection;
     }

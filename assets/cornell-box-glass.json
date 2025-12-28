@@ -1,0 +1,129 @@
+{
+  "cameras": [
+    {
+      "perspective": {
+        "name": "default",
+        "eye": [278, -278, -800],
+        "look_at": [278, -278, 0],
+        "up": [0, 1, 0],
+        "fov_y": 40,
+        "z_near": 0.01,
+        "z_far": 100,
+        "focal_length": 1.0,
+        "aperture_size": 0
+      }
+    }
+  ],
+  "textures": [
+    { "constant": { "name": "red", "rgb": [0.65, 0.05, 0.05] } },
+    { "constant": { "name": "white", "rgb": [0.73, 0.73, 0.73] } },
+    { "constant": { "name": "green", "rgb": [0.12, 0.45, 0.15] } },
+    { "constant": { "name": "light", "rgb": [15, 15, 15] } }
+  ],
+  "materials": [
+    { "lambertian": { "name": "red", "albedo": "red" } },
+    { "lambertian": { "name": "white", "albedo": "white" } },
+    { "lambertian": { "name": "green", "albedo": "green" } },
+    { "diffuse_light": { "name": "light", "emit": "light" } },
+    { "dielectric": { "name": "glass", "refraction_index": 1.5 } }
+  ],
+  "primitives": [
+    {
+      "quad": {
+        "name": "left-green",
+        "points": [ [555, 0, 0], [555, -555, 0], [555, -555, 555], [555, 0, 555] ],
+        "normal": [-1, 0, 0],
+        "uv": [ [0, 0], [0, 1], [1, 1], [1, 0] ],
+        "material": "green"
+      }
+    },
+    {
+      "quad": {
+        "name": "right-red",
+        "points": [ [0, 0, 0], [0, -555, 0], [0, -555, 555], [0, 0, 555] ],
+        "normal": [1, 0, 0],
+        "uv": [ [0, 0], [0, 1], [1, 1], [1, 0] ],
+        "material": "red"
+      }
+    },
+    {
+      "quad": {
+        "name": "top-light",
+        "points": [ [343, -554, 332], [213, -554, 332], [213, -554, 227], [343, -554, 227] ],
+        "normal": [0, 1, 0],
+        "uv": [ [0, 0], [0, 1], [1, 1], [1, 0] ],
+        "material": "light"
+      }
+    },
+    {
+      "quad": {
+        "name": "bottom-white",
+        "points": [ [0, 0, 0], [555, 0, 0], [555, 0, 555], [0, 0, 555] ],
+        "normal": [0, -1, 0],
+        "uv": [ [0, 0], [0, 1], [1, 1], [1, 0] ],
+        "material": "white"
+      }
+    },
+    {
+      "quad": {
+        "name": "top-white",
+        "points": [ [555, -555, 555], [0, -555, 555], [0, -555, 0], [555, -555, 0] ],
+        "normal": [0, 1, 0],
+        "uv": [ [0, 0], [0, 1], [1, 1], [1, 0] ],
+        "material": "white"
+      }
+    },
+    {
+      "quad": {
+        "name": "back-white",
+        "points": [ [0, 0, 555], [555, 0, 555], [555, -555, 555], [0, -555, 555] ],
+        "normal": [0, 0, -1],
+        "uv": [ [0, 0], [0, 1], [1, 1], [1, 0] ],
+        "material": "white"
+      }
+    },
+    {
+      "box": {
+        "name": "box",
+        "corners": [ [0, 0, 0],  [165, -330, 165] ],
+        "material": "white"
+      }
+    },
+    {
+      "uv_sphere": {
+        "name": "sphere",
+        "center": [ 190, -90, 190 ],
+        "radius": 90,
+        "rings": 32,
+        "segments": 64,
+        "material": "glass"
+      }
+    }
+  ],
+  "instances": [
+    { "name": "left-green" },
+    { "name": "right-red" },
+    { "name": "top-light" },
+    { "name": "bottom-white" },
+    { "name": "top-white" },
+    { "name": "back-white" },
+    {
+      "name": "box",
+      "transforms": [
+        { "translate": [265, 0, 295] },
+        { "rotate_y": 15 }
+      ]
+    },
+    { "name": "sphere" }
+  ],
+  "sky": {
+    "solid" : { "rgb": [0, 0, 0] }
+  },
+  "render": {
+    "camera": "default",
+    "samples_per_pixel": 64,
+    "sample_batches": 32,
+    "max_ray_depth": 50,
+    "aspect_ratio": 1
+  }
+}
