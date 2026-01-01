@@ -105,17 +105,17 @@
     { "name": "back-white" },
     {
       "name": "box1",
-      "transforms": [
-        { "translate": [265, 0, 295] },
-        { "rotate_y": 15 }
-      ]
+      "transform": {
+        "translate": [265, 0, 295],
+        "rotate": { "axis": [0, 1, 0], "degrees": 15 }
+      }
     },
     {
       "name": "box2",
-      "transforms": [
-        { "translate": [130, 0, 65] },
-        { "rotate_y": -18 }
-      ]
+      "transform": {
+        "translate": [130, 0, 65],
+        "rotate": { "axis": [0, 1, 0], "degrees": -18 }
+      }
     }
   ],
   "sky": {

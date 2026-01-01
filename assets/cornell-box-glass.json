@@ -109,10 +109,10 @@
     { "name": "back-white" },
     {
       "name": "box",
-      "transforms": [
-        { "translate": [265, 0, 295] },
-        { "rotate_y": 15 }
-      ]
+      "transform": {
+        "translate": [265, 0, 295],
+        "rotate": { "axis": [0, 1, 0], "degrees": 15 }
+      }
     },
     { "name": "sphere" }
   ],
