@@ -121,8 +121,9 @@ const uint LIGHT_PDF   = 3; // hittable_pdf
 const uint MIXTURE_PDF = 4; // For now COSINE_PDF and LIGHT_PDF 50-50 chance of pick.
 
 struct Ray {
-    vec3 origin;
-    vec3 direction;
+    vec3  origin;
+    vec3  direction;
+    float time;
 };
 
 struct RayPayload {
