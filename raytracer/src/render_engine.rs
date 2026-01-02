@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use random::Random;
 use scene_file::SceneFile;
 use shaders::{GfxShaderModules, RtShaderModules, ray_gen};
 use vulkano::{
@@ -27,7 +28,7 @@ use vulkano::{
 };
 
 use crate::{
-    Camera, Materials, Mesh, MeshInstance, Vk,
+    Camera, Materials, Mesh, MeshInstance, Transform, Vk,
     acceleration::AccelerationStructures,
     create_light_source_alias_table, create_mesh_index_buffer, create_mesh_storage_buffer,
     create_mesh_vertex_buffer,
@@ -90,8 +91,17 @@ pub struct RenderEngine {
     /// Number of batches to use when rendering.
     sample_batches: u32,
 
-    /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
-    _acceleration_structures: AccelerationStructures,
+    /// Acceleration structures.
+    acceleration_structures: AccelerationStructures,
+
+    /// Meshes.
+    meshes: Vec<Arc<Mesh>>,
+
+    /// Mesh instances.
+    mesh_instances: Vec<MeshInstance>,
+
+    /// Ray time values for each sample batch.
+    batch_ray_times: Vec<f32>,
 }
 
 impl RenderEngine {
@@ -102,6 +112,9 @@ impl RenderEngine {
         window_size: &[f32; 2],
         swapchain_format: Format,
     ) -> Result<Self> {
+        // Seed random number generator.
+        Random::seed(485_674_845_675_491);
+
         // Load shader modules.
         let rt_shader_modules = RtShaderModules::load(vk.device.clone());
         let gfx_shader_modules = GfxShaderModules::load(vk.device.clone());
@@ -129,10 +142,10 @@ impl RenderEngine {
             let mesh_index = mesh_name_to_index
                 .get(&instance.name)
                 .with_context(|| format!("Mesh {} not found", instance.name))?;
-            mesh_instances.push(MeshInstance::new(
-                *mesh_index,
-                instance.get_object_to_world_space_matrix(),
-            ));
+
+            let object_to_world = instance.get_object_to_world_space_matrix();
+            let transform = Transform::from(object_to_world);
+            mesh_instances.push(MeshInstance::new(*mesh_index, transform));
         }
 
         // Get materials.
@@ -146,9 +159,13 @@ impl RenderEngine {
         let light_source_alias_table =
             create_light_source_alias_table(vk.clone(), &mesh_instances, &meshes, &materials)?;
 
+        // Get ray time values for each sample batch. This is used for interpolating transforms for
+        // each sample batch to produce the motion-blur effect.
+        let sample_batches = scene_file.render.sample_batches;
+        let batch_ray_times = get_batch_ray_times(sample_batches);
+
         // Push constants.
-        // sampleBatch will need to change in Scene::render() but we can store the push constant
-        // data we need for now.
+        // sampleBatch will need to change in Scene::render() but we can store 0 for the first batch.
         let push_constants = UnifiedPushConstants {
             ray_gen_pc: ray_gen::RayGenPushConstants {
                 resolution: [window_size[0] as u32, window_size[1] as u32],
@@ -166,6 +183,7 @@ impl RenderEngine {
                 diffuseLightMaterialCount: diffuse_light_material_count as _,
                 lightSourceTriangleCount: light_source_alias_table.triangle_count as _,
                 lightSourceTotalArea: light_source_alias_table.total_area as _,
+                batchRayTime: batch_ray_times[0],
             },
         };
 
@@ -191,7 +209,7 @@ impl RenderEngine {
 
         // Acceleration structures.
         let acceleration_structures =
-            AccelerationStructures::new(vk.clone(), &mesh_instances, &meshes)?;
+            AccelerationStructures::new(vk.clone(), &mesh_instances, &meshes, batch_ray_times[0])?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -367,8 +385,11 @@ impl RenderEngine {
             push_constants,
             accum_image_view,
             current_sample_batch: 0,
-            sample_batches: scene_file.render.sample_batches,
-            _acceleration_structures: acceleration_structures,
+            sample_batches,
+            acceleration_structures,
+            mesh_instances,
+            meshes,
+            batch_ray_times,
         })
     }
 
@@ -443,6 +464,20 @@ impl RenderEngine {
         if self.current_sample_batch >= self.sample_batches {
             return;
         }
+
+        // Starting at 2nd batch we need to update acceleration structures so we can account for
+        // motion blur.
+        if self.current_sample_batch > 0 {
+            self.acceleration_structures
+                .update(
+                    vk.clone(),
+                    &self.mesh_instances,
+                    &self.meshes,
+                    self.batch_ray_times[self.current_sample_batch as usize],
+                )
+                .unwrap();
+        }
+
         // Create the uniform buffer for the camera.
         let camera = camera.read().unwrap();
 
@@ -450,9 +485,12 @@ impl RenderEngine {
         let pipeline_layout = self.rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
 
-        // Load current sample batch to push constants.
+        // Load current sample batch information to push constants.
         let mut push_constants = self.push_constants;
         push_constants.ray_gen_pc.sampleBatch = self.current_sample_batch;
+
+        push_constants.ray_gen_pc.batchRayTime =
+            self.batch_ray_times[self.current_sample_batch as usize];
 
         let camera_buffer = Buffer::from_data(
             vk.memory_allocator.clone(),
@@ -655,4 +693,18 @@ fn create_accumulated_render_image_view(
     )?;
 
     Ok(image_view)
+}
+
+/// Calculate jittered stratified sampling for time values over [0, 1] based on number of sample batches.
+/// The sample is biased around the center rather than uniform across the full time interval.
+fn get_batch_ray_times(sample_batches: u32) -> Vec<f32> {
+    let d = 1.0 / sample_batches as f32;
+
+    (0..sample_batches)
+        .map(|i| {
+            let t_center = (i as f32 + 0.5) * d;
+            let jitter = Random::sample_in_range(-0.5, 0.5);
+            (t_center + jitter * d).clamp(0.0, 1.0)
+        })
+        .collect()
 }

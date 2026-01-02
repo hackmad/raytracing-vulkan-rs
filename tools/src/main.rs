@@ -2,7 +2,10 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use glam::Vec3;
 use random::Random;
-use scene_file::{Camera, Instance, Material, Primitive, Render, SceneFile, Sky, Texture};
+use scene_file::{
+    Camera, Instance, Material, Primitive, Render, SceneFile, Sky, Texture, Transform,
+    TransformType,
+};
 
 #[derive(Debug, Parser)]
 #[command(version, about, long_about = None)]
@@ -23,7 +26,8 @@ fn main() -> Result<()> {
 
     match &cli.command {
         Some(Commands::GenFinalOneWeekend) => {
-            generate_final_one_weekend_scene()?;
+            generate_final_one_weekend_scene("assets/final-one-weekend.json", false)?;
+            generate_final_one_weekend_scene("assets/final-one-weekend-motion-blur.json", true)?;
         }
         None => {
             println!("Please specify a command");
@@ -45,8 +49,15 @@ fn make_sphere_touch_ground(
     (dir.normalize() * (ground_sphere_radius + sphere_radius - FUDGE) + g_center).to_array()
 }
 
-fn generate_final_one_weekend_scene() -> Result<()> {
-    println!("Generating Raytracing in One Weekend final scene file");
+fn generate_final_one_weekend_scene(file_path: &str, do_motion_blur: bool) -> Result<()> {
+    println!(
+        "Generating Raytracing in One Weekend final scene file {file_path} {}",
+        if do_motion_blur {
+            "with motion blur"
+        } else {
+            "without motion blur"
+        }
+    );
 
     let mut primitives = vec![];
     let mut instances = vec![];
@@ -91,7 +102,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     materials.push(ground_material);
     instances.push(Instance {
         name: "ground_sphere".to_string(),
-        transforms: None,
+        transform: None,
     });
 
     let center_sphere_1 = Vec3::new(0.0, -1.0, 0.0);
@@ -116,6 +127,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
 
             let radius = 0.2;
             let mut center: [f32; 3];
+
             loop {
                 center = [
                     a as f32 + 0.9 * Random::sample::<f32>(),
@@ -135,7 +147,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                 }
             }
 
-            let (tex, material) = if choose_mat < 0.8 {
+            let (tex, material, transform) = if choose_mat < 0.8 {
                 // diffuse
                 let name = format!("diffuse_{a}_{b}");
                 let t_albedo = Texture::Constant {
@@ -146,7 +158,23 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                     name: format!("mat_{name}"),
                     albedo: t_albedo.get_name().to_string(),
                 };
-                (vec![t_albedo], mat)
+                let transform = if do_motion_blur {
+                    Some(TransformType::Animated(
+                        Transform {
+                            translate: Some([0.0, Random::sample_in_range(-0.5, 0.0), 0.0]),
+                            rotate: None,
+                            scale: None,
+                        },
+                        Transform {
+                            translate: Some([0.0, 0.0, 0.0]),
+                            rotate: None,
+                            scale: None,
+                        },
+                    ))
+                } else {
+                    None
+                };
+                (vec![t_albedo], mat, transform)
             } else if choose_mat < 0.95 {
                 // metal
                 let name = format!("metal_{a}_{b}");
@@ -163,14 +191,14 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                     albedo: t_albedo.get_name().to_string(),
                     fuzz: t_fuzz.get_name().to_string(),
                 };
-                (vec![t_albedo, t_fuzz], mat)
+                (vec![t_albedo, t_fuzz], mat, None)
             } else {
                 // glass
                 let mat = Material::Dielectric {
                     name: format!("mat_dielectric_{a}_{b}"),
                     refraction_index: 1.5,
                 };
-                (vec![], mat)
+                (vec![], mat, None)
             };
 
             let name = format!("sphere_{a}_{b}").to_string();
@@ -182,10 +210,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
                 segments: 64,
                 material: material.get_name().to_string(),
             });
-            instances.push(Instance {
-                name,
-                transforms: None,
-            });
+            instances.push(Instance { name, transform });
 
             textures.extend_from_slice(&tex);
             materials.push(material);
@@ -207,7 +232,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     materials.push(material1);
     instances.push(Instance {
         name: "sphere1".to_string(),
-        transforms: None,
+        transform: None,
     });
 
     let texture2 = Texture::Constant {
@@ -230,7 +255,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     materials.push(material2);
     instances.push(Instance {
         name: "sphere2".to_string(),
-        transforms: None,
+        transform: None,
     });
 
     let texture3 = Texture::Constant {
@@ -259,7 +284,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     materials.push(material3);
     instances.push(Instance {
         name: "sphere3".to_string(),
-        transforms: None,
+        transform: None,
     });
 
     cameras.push(Camera::Perspective {
@@ -277,7 +302,7 @@ fn generate_final_one_weekend_scene() -> Result<()> {
     let render = Render {
         camera: cameras[0].get_name().to_string(),
         samples_per_pixel: 4,
-        sample_batches: 32,
+        sample_batches: 25,
         max_ray_depth: 50,
         aspect_ratio: 16.0 / 9.0,
     };
@@ -297,5 +322,5 @@ fn generate_final_one_weekend_scene() -> Result<()> {
         sky,
         render,
     };
-    scene_file.save_json("assets/final-one-weekend.json")
+    scene_file.save_json(file_path)
 }

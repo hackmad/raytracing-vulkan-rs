@@ -82,6 +82,17 @@ impl Random {
         })
     }
 
+    /// Return a random value via the [`StandardUniform`] distribution.
+    pub fn random<T>() -> T
+    where
+        StandardUniform: Distribution<T>,
+    {
+        RNG.with(|rng| {
+            let mut r = rng.borrow_mut();
+            r.random::<T>()
+        })
+    }
+
     /// Returns a random vector with random components in [0, 1].
     pub fn vec3() -> Vec3 {
         RNG.with(|rng| {
@@ -160,10 +171,13 @@ impl Random {
         })
     }
 
-    /// Shuffle a `Vec<usize>` in place.
+    /// Shuffle a `Vec<T>` in place.
     ///
     /// * `v` - Vector to shuffle.
-    pub fn permute(v: &mut [usize]) {
+    pub fn permute<T>(v: &mut [T])
+    where
+        T: Copy,
+    {
         RNG.with(|rng| {
             let mut r = rng.borrow_mut();
             for i in (1..v.len()).rev() {

@@ -29,12 +29,17 @@ pub struct AccelerationStructures {
 
     /// The bottom-level acceleration structure is required to be kept alive even though renderer will not
     /// directly use it. The top-level acceleration structure needs it.
-    _blas_map: HashMap<String, Arc<AccelerationStructure>>,
+    blas_map: HashMap<String, Arc<AccelerationStructure>>,
 }
 
 impl AccelerationStructures {
     /// Create new acceleration structures for the given model.
-    pub fn new(vk: Arc<Vk>, mesh_instances: &[MeshInstance], meshes: &[Arc<Mesh>]) -> Result<Self> {
+    pub fn new(
+        vk: Arc<Vk>,
+        mesh_instances: &[MeshInstance],
+        meshes: &[Arc<Mesh>],
+        batch_ray_time: f32,
+    ) -> Result<Self> {
         let mut mesh_map: HashMap<String, Arc<Mesh>> = HashMap::new();
         for mesh_instance in mesh_instances.iter() {
             let mesh = meshes[mesh_instance.mesh_index].clone();
@@ -65,39 +70,64 @@ impl AccelerationStructures {
             blas_map.insert(name.clone(), acc);
         }
 
-        let mut blas_instances: Vec<_> = Vec::new();
-        for mesh_instance in mesh_instances.iter() {
-            let mesh_index = mesh_instance.mesh_index;
-            if mesh_index >= 16_777_216 {
-                warn!("Mesh count exceeds 24 bit storage for instance_custom_index_and_mask");
-            }
-
-            // Ideally we should use this to point to materials directly. For now, just use it to
-            // point to the mesh index we should be using to extract material data in the shader.
-            let instance_custom_index_and_mask = Packed24_8::new(mesh_index as u32, 0xFF);
-
-            let name = meshes[mesh_index].name.clone();
-            let blas = blas_map
-                .get(&name)
-                .with_context(|| format!("BLAS not found {name}"))?;
-
-            let acc = AccelerationStructureInstance {
-                transform: mesh_instance.get_vulkan_acc_transform(),
-                acceleration_structure_reference: blas.device_address().into(),
-                instance_custom_index_and_mask,
-                ..Default::default()
-            };
-            blas_instances.push(acc);
-        }
+        let as_instances = build_as_instances(mesh_instances, meshes, &blas_map, batch_ray_time)?;
 
         // Build the top-level acceleration structure.
-        let tlas = unsafe { build_top_level_acceleration_structure(vk.clone(), blas_instances) }?;
+        let tlas =
+            unsafe { build_top_level_acceleration_structure(vk.clone(), as_instances, None) }?;
 
-        Ok(Self {
-            _blas_map: blas_map,
-            tlas,
-        })
+        Ok(Self { blas_map, tlas })
     }
+
+    /// Update acceleration structures for motion blur.
+    ///
+    /// NOTES:
+    ///
+    /// Vulkan only allows in-place updates if the topology of instances doesn't change.
+    /// Since the number of instances and meshes is constant, we are safe.
+    ///
+    /// Animated transforms are okay, but make sure no TLAS instance order changes,
+    /// otherwise update will fail silently or give wrong motion blur.
+    pub fn update(
+        &mut self,
+        vk: Arc<Vk>,
+        mesh_instances: &[MeshInstance],
+        meshes: &[Arc<Mesh>],
+        batch_ray_time: f32,
+    ) -> Result<()> {
+        let as_instances =
+            build_as_instances(mesh_instances, meshes, &self.blas_map, batch_ray_time)?;
+
+        // IMPORTANT:
+        // Do NOT replace self.tlas or drop it. Just refit it in-place
+        //
+        // Even though we get a clone of the Arc, the UPDATE mutates GPU memory in place.
+        // Reassigning suggests "new object", which is wrong semantically.
+        unsafe {
+            build_top_level_acceleration_structure(
+                vk.clone(),
+                as_instances,
+                Some(self.tlas.clone()),
+            )
+        }?;
+
+        Ok(())
+    }
+}
+
+fn get_as_build_flags(is_update_mode: bool) -> BuildAccelerationStructureFlags {
+    let mut build_as_flags = BuildAccelerationStructureFlags::ALLOW_UPDATE;
+    if is_update_mode {
+        // Update/refit mode for motion blur:
+        // Prioritize updating the acceleration structure over tracing ray since we will
+        // call updates.
+        build_as_flags |= BuildAccelerationStructureFlags::PREFER_FAST_BUILD;
+    } else {
+        // First full build:
+        // Prioritize fast tracing since building happens on first batch only.
+        build_as_flags |= BuildAccelerationStructureFlags::PREFER_FAST_TRACE;
+    }
+    build_as_flags
 }
 
 /// A helper function to build a acceleration structure and wait for its completion.
@@ -111,11 +141,25 @@ fn build_acceleration_structure_common(
     geometries: AccelerationStructureGeometries,
     primitive_count: u32,
     ty: AccelerationStructureType,
+    old_acceleration_structure: Option<Arc<AccelerationStructure>>,
 ) -> Result<Arc<AccelerationStructure>> {
-    let mut as_build_geometry_info = AccelerationStructureBuildGeometryInfo {
-        mode: BuildAccelerationStructureMode::Build,
-        flags: BuildAccelerationStructureFlags::PREFER_FAST_TRACE,
-        ..AccelerationStructureBuildGeometryInfo::new(geometries)
+    // Setup information for building the acceleration structure.
+    let is_update_mode = old_acceleration_structure.is_some();
+    let build_as_flags = get_as_build_flags(is_update_mode);
+
+    let mut as_build_geometry_info = if is_update_mode {
+        let old_acc = old_acceleration_structure.as_ref().unwrap().clone();
+        AccelerationStructureBuildGeometryInfo {
+            mode: BuildAccelerationStructureMode::Update(old_acc),
+            flags: build_as_flags,
+            ..AccelerationStructureBuildGeometryInfo::new(geometries)
+        }
+    } else {
+        AccelerationStructureBuildGeometryInfo {
+            mode: BuildAccelerationStructureMode::Build,
+            flags: build_as_flags,
+            ..AccelerationStructureBuildGeometryInfo::new(geometries)
+        }
     };
 
     let as_build_sizes_info = vk.device.acceleration_structure_build_sizes(
@@ -182,7 +226,11 @@ fn build_acceleration_structure_common(
         )?)
     };
 
-    let acceleration = unsafe { AccelerationStructure::new(vk.device.clone(), as_create_info) }?;
+    let acceleration = if let Some(old_acc) = old_acceleration_structure {
+        old_acc.clone() // Update
+    } else {
+        unsafe { AccelerationStructure::new(vk.device.clone(), as_create_info) }? // Build
+    };
 
     as_build_geometry_info.dst_acceleration_structure = Some(acceleration.clone());
     as_build_geometry_info.scratch_data = Some(scratch_buffer);
@@ -241,6 +289,7 @@ fn build_acceleration_structure_triangles(
         geometries,
         primitive_count,
         AccelerationStructureType::BottomLevel,
+        None,
     )
 }
 
@@ -253,6 +302,7 @@ fn build_acceleration_structure_triangles(
 unsafe fn build_top_level_acceleration_structure(
     vk: Arc<Vk>,
     as_instances: Vec<AccelerationStructureInstance>,
+    old_acceleration_structure: Option<Arc<AccelerationStructure>>,
 ) -> Result<Arc<AccelerationStructure>> {
     let primitive_count = as_instances.len() as u32;
 
@@ -282,5 +332,44 @@ unsafe fn build_top_level_acceleration_structure(
         geometries,
         primitive_count,
         AccelerationStructureType::TopLevel,
+        old_acceleration_structure,
     )
+}
+
+fn build_as_instances(
+    mesh_instances: &[MeshInstance],
+    meshes: &[Arc<Mesh>],
+    blas_map: &HashMap<String, Arc<AccelerationStructure>>,
+    batch_ray_time: f32,
+) -> Result<Vec<AccelerationStructureInstance>> {
+    let mut as_instances: Vec<_> = Vec::new();
+
+    for mesh_instance in mesh_instances.iter() {
+        let mesh_index = mesh_instance.mesh_index;
+        if mesh_index >= 16_777_216 {
+            warn!("Mesh count exceeds 24 bit storage for instance_custom_index_and_mask");
+        }
+
+        // Ideally we should use this to point to materials directly. For now, just use it to
+        // point to the mesh index we should be using to extract material data in the shader.
+        let instance_custom_index_and_mask = Packed24_8::new(mesh_index as u32, 0xFF);
+
+        let name = meshes[mesh_index].name.clone();
+        let blas = blas_map
+            .get(&name)
+            .with_context(|| format!("BLAS not found {name}"))?;
+
+        let transform = mesh_instance.get_vulkan_acc_transform(batch_ray_time);
+        debug!("Transform {transform:?}");
+
+        let acc = AccelerationStructureInstance {
+            transform,
+            acceleration_structure_reference: blas.device_address().into(),
+            instance_custom_index_and_mask,
+            ..Default::default()
+        };
+        as_instances.push(acc);
+    }
+
+    Ok(as_instances)
 }

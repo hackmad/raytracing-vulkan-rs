@@ -1,6 +1,6 @@
 use std::{f32::consts::PI, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use glam::Vec3;
 use log::{debug, info};
 use scene_file::Primitive;
@@ -10,7 +10,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::{MAT_TYPE_NONE, Materials, MeshInstance, Vk, create_device_local_buffer};
+use crate::{MAT_TYPE_NONE, Materials, MeshInstance, Transform, Vk, create_device_local_buffer};
 
 // This is used for cleaner code and it represents the data that the shader's MeshVertex structure needs.
 #[derive(Clone, Debug)]
@@ -516,10 +516,17 @@ pub fn create_light_source_alias_table(
                 indices[i + 2] as usize,
             ];
 
+            let light_object_to_world = match light_source.object_to_world {
+                Transform::Static(ref t) => Ok(t.to_mat4()),
+                Transform::Animated { .. } => Err(anyhow!(
+                    "Animated transform for light sources not implemented"
+                )),
+            }?;
+
             let p = indices.map(|i| {
                 let v = vertices[i].p;
                 let v4 = [v[0], v[1], v[2], 1.0].into();
-                let w = light_source.object_to_world_space_matrix.mul_vec4(v4);
+                let w = light_object_to_world.mul_vec4(v4);
                 Vec3::new(w.x, w.y, w.z)
             });
 

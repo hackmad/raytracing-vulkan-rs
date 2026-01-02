@@ -65,12 +65,23 @@ layout(set = 9, binding = 0, scalar) buffer LightSourceAliasTable {
     LightSourceAliasTableEntry values[];
 } lightSourceAliasTableData;
 
-// If this changes, make sure to update layouts for ClosestHitPushConstants in closest_hit.glsl.
+// NOTES:
 //
-// NOTE: See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
+// See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
 // It explains not exceeding 64 samples per pixel and 32 batches to avoid timeouts and long renders.
 // We now do progressive rendering so 64 samples per pixel is still good and you can do higher number
-// of batches. However, at some point it will be diminishing returns.
+// of batches especially for motion blur.
+//
+// The batchRayTime is included here for correctness. However, it is used when building the acceleration
+// structures with interpolated transformations for moving objects. At the moment, it is not used for
+// anything but included for correctness. Later we could use it for time dependent features such as:
+// - Animated materials
+// - Time-varying emission
+// - Procedural textures
+// - Camera motion blur
+// - Light sampling
+// - BSDFs with time dependence
+// - Random number decorrelation
 layout(push_constant) uniform RayGenPushConstants {
     layout(offset =  0) uvec2 resolution;
     layout(offset =  8) uint  samplesPerPixel;
@@ -87,6 +98,7 @@ layout(push_constant) uniform RayGenPushConstants {
     layout(offset = 52) uint  diffuseLightMaterialCount;
     layout(offset = 56) uint  lightSourceTriangleCount;
     layout(offset = 60) float lightSourceTotalArea;
+    layout(offset = 64) float batchRayTime;
 } pc;
 
 
@@ -331,7 +343,7 @@ ScatterRecord lambertianMaterialScatter(inout uint rngState, uint materialIndex,
     return srec;
 }
 
-ScatterRecord metalMaterialScatter(inout uint rngState, uint materialIndex, HitRecord rec, vec3 worldRayDirection) {
+ScatterRecord metalMaterialScatter(inout uint rngState, uint materialIndex, HitRecord rec, vec3 worldRayDirection, float time) {
     ScatterRecord srec = initScatterRecord();
 
     if (materialIndex >= 0 && materialIndex < pc.metalMaterialCount) {
@@ -343,16 +355,17 @@ ScatterRecord metalMaterialScatter(inout uint rngState, uint materialIndex, HitR
 
         srec.attenuation          = albedo;
         srec.isScattered          = dot(reflectedDirection, rec.normal) > 0;
-        srec.skipPdf              = true;
         srec.matPdfType           = NO_PDF;
+        srec.skipPdf              = true;
         srec.skipPdfRay.origin    = rec.meshVertex.p;
         srec.skipPdfRay.direction = normalize(reflectedDirection) + (fuzz * randomUnitVec3(rngState));
+        srec.skipPdfRay.time      = time;
     }
 
     return srec;
 }
 
-ScatterRecord dielectricMaterialScatter(inout uint rngState, uint materialIndex, HitRecord rec, vec3 worldRayDirection) {
+ScatterRecord dielectricMaterialScatter(inout uint rngState, uint materialIndex, HitRecord rec, vec3 worldRayDirection, float time) {
     ScatterRecord srec = initScatterRecord();
 
     if (materialIndex >= 0 && materialIndex < pc.dielectricMaterialCount) {
@@ -377,10 +390,11 @@ ScatterRecord dielectricMaterialScatter(inout uint rngState, uint materialIndex,
 
         srec.attenuation          = attenuation;
         srec.isScattered          = true;
-        srec.skipPdf              = true;
         srec.matPdfType           = NO_PDF;
+        srec.skipPdf              = true;
         srec.skipPdfRay.origin    = rec.meshVertex.p;
         srec.skipPdfRay.direction = refractedDirection;
+        srec.skipPdfRay.time      = time;
     }
 
     return srec;
@@ -399,16 +413,16 @@ EmissionRecord diffuseLightMaterialEmission(inout uint rngState, uint materialIn
     return erec;
 }
 
-ScatterRecord calculateScatter(inout uint rngState, MeshMaterial material, HitRecord rec, vec3 worldRayDirection) {
+ScatterRecord calculateScatter(inout uint rngState, MeshMaterial material, HitRecord rec, vec3 worldRayDirection, float time) {
     switch (material.type) {
         case MAT_TYPE_LAMBERTIAN:
             return lambertianMaterialScatter(rngState, material.index, rec);
 
         case MAT_TYPE_METAL:
-            return metalMaterialScatter(rngState, material.index, rec, worldRayDirection);
+            return metalMaterialScatter(rngState, material.index, rec, worldRayDirection, time);
 
         case MAT_TYPE_DIELECTRIC:
-            return dielectricMaterialScatter(rngState, material.index, rec, worldRayDirection);
+            return dielectricMaterialScatter(rngState, material.index, rec, worldRayDirection, time);
 
         default:
             // Materials that don't support scattering.
@@ -488,7 +502,7 @@ vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFla
         accumulated += throughput * erec.emissionColour;
 
         // Scatter
-        ScatterRecord srec = calculateScatter(rngState, material, rec, rayPayload.worldRayDirection);
+        ScatterRecord srec = calculateScatter(rngState, material, rec, rayPayload.worldRayDirection, ray.time);
         if (!srec.isScattered) {
             break;
         }
@@ -522,7 +536,7 @@ vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFla
         throughput *= srec.attenuation * scatteringPdf / pdfValue;
 
         // Calculate ray for next depth.
-        ray = Ray(rec.meshVertex.p, normalize(scatterDirection));
+        ray = Ray(rec.meshVertex.p, normalize(scatterDirection), ray.time);
     }
 
     return accumulated;
@@ -548,9 +562,13 @@ Ray getRay(inout uint rngState, vec2 pixelCenter, int si, int sj, float recipSqr
         direction = vec4((normalize((camera.viewInverse * focalPoint) - origin).xyz), 0.0);
     }
 
+    // For simplicity, to do motion blur sample time in [0, 1] as start time and end time.
+    float time = pc.batchRayTime;
+
     Ray ray;
-    ray.origin = origin.xyz;
+    ray.origin    = origin.xyz;
     ray.direction = direction.xyz;
+    ray.time      = time;
     return ray;
 }
 
