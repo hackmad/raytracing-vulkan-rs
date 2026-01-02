@@ -80,6 +80,14 @@ impl AccelerationStructures {
     }
 
     /// Update acceleration structures for motion blur.
+    ///
+    /// NOTES:
+    ///
+    /// Vulkan only allows in-place updates if the topology of instances doesn't change.
+    /// Since the number of instances and meshes is constant, we are safe.
+    ///
+    /// Animated transforms are okay, but make sure no TLAS instance order changes,
+    /// otherwise update will fail silently or give wrong motion blur.
     pub fn update(
         &mut self,
         vk: Arc<Vk>,
@@ -90,11 +98,36 @@ impl AccelerationStructures {
         let as_instances =
             build_as_instances(mesh_instances, meshes, &self.blas_map, batch_ray_time)?;
 
-        self.tlas =
-            unsafe { build_top_level_acceleration_structure(vk.clone(), as_instances, None) }?;
+        // IMPORTANT:
+        // Do NOT replace self.tlas or drop it. Just refit it in-place
+        //
+        // Even though we get a clone of the Arc, the UPDATE mutates GPU memory in place.
+        // Reassigning suggests "new object", which is wrong semantically.
+        unsafe {
+            build_top_level_acceleration_structure(
+                vk.clone(),
+                as_instances,
+                Some(self.tlas.clone()),
+            )
+        }?;
 
         Ok(())
     }
+}
+
+fn get_as_build_flags(is_update_mode: bool) -> BuildAccelerationStructureFlags {
+    let mut build_as_flags = BuildAccelerationStructureFlags::ALLOW_UPDATE;
+    if is_update_mode {
+        // Update/refit mode for motion blur:
+        // Prioritize updating the acceleration structure over tracing ray since we will
+        // call updates.
+        build_as_flags |= BuildAccelerationStructureFlags::PREFER_FAST_BUILD;
+    } else {
+        // First full build:
+        // Prioritize fast tracing since building happens on first batch only.
+        build_as_flags |= BuildAccelerationStructureFlags::PREFER_FAST_TRACE;
+    }
+    build_as_flags
 }
 
 /// A helper function to build a acceleration structure and wait for its completion.
@@ -110,14 +143,23 @@ fn build_acceleration_structure_common(
     ty: AccelerationStructureType,
     old_acceleration_structure: Option<Arc<AccelerationStructure>>,
 ) -> Result<Arc<AccelerationStructure>> {
-    let mut as_build_geometry_info = AccelerationStructureBuildGeometryInfo {
-        mode: if let Some(ref old_acc) = old_acceleration_structure {
-            BuildAccelerationStructureMode::Update(old_acc.clone())
-        } else {
-            BuildAccelerationStructureMode::Build
-        },
-        flags: BuildAccelerationStructureFlags::PREFER_FAST_TRACE,
-        ..AccelerationStructureBuildGeometryInfo::new(geometries)
+    // Setup information for building the acceleration structure.
+    let is_update_mode = old_acceleration_structure.is_some();
+    let build_as_flags = get_as_build_flags(is_update_mode);
+
+    let mut as_build_geometry_info = if is_update_mode {
+        let old_acc = old_acceleration_structure.as_ref().unwrap().clone();
+        AccelerationStructureBuildGeometryInfo {
+            mode: BuildAccelerationStructureMode::Update(old_acc),
+            flags: build_as_flags,
+            ..AccelerationStructureBuildGeometryInfo::new(geometries)
+        }
+    } else {
+        AccelerationStructureBuildGeometryInfo {
+            mode: BuildAccelerationStructureMode::Build,
+            flags: build_as_flags,
+            ..AccelerationStructureBuildGeometryInfo::new(geometries)
+        }
     };
 
     let as_build_sizes_info = vk.device.acceleration_structure_build_sizes(
@@ -317,8 +359,11 @@ fn build_as_instances(
             .get(&name)
             .with_context(|| format!("BLAS not found {name}"))?;
 
+        let transform = mesh_instance.get_vulkan_acc_transform(batch_ray_time);
+        debug!("Transform {transform:?}");
+
         let acc = AccelerationStructureInstance {
-            transform: mesh_instance.get_vulkan_acc_transform(batch_ray_time),
+            transform,
             acceleration_structure_reference: blas.device_address().into(),
             instance_custom_index_and_mask,
             ..Default::default()

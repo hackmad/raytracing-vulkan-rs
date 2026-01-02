@@ -28,7 +28,7 @@ use vulkano::{
 };
 
 use crate::{
-    AnimatedTransform, Camera, Materials, Mesh, MeshInstance, Transform, Vk,
+    Camera, Materials, Mesh, MeshInstance, Transform, Vk,
     acceleration::AccelerationStructures,
     create_light_source_alias_table, create_mesh_index_buffer, create_mesh_storage_buffer,
     create_mesh_vertex_buffer,
@@ -99,6 +99,9 @@ pub struct RenderEngine {
 
     /// Mesh instances.
     mesh_instances: Vec<MeshInstance>,
+
+    /// Ray time values for each sample batch.
+    batch_ray_times: Vec<f32>,
 }
 
 impl RenderEngine {
@@ -140,9 +143,8 @@ impl RenderEngine {
                 .get(&instance.name)
                 .with_context(|| format!("Mesh {} not found", instance.name))?;
 
-            let mat = instance.get_object_to_world_space_matrix();
-            let transform = Transform::Static(AnimatedTransform::from(mat));
-
+            let object_to_world = instance.get_object_to_world_space_matrix();
+            let transform = Transform::from(object_to_world);
             mesh_instances.push(MeshInstance::new(*mesh_index, transform));
         }
 
@@ -157,9 +159,13 @@ impl RenderEngine {
         let light_source_alias_table =
             create_light_source_alias_table(vk.clone(), &mesh_instances, &meshes, &materials)?;
 
+        // Get ray time values for each sample batch. This is used for interpolating transforms for
+        // each sample batch to produce the motion-blur effect.
+        let sample_batches = scene_file.render.sample_batches;
+        let batch_ray_times = get_batch_ray_times(sample_batches);
+
         // Push constants.
-        // sampleBatch will need to change in Scene::render() but we can store the push constant
-        // data we need for now.
+        // sampleBatch will need to change in Scene::render() but we can store 0 for the first batch.
         let push_constants = UnifiedPushConstants {
             ray_gen_pc: ray_gen::RayGenPushConstants {
                 resolution: [window_size[0] as u32, window_size[1] as u32],
@@ -177,6 +183,7 @@ impl RenderEngine {
                 diffuseLightMaterialCount: diffuse_light_material_count as _,
                 lightSourceTriangleCount: light_source_alias_table.triangle_count as _,
                 lightSourceTotalArea: light_source_alias_table.total_area as _,
+                batchRayTime: batch_ray_times[0],
             },
         };
 
@@ -201,10 +208,8 @@ impl RenderEngine {
         // Create descriptor sets for non-changing data.
 
         // Acceleration structures.
-        let sample_batches = scene_file.render.sample_batches;
-        let batch_ray_time = get_batch_ray_time(0, sample_batches); // Used for motion blur.
         let acceleration_structures =
-            AccelerationStructures::new(vk.clone(), &mesh_instances, &meshes, batch_ray_time)?;
+            AccelerationStructures::new(vk.clone(), &mesh_instances, &meshes, batch_ray_times[0])?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -384,6 +389,7 @@ impl RenderEngine {
             acceleration_structures,
             mesh_instances,
             meshes,
+            batch_ray_times,
         })
     }
 
@@ -462,13 +468,12 @@ impl RenderEngine {
         // Starting at 2nd batch we need to update acceleration structures so we can account for
         // motion blur.
         if self.current_sample_batch > 0 {
-            let batch_ray_time = get_batch_ray_time(self.current_sample_batch, self.sample_batches);
             self.acceleration_structures
                 .update(
                     vk.clone(),
                     &self.mesh_instances,
                     &self.meshes,
-                    batch_ray_time,
+                    self.batch_ray_times[self.current_sample_batch as usize],
                 )
                 .unwrap();
         }
@@ -480,9 +485,12 @@ impl RenderEngine {
         let pipeline_layout = self.rt_pipeline.get_layout();
         let layouts = pipeline_layout.set_layouts();
 
-        // Load current sample batch to push constants.
+        // Load current sample batch information to push constants.
         let mut push_constants = self.push_constants;
         push_constants.ray_gen_pc.sampleBatch = self.current_sample_batch;
+
+        push_constants.ray_gen_pc.batchRayTime =
+            self.batch_ray_times[self.current_sample_batch as usize];
 
         let camera_buffer = Buffer::from_data(
             vk.memory_allocator.clone(),
@@ -687,9 +695,16 @@ fn create_accumulated_render_image_view(
     Ok(image_view)
 }
 
-fn get_batch_ray_time(current_sample_batch: u32, sample_batches: u32) -> f32 {
+/// Calculate jittered stratified sampling for time values over [0, 1] based on number of sample batches.
+/// The sample is biased around the center rather than uniform across the full time interval.
+fn get_batch_ray_times(sample_batches: u32) -> Vec<f32> {
     let d = 1.0 / sample_batches as f32;
-    let t0 = current_sample_batch as f32 * d;
-    let t1 = t0 + d;
-    Random::sample_in_range(t0, t1)
+
+    (0..sample_batches)
+        .map(|i| {
+            let t_center = (i as f32 + 0.5) * d;
+            let jitter = Random::sample_in_range(-0.5, 0.5);
+            (t_center + jitter * d).clamp(0.0, 1.0)
+        })
+        .collect()
 }

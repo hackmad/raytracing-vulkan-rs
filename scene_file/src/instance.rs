@@ -5,17 +5,23 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub struct Instance {
     pub name: String,
-    pub transform: Option<Transform>,
+    pub transform: Option<TransformType>,
 }
 
 impl Instance {
-    /// Multiplies all transformation matrices in order to get final transformation for the
-    /// object in world space.
-    pub fn get_object_to_world_space_matrix(&self) -> Mat4 {
+    /// Returns final transformation matrix/matrices for the object in world space.
+    pub fn get_object_to_world_space_matrix(&self) -> Matrix {
         self.transform
             .as_ref()
-            .map_or(Mat4::IDENTITY, |t| t.to_matrix())
+            .map_or(Matrix::Static(Mat4::IDENTITY), |t| t.into())
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransformType {
+    Static(Transform),
+    Animated(Transform, Transform),
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -45,5 +51,21 @@ impl Transform {
             Mat4::from_scale(Vec3::new(s[0], s[1], s[2]))
         });
         t.mul_mat4(&r).mul_mat4(&s)
+    }
+}
+
+#[derive(Debug)]
+pub enum Matrix {
+    Static(Mat4),
+    Animated(Mat4, Mat4),
+}
+impl From<&TransformType> for Matrix {
+    fn from(value: &TransformType) -> Self {
+        match value {
+            TransformType::Static(t) => Self::Static(t.to_matrix()),
+            TransformType::Animated(start, end) => {
+                Self::Animated(start.to_matrix(), end.to_matrix())
+            }
+        }
     }
 }

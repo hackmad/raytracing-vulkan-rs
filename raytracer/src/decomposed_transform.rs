@@ -1,14 +1,20 @@
 use glam::{Mat4, Quat, Vec3};
 
+/// Stores decomposed translation, rotation and scaling transformations.
+///
+/// Translation and scale are just vectors for containing information for each dimension. Rotation uses a unit
+/// quaternion. These can then be interpolated separately and combined to give transformations for moving objects.
 #[derive(Debug, Clone, Copy)]
-pub struct AnimatedTransform {
+pub struct DecomposedTransform {
     pub translation: Vec3,
     pub rotation: Quat, // unit quaternion
     pub scale: Vec3,
 }
 
-impl AnimatedTransform {
-    pub fn lerp(&self, other: &AnimatedTransform, t: f32) -> Self {
+impl DecomposedTransform {
+    /// Interpolate transformation at time t in [0, 1] between [self] starting at t = 0, and another
+    /// [DecomposedTransform] ending transform at t = 1.
+    pub fn lerp(&self, other: &DecomposedTransform, t: f32) -> Self {
         Self {
             translation: self.translation.lerp(other.translation, t),
             rotation: self.rotation.slerp(other.rotation, t),
@@ -16,18 +22,20 @@ impl AnimatedTransform {
         }
     }
 
+    /// Combine the individual transformations to give a 4x4 matrix.
     pub fn to_mat4(&self) -> Mat4 {
         Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
     }
 
-    /// Convert to a matrix for Vulkan TLAS
+    /// Combine the individual transformations and convert to a 3x4 matrix for Vulkan acceleration structures.
     pub fn to_vulkan_acc_mat(&self) -> [[f32; 4]; 3] {
         let m = self.to_mat4().transpose().to_cols_array_2d();
         [m[0], m[1], m[2]]
     }
 }
 
-impl From<&scene_file::Transform> for AnimatedTransform {
+impl From<&scene_file::Transform> for DecomposedTransform {
+    /// Decompose a [scene_file::Transform].
     fn from(value: &scene_file::Transform) -> Self {
         let translation = match value.translate {
             Some(v) => Vec3::from(v),
@@ -56,7 +64,8 @@ impl From<&scene_file::Transform> for AnimatedTransform {
     }
 }
 
-impl From<Mat4> for AnimatedTransform {
+impl From<Mat4> for DecomposedTransform {
+    /// Decompose a [Mat4].
     fn from(value: Mat4) -> Self {
         // Extract translation
         let translation = value.w_axis.truncate(); // last column (x,y,z)

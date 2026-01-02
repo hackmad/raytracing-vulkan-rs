@@ -109,15 +109,19 @@
     {
       "name": "box1",
       "transform": {
-        "translate": [265, 0, 295],
-        "rotate": { "axis": [0, 1, 0], "degrees": 15 }
+        "static": {
+          "translate": [265, 0, 295],
+          "rotate": { "axis": [0, 1, 0], "degrees": 15 }
+        }
       }
     },
     {
       "name": "box2",
       "transform": {
-        "translate": [130, 0, 65],
-        "rotate": { "axis": [0, 1, 0], "degrees": -18 }
+        "static": {
+          "translate": [130, 0, 65],
+          "rotate": { "axis": [0, 1, 0], "degrees": -18 }
+        }
       }
     }
   ],

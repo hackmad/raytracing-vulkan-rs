@@ -65,12 +65,23 @@ layout(set = 9, binding = 0, scalar) buffer LightSourceAliasTable {
     LightSourceAliasTableEntry values[];
 } lightSourceAliasTableData;
 
-// If this changes, make sure to update layouts for ClosestHitPushConstants in closest_hit.glsl.
+// NOTES:
 //
-// NOTE: See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
+// See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
 // It explains not exceeding 64 samples per pixel and 32 batches to avoid timeouts and long renders.
 // We now do progressive rendering so 64 samples per pixel is still good and you can do higher number
-// of batches. However, at some point it will be diminishing returns.
+// of batches especially for motion blur.
+//
+// The batchRayTime is included here for correctness. However, it is used when building the acceleration
+// structures with interpolated transformations for moving objects. At the moment, it is not used for
+// anything but included for correctness. Later we could use it for time dependent features such as:
+// - Animated materials
+// - Time-varying emission
+// - Procedural textures
+// - Camera motion blur
+// - Light sampling
+// - BSDFs with time dependence
+// - Random number decorrelation
 layout(push_constant) uniform RayGenPushConstants {
     layout(offset =  0) uvec2 resolution;
     layout(offset =  8) uint  samplesPerPixel;
@@ -87,6 +98,7 @@ layout(push_constant) uniform RayGenPushConstants {
     layout(offset = 52) uint  diffuseLightMaterialCount;
     layout(offset = 56) uint  lightSourceTriangleCount;
     layout(offset = 60) float lightSourceTotalArea;
+    layout(offset = 64) float batchRayTime;
 } pc;
 
 
@@ -551,7 +563,7 @@ Ray getRay(inout uint rngState, vec2 pixelCenter, int si, int sj, float recipSqr
     }
 
     // For simplicity, to do motion blur sample time in [0, 1] as start time and end time.
-    float time = randomFloat(rngState);
+    float time = pc.batchRayTime;
 
     Ray ray;
     ray.origin    = origin.xyz;
