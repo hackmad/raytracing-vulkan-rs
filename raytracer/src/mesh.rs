@@ -517,7 +517,7 @@ pub fn create_light_source_alias_table(
             ];
 
             let light_object_to_world = match light_source.object_to_world {
-                Transform::Static(mat) => Ok(mat),
+                Transform::Static(ref t) => Ok(t.to_mat4()),
                 Transform::Animated { .. } => Err(anyhow!(
                     "Animated transform for light sources not implemented"
                 )),

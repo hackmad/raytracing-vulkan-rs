@@ -27,7 +27,7 @@ use vulkano::{
 };
 
 use crate::{
-    Camera, Materials, Mesh, MeshInstance, Transform, Vk,
+    AnimatedTransform, Camera, Materials, Mesh, MeshInstance, Transform, Vk,
     acceleration::AccelerationStructures,
     create_light_source_alias_table, create_mesh_index_buffer, create_mesh_storage_buffer,
     create_mesh_vertex_buffer,
@@ -129,10 +129,11 @@ impl RenderEngine {
             let mesh_index = mesh_name_to_index
                 .get(&instance.name)
                 .with_context(|| format!("Mesh {} not found", instance.name))?;
-            mesh_instances.push(MeshInstance::new(
-                *mesh_index,
-                Transform::Static(instance.get_object_to_world_space_matrix()),
-            ));
+
+            let mat = instance.get_object_to_world_space_matrix();
+            let transform = Transform::Static(AnimatedTransform::from(mat));
+
+            mesh_instances.push(MeshInstance::new(*mesh_index, transform));
         }
 
         // Get materials.

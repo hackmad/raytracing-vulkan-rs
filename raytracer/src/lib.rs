@@ -1,4 +1,5 @@
 mod acceleration;
+mod animated_transform;
 mod camera;
 mod material;
 mod mesh;
@@ -10,6 +11,7 @@ mod scene;
 mod textures;
 mod vk;
 
+pub use animated_transform::*;
 pub use camera::*;
 pub use material::*;
 pub use mesh::*;

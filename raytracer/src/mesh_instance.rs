@@ -1,9 +1,12 @@
-use glam::Mat4;
+use crate::AnimatedTransform;
 
 #[derive(Debug)]
 pub enum Transform {
-    Static(Mat4),
-    Animated { start: Mat4, end: Mat4 },
+    Static(AnimatedTransform),
+    Animated {
+        start: AnimatedTransform,
+        end: AnimatedTransform,
+    },
 }
 
 #[derive(Debug)]
@@ -21,13 +24,13 @@ impl MeshInstance {
     }
 
     /// Returns the 4x3 matrix used in Vulkan transformations for acceleration structures.
-    pub fn get_vulkan_acc_transform(&self) -> [[f32; 4]; 3] {
+    pub fn get_vulkan_acc_transform(&self, time: f32) -> [[f32; 4]; 3] {
         match self.object_to_world {
-            Transform::Static(mat) => {
-                let t = mat.transpose().to_cols_array_2d();
-                [t[0], t[1], t[2]]
-            }
-            Transform::Animated { .. } => todo!("Animated transforms not implemented yet!"),
+            Transform::Static(ref t) => t.to_vulkan_acc_mat(),
+            Transform::Animated {
+                start: ref t0,
+                end: ref t1,
+            } => t0.lerp(t1, time).to_vulkan_acc_mat(),
         }
     }
 }

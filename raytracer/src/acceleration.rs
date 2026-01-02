@@ -81,8 +81,10 @@ impl AccelerationStructures {
                 .get(&name)
                 .with_context(|| format!("BLAS not found {name}"))?;
 
+            // TODO For motion blur we need to sample a time value in intervals of 1 / sample_batches.
+            // when calling get_vulkan_acc_transform().
             let acc = AccelerationStructureInstance {
-                transform: mesh_instance.get_vulkan_acc_transform(),
+                transform: mesh_instance.get_vulkan_acc_transform(0.0),
                 acceleration_structure_reference: blas.device_address().into(),
                 instance_custom_index_and_mask,
                 ..Default::default()
