@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use random::Random;
 use scene_file::SceneFile;
 use shaders::{GfxShaderModules, RtShaderModules, ray_gen};
 use vulkano::{
@@ -90,8 +91,14 @@ pub struct RenderEngine {
     /// Number of batches to use when rendering.
     sample_batches: u32,
 
-    /// Acceleration structures. These have to be kept alive since we need the TLAS for rendering.
-    _acceleration_structures: AccelerationStructures,
+    /// Acceleration structures.
+    acceleration_structures: AccelerationStructures,
+
+    /// Meshes.
+    meshes: Vec<Arc<Mesh>>,
+
+    /// Mesh instances.
+    mesh_instances: Vec<MeshInstance>,
 }
 
 impl RenderEngine {
@@ -102,6 +109,9 @@ impl RenderEngine {
         window_size: &[f32; 2],
         swapchain_format: Format,
     ) -> Result<Self> {
+        // Seed random number generator.
+        Random::seed(485_674_845_675_491);
+
         // Load shader modules.
         let rt_shader_modules = RtShaderModules::load(vk.device.clone());
         let gfx_shader_modules = GfxShaderModules::load(vk.device.clone());
@@ -191,8 +201,10 @@ impl RenderEngine {
         // Create descriptor sets for non-changing data.
 
         // Acceleration structures.
+        let sample_batches = scene_file.render.sample_batches;
+        let batch_ray_time = get_batch_ray_time(0, sample_batches); // Used for motion blur.
         let acceleration_structures =
-            AccelerationStructures::new(vk.clone(), &mesh_instances, &meshes)?;
+            AccelerationStructures::new(vk.clone(), &mesh_instances, &meshes, batch_ray_time)?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -368,8 +380,10 @@ impl RenderEngine {
             push_constants,
             accum_image_view,
             current_sample_batch: 0,
-            sample_batches: scene_file.render.sample_batches,
-            _acceleration_structures: acceleration_structures,
+            sample_batches,
+            acceleration_structures,
+            mesh_instances,
+            meshes,
         })
     }
 
@@ -444,6 +458,21 @@ impl RenderEngine {
         if self.current_sample_batch >= self.sample_batches {
             return;
         }
+
+        // Starting at 2nd batch we need to update acceleration structures so we can account for
+        // motion blur.
+        if self.current_sample_batch > 0 {
+            let batch_ray_time = get_batch_ray_time(self.current_sample_batch, self.sample_batches);
+            self.acceleration_structures
+                .update(
+                    vk.clone(),
+                    &self.mesh_instances,
+                    &self.meshes,
+                    batch_ray_time,
+                )
+                .unwrap();
+        }
+
         // Create the uniform buffer for the camera.
         let camera = camera.read().unwrap();
 
@@ -656,4 +685,11 @@ fn create_accumulated_render_image_view(
     )?;
 
     Ok(image_view)
+}
+
+fn get_batch_ray_time(current_sample_batch: u32, sample_batches: u32) -> f32 {
+    let d = 1.0 / sample_batches as f32;
+    let t0 = current_sample_batch as f32 * d;
+    let t1 = t0 + d;
+    Random::sample_in_range(t0, t1)
 }

@@ -82,6 +82,17 @@ impl Random {
         })
     }
 
+    /// Return a random value via the [`StandardUniform`] distribution.
+    pub fn random<T>() -> T
+    where
+        StandardUniform: Distribution<T>,
+    {
+        RNG.with(|rng| {
+            let mut r = rng.borrow_mut();
+            r.random::<T>()
+        })
+    }
+
     /// Returns a random vector with random components in [0, 1].
     pub fn vec3() -> Vec3 {
         RNG.with(|rng| {

@@ -2392,6 +2392,7 @@ dependencies = [
  "image",
  "log",
  "ordered-float",
+ "random",
  "scene_file",
  "shaders",
  "tobj",

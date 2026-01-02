@@ -5,6 +5,7 @@ authors = ["Ahmad Kabani <ahmadkabani@yahoo.com>"]
 edition = "2024"
 
 [dependencies]
+random = { path = "../random" }
 scene_file = { path = "../scene_file" }
 shaders = { path = "../shaders" }
 
