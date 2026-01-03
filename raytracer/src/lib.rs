@@ -1,6 +1,7 @@
 mod acceleration;
 mod camera;
 mod decomposed_transform;
+mod light;
 mod material;
 mod mesh;
 mod mesh_instance;
@@ -13,6 +14,7 @@ mod vk;
 
 pub use camera::*;
 pub use decomposed_transform::*;
+pub use light::*;
 pub use material::*;
 pub use mesh::*;
 pub use mesh_instance::*;
