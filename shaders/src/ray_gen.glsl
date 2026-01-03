@@ -119,8 +119,6 @@ MeshMaterial unpackInstanceMaterial(const uint meshId) {
 }
 
 MeshTriangle unpackInstanceVertex(const uint meshId, const uint primitiveId) {
-    Mesh mesh = meshData.values[meshId];
-
     // Note if we got here meshId >= 1 and pc.meshCount >= 1 because there was an intersection.
     uint indexBufferOffset = 0;
     uint vertexBufferOffset = 0;
