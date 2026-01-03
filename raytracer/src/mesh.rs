@@ -409,7 +409,16 @@ pub fn create_mesh_storage_buffer(
                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         },
-        mesh_data,
+        if !mesh_data.is_empty() {
+            mesh_data
+        } else {
+            vec![ray_gen::Mesh {
+                vertexBufferSize: 0,
+                indexBufferSize: 0,
+                materialType: 0,
+                materialIndex: 0,
+            }]
+        },
     )?;
     Ok(buffer)
 }
@@ -437,7 +446,16 @@ pub fn create_mesh_vertex_buffer(
                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         },
-        vertex_buffer_data,
+        if !vertex_buffer_data.is_empty() {
+            vertex_buffer_data
+        } else {
+            vec![ray_gen::MeshVertex {
+                p: [0.0, 0.0, 0.0],
+                n: [0.0, 0.0, 0.0],
+                u: 0.0,
+                v: 0.0,
+            }]
+        },
     )?;
     Ok(buffer)
 }
@@ -462,7 +480,11 @@ pub fn create_mesh_index_buffer(vk: Arc<Vk>, meshes: &[Arc<Mesh>]) -> Result<Sub
                 | MemoryTypeFilter::HOST_SEQUENTIAL_WRITE,
             ..Default::default()
         },
-        index_buffer_data,
+        if !index_buffer_data.is_empty() {
+            index_buffer_data
+        } else {
+            vec![0]
+        },
     )?;
     Ok(buffer)
 }
