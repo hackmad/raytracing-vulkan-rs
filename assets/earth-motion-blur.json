@@ -1,0 +1,59 @@
+{
+  "cameras": [
+    {
+      "perspective": {
+        "name": "default",
+        "eye": [0, -5, 12],
+        "look_at": [0, 0, 0],
+        "up": [0, 1, 0],
+        "fov_y": 20,
+        "z_near": 0.01,
+        "z_far": 100,
+        "focal_length": 1.0,
+        "aperture_size": 0
+      }
+    }
+  ],
+  "textures": [
+    { "image": { "name": "earth", "path": "world.topo.bathy.200412.3x5400x2700.jpg" } }
+  ],
+  "materials": [
+    { "lambertian": { "name": "earth-surface", "albedo": "earth" } }
+  ],
+  "primitives": [
+    {
+      "uv_sphere": {
+        "name": "globe",
+        "center": [0, 0, 0],
+        "radius": 2,
+        "rings": 16,
+        "segments": 32,
+        "material": "earth-surface"
+      }
+    }
+  ],
+  "instances": [
+    {
+      "name" : "globe",
+      "transform": {
+        "animated": [
+          { "rotate": { "axis": [0, 1, 0], "degrees": 0 } },
+          { "rotate": { "axis": [0, 1, 0], "degrees": 5 } }
+        ]
+      }
+    }
+  ],
+  "sky": {
+    "solid" : {
+        "rgb": [0.7, 0.8, 1.0]
+    }
+  },
+  "render": {
+    "camera": "default",
+    "samples_per_pixel": 8,
+    "sample_batches": 32,
+    "max_ray_depth": 50,
+    "aspect_ratio": 1
+  }
+}
+
