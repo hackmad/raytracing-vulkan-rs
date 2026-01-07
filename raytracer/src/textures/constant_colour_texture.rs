@@ -3,7 +3,7 @@ use std::collections::{HashMap, hash_map::Entry};
 
 use ordered_float::OrderedFloat;
 use scene_file::Texture;
-use shaders::ray_gen;
+use shaders::closest_hit;
 
 use crate::MAT_PROP_VALUE_TYPE_RGB;
 
@@ -36,10 +36,10 @@ impl ConstantColourTextures {
         ConstantColourTextures { colours, indices }
     }
 
-    pub fn to_shader(&self, name: &str) -> Option<ray_gen::MaterialPropertyValue> {
+    pub fn to_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
         self.indices
             .get(name)
-            .map(|i| ray_gen::MaterialPropertyValue {
+            .map(|i| closest_hit::MaterialPropertyValue {
                 propValueType: MAT_PROP_VALUE_TYPE_RGB,
                 index: *i,
             })

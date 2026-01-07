@@ -6,7 +6,7 @@ use std::{
 use anyhow::{Context, Result};
 use random::Random;
 use scene_file::SceneFile;
-use shaders::{GfxShaderModules, RtShaderModules, ray_gen};
+use shaders::{GfxShaderModules, RtShaderModules, closest_hit, ray_gen};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{
@@ -39,7 +39,8 @@ use crate::{
 #[repr(C)]
 #[derive(BufferContents, Clone, Copy)]
 pub struct UnifiedPushConstants {
-    pub ray_gen_pc: ray_gen::RayGenPushConstants,
+    pub ray_gen_pc: ray_gen::PushConstants,
+    pub closest_hit_pc: closest_hit::PushConstants,
 }
 
 /// Stores resources specific to the rendering pipelines and renders an image progressively.
@@ -167,11 +168,14 @@ impl RenderEngine {
         // Push constants.
         // sampleBatch will need to change in Scene::render() but we can store 0 for the first batch.
         let push_constants = UnifiedPushConstants {
-            ray_gen_pc: ray_gen::RayGenPushConstants {
+            ray_gen_pc: ray_gen::PushConstants {
                 resolution: [window_size[0] as u32, window_size[1] as u32],
                 samplesPerPixel: scene_file.render.samples_per_pixel,
                 sampleBatch: 0,
                 maxRayDepth: scene_file.render.max_ray_depth,
+                batchRayTime: batch_ray_times[0],
+            },
+            closest_hit_pc: closest_hit::PushConstants {
                 meshCount: mesh_count as _,
                 imageTextureCount: image_texture_count as _,
                 constantColourCount: constant_colour_count as _,
@@ -183,7 +187,6 @@ impl RenderEngine {
                 diffuseLightMaterialCount: diffuse_light_material_count as _,
                 lightSourceTriangleCount: light_source_alias_table.triangle_count as _,
                 lightSourceTotalArea: light_source_alias_table.total_area as _,
-                batchRayTime: batch_ray_times[0],
             },
         };
 

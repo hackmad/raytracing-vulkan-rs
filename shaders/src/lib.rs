@@ -115,13 +115,21 @@ impl GfxShaderModules {
     }
 }
 
-impl fmt::Debug for ray_gen::RayGenPushConstants {
+impl fmt::Debug for ray_gen::PushConstants {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::RayGenPushConstants")
+        f.debug_struct("ray_gen::PushConstants")
             .field("resolution", &self.resolution)
             .field("samplesPerPixel", &self.samplesPerPixel)
             .field("sampleBatch", &self.sampleBatch)
             .field("maxRayDepth", &self.maxRayDepth)
+            .field("batchRayTime", &self.batchRayTime)
+            .finish()
+    }
+}
+
+impl fmt::Debug for closest_hit::PushConstants {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::PushConstants")
             .field("meshCount", &self.meshCount)
             .field("imageTextureCount", &self.imageTextureCount)
             .field("checkerTextureCount", &self.checkerTextureCount)
@@ -138,43 +146,43 @@ impl fmt::Debug for ray_gen::RayGenPushConstants {
     }
 }
 
-impl fmt::Debug for ray_gen::MaterialPropertyValue {
+impl fmt::Debug for closest_hit::MaterialPropertyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ray_gen::MaterialPropertyValue")
+        f.debug_struct("closest_hit::MaterialPropertyValue")
             .field("propValueType", &self.propValueType)
             .field("index", &self.index)
             .finish()
     }
 }
 
-impl fmt::Debug for ray_gen::LambertianMaterial {
+impl fmt::Debug for closest_hit::LambertianMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ray_gen::LambertianMaterial")
+        f.debug_struct("closest_hit::LambertianMaterial")
             .field("albedo", &self.albedo)
             .finish()
     }
 }
 
-impl fmt::Debug for ray_gen::MetalMaterial {
+impl fmt::Debug for closest_hit::MetalMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ray_gen::MetalMaterial")
+        f.debug_struct("closest_hit::MetalMaterial")
             .field("albedo", &self.albedo)
             .field("fuzz", &self.fuzz)
             .finish()
     }
 }
 
-impl fmt::Debug for ray_gen::DielectricMaterial {
+impl fmt::Debug for closest_hit::DielectricMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ray_gen::DielectricMaterial")
+        f.debug_struct("closest_hit::DielectricMaterial")
             .field("refractionIndex", &self.refractionIndex)
             .finish()
     }
 }
 
-impl fmt::Debug for ray_gen::DiffuseLightMaterial {
+impl fmt::Debug for closest_hit::DiffuseLightMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ray_gen::DiffuseLightMaterial")
+        f.debug_struct("closest_hit::DiffuseLightMaterial")
             .field("emit", &self.emit)
             .finish()
     }

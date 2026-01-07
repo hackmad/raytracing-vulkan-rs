@@ -2,7 +2,7 @@ use std::{collections::HashMap, iter, mem::size_of, sync::Arc};
 
 use anyhow::{Context, Result};
 use log::{debug, warn};
-use shaders::ray_gen::MeshVertex;
+use shaders::closest_hit::MeshVertex;
 use vulkano::{
     Packed24_8,
     acceleration_structure::{

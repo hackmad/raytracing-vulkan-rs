@@ -62,17 +62,6 @@ const uint SKY_TYPE_NONE = 0;
 const uint SKY_TYPE_SOLID = 1;
 const uint SKY_TYPE_VERTICAL_GRADIENT = 2;
 
-struct Sky {
-    vec3 solid;     // Solid colour.
-
-    uint skyType;   // Sky type.
-
-    vec3 vTop;      // Vertical gradient top colour;
-    float vFactor;  // Vertical gradient factor.
-    vec3 vBottom;   // Vertical gradient bottom colour;
-
-};
-
 // --------------------------------------------------------------------------------
 // Mesh
 
@@ -126,22 +115,13 @@ struct Ray {
     float time;
 };
 
-struct RayPayload {
-    uint   meshId;
-    uint   primitiveId;
-    bool   isMissed;
-    vec2   hitAttribs;
-    mat4x3 objectToWorld;
-    mat4x3 worldToObject;
-    vec3   worldRayDirection;
-};
-
 struct ScatterRecord {
     bool isScattered;
     vec3 attenuation;
     uint matPdfType;
     bool skipPdf;
     Ray  skipPdfRay;
+    vec3 scatterDirection;
 };
 
 ScatterRecord initScatterRecord() {
@@ -152,6 +132,7 @@ ScatterRecord initScatterRecord() {
     rec.skipPdf              = false;
     rec.skipPdfRay.origin    = vec3(0.0);
     rec.skipPdfRay.direction = vec3(0.0);
+    rec.scatterDirection     = vec3(0.0);
     return rec;
 }
 
@@ -163,6 +144,24 @@ EmissionRecord initEmissionRecord() {
     EmissionRecord rec;
     rec.emissionColour = vec3(0.0);
     return rec;
+}
+
+struct RayPayload {
+    uint   rngState;
+    float  time;
+    bool   isMissed;
+
+    HitRecord      rec;
+    EmissionRecord erec;
+    ScatterRecord  srec;
+};
+
+RayPayload initRayPayload(uint rngState, float time) {
+    RayPayload rp;
+    rp.rngState = rngState;
+    rp.isMissed = false;
+    rp.time     = time;
+    return rp;
 }
 
 // --------------------------------------------------------------------------------
