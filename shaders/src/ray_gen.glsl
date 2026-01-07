@@ -18,7 +18,7 @@ layout(set = 1, binding = 0) uniform Camera {
     float apertureSize; // Aperture size (diameter of lens).
 } camera;
 
-layout(set = 2, binding = 0, rgba8) uniform image2D image;
+layout(set = 2, binding = 0, rgba32f) uniform image2D image;
 
 layout(set = 3, binding = 0, scalar) buffer MeshVertices {
     MeshVertex values[];
