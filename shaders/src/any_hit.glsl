@@ -176,11 +176,11 @@ void main() {
             ScatterRecord srec = calculateScatter(rp.rngState, material, p, rp.time);
             rp.srec = srec;
 
-            if (!srec.isScattered) {
-                ignoreIntersectionEXT;
+            if (srec.isScattered) {
+                return; // Accept reported intersection.
             }
-        } else {
-            ignoreIntersectionEXT;
         }
+
+        ignoreIntersectionEXT; // Reject reported intersection.
     }
 }
