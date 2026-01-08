@@ -18,7 +18,7 @@
     { "constant": { "name": "red", "rgb": [0.65, 0.05, 0.05] } },
     { "constant": { "name": "white", "rgb": [0.73, 0.73, 0.73] } },
     { "constant": { "name": "green", "rgb": [0.12, 0.45, 0.15] } },
-    { "constant": { "name": "light", "rgb": [15, 15, 15] } },
+    { "constant": { "name": "light", "rgb": [7, 7, 7] } },
     { "constant": { "name": "pure-black", "rgb": [0, 0, 0] } },
     { "constant": { "name": "pure-white", "rgb": [1, 1, 1] } }
   ],
@@ -52,7 +52,7 @@
     {
       "quad": {
         "name": "top-light",
-        "points": [ [343, -554, 332], [213, -554, 332], [213, -554, 227], [343, -554, 227] ],
+        "points": [ [443, -554, 432], [113, -554, 432], [113, -554, 127], [443, -554, 127] ],
         "normal": [0, 1, 0],
         "uv": [ [0, 0], [0, 1], [1, 1], [1, 0] ],
         "material": "light"
