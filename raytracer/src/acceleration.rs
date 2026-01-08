@@ -2,16 +2,17 @@ use std::{collections::HashMap, iter, mem::size_of, sync::Arc};
 
 use anyhow::{Context, Result};
 use log::{debug, warn};
-use shaders::closest_hit::MeshVertex;
+use shaders::closest_hit;
 use vulkano::{
     Packed24_8,
     acceleration_structure::{
-        AccelerationStructure, AccelerationStructureBuildGeometryInfo,
+        AabbPositions, AccelerationStructure, AccelerationStructureBuildGeometryInfo,
         AccelerationStructureBuildRangeInfo, AccelerationStructureBuildType,
         AccelerationStructureCreateInfo, AccelerationStructureGeometries,
-        AccelerationStructureGeometryInstancesData, AccelerationStructureGeometryInstancesDataType,
-        AccelerationStructureGeometryTrianglesData, AccelerationStructureInstance,
-        AccelerationStructureType, BuildAccelerationStructureFlags, BuildAccelerationStructureMode,
+        AccelerationStructureGeometryAabbsData, AccelerationStructureGeometryInstancesData,
+        AccelerationStructureGeometryInstancesDataType, AccelerationStructureGeometryTrianglesData,
+        AccelerationStructureInstance, AccelerationStructureType, BuildAccelerationStructureFlags,
+        BuildAccelerationStructureMode, GeometryInstanceFlags,
     },
     buffer::{Buffer, BufferCreateInfo, BufferUsage, IndexBuffer, Subbuffer},
     command_buffer::{AutoCommandBufferBuilder, CommandBufferUsage, PrimaryCommandBufferAbstract},
@@ -20,7 +21,7 @@ use vulkano::{
     sync::GpuFuture,
 };
 
-use crate::{Instances, Mesh, Vk};
+use crate::{Instances, Mesh, Vk, Volume};
 
 /// Stores the acceleration structures.
 pub struct AccelerationStructures {
@@ -36,25 +37,42 @@ impl AccelerationStructures {
     /// Create new acceleration structures for the given model.
     pub fn new(vk: Arc<Vk>, instances: &Instances, batch_ray_time: f32) -> Result<Self> {
         let mut mesh_map: HashMap<String, Arc<Mesh>> = HashMap::new();
-        for mesh_instance in instances.mesh_instances.iter() {
-            let mesh = instances.meshes[mesh_instance.index].clone();
+        for instance in instances.mesh_instances.iter() {
+            let mesh = instances.meshes[instance.index].clone();
             let name = mesh.name.clone();
             mesh_map.entry(name).or_insert_with(|| mesh);
         }
 
-        let mut vertex_buffers: HashMap<String, Subbuffer<[MeshVertex]>> = HashMap::new();
+        let mut volume_map: HashMap<String, Arc<Volume>> = HashMap::new();
+        for instance in instances.volume_instances.iter() {
+            let volume = instances.volumes[instance.index].clone();
+            let name = volume.name.clone();
+            volume_map.entry(name).or_insert_with(|| volume);
+        }
+
+        // Create vertex and index buffers for meshes.
+        let mut vertex_buffers = HashMap::<String, Subbuffer<[closest_hit::MeshVertex]>>::new();
         for (name, mesh) in mesh_map.iter() {
             let buf = mesh.create_blas_vertex_buffer(vk.clone())?;
             vertex_buffers.insert(name.clone(), buf);
         }
 
-        let mut index_buffers: HashMap<String, Subbuffer<[u32]>> = HashMap::new();
+        let mut index_buffers = HashMap::<String, Subbuffer<[u32]>>::new();
         for (name, mesh) in mesh_map.iter() {
             let buf = mesh.create_blas_index_buffer(vk.clone())?;
             index_buffers.insert(name.clone(), buf);
         }
 
-        let mut blas_map: HashMap<String, Arc<AccelerationStructure>> = HashMap::new();
+        // NOTE: Each volume has its own transform. So we are creating on BLAS per volume.
+        // Don't expect to have lots of volumes in a scene. Otherwise we would need to setup
+        // one or multiple BLAS instances with multiple AABBs which is slightly more complicated.
+        let mut volume_buffers = HashMap::<String, Subbuffer<[AabbPositions]>>::new();
+        for (name, volume) in volume_map.iter() {
+            let buf = volume.create_blas_aabb_buffer(vk.clone())?;
+            volume_buffers.insert(name.clone(), buf);
+        }
+
+        let mut blas_map = HashMap::<String, Arc<AccelerationStructure>>::new();
         for (name, vertex_buffer) in vertex_buffers.iter() {
             let index_buffer = index_buffers
                 .get(name)
@@ -62,6 +80,10 @@ impl AccelerationStructures {
 
             let acc =
                 build_acceleration_structure_triangles(vk.clone(), vertex_buffer, index_buffer)?;
+            blas_map.insert(name.clone(), acc);
+        }
+        for (name, volume_buffer) in volume_buffers.iter() {
+            let acc = build_acceleration_structure_volume(vk.clone(), volume_buffer)?;
             blas_map.insert(name.clone(), acc);
         }
 
@@ -260,7 +282,7 @@ fn build_acceleration_structure_common(
 /// Builds a bottom level accerlation strucuture for a set of triangles.
 fn build_acceleration_structure_triangles(
     vk: Arc<Vk>,
-    vertex_buffer: &Subbuffer<[MeshVertex]>,
+    vertex_buffer: &Subbuffer<[closest_hit::MeshVertex]>,
     index_buffer: &Subbuffer<[u32]>,
 ) -> Result<Arc<AccelerationStructure>> {
     let primitive_count = (index_buffer.len() / 3) as u32;
@@ -271,7 +293,7 @@ fn build_acceleration_structure_triangles(
         max_vertex: vertex_buffer.len() as _,
         vertex_data: Some(vertex_buffer.clone().into_bytes()),
         index_data: Some(IndexBuffer::U32(index_buffer.clone())),
-        vertex_stride: size_of::<MeshVertex>() as _,
+        vertex_stride: size_of::<closest_hit::MeshVertex>() as _,
         ..AccelerationStructureGeometryTrianglesData::new(Format::R32G32B32_SFLOAT)
     };
 
@@ -281,6 +303,30 @@ fn build_acceleration_structure_triangles(
         vk,
         geometries,
         primitive_count,
+        AccelerationStructureType::BottomLevel,
+        None,
+    )
+}
+
+/// Builds a bottom level accerlation strucuture for a volume.
+fn build_acceleration_structure_volume(
+    vk: Arc<Vk>,
+    volume_buffer: &Subbuffer<[AabbPositions]>,
+) -> Result<Arc<AccelerationStructure>> {
+    // NOTE: Unfortunately the clone of volume_buffer is unavoidable because of
+    // AccelerationStructureGeometryAabbsData Would be nice if we could share this data.
+    let as_geometry_aab_data = AccelerationStructureGeometryAabbsData {
+        data: Some(volume_buffer.clone().into_bytes()),
+        stride: size_of::<AabbPositions>() as _,
+        ..AccelerationStructureGeometryAabbsData::default()
+    };
+
+    let geometries = AccelerationStructureGeometries::Aabbs(vec![as_geometry_aab_data]);
+
+    build_acceleration_structure_common(
+        vk,
+        geometries,
+        1, // One BLAS AABB per volume
         AccelerationStructureType::BottomLevel,
         None,
     )
@@ -334,31 +380,62 @@ fn build_as_instances(
     blas_map: &HashMap<String, Arc<AccelerationStructure>>,
     batch_ray_time: f32,
 ) -> Result<Vec<AccelerationStructureInstance>> {
+    // We do not store meshes/volumes together because of different structs. So we do not need
+    // to make custom index unique across them; just within each group of instances.
     let mut as_instances: Vec<_> = Vec::new();
 
-    for mesh_instance in instances.mesh_instances.iter() {
-        let mesh_index = mesh_instance.index;
-        if mesh_index >= 16_777_216 {
-            warn!("Mesh count exceeds 24 bit storage for instance_custom_index_and_mask");
+    for instance in instances.mesh_instances.iter() {
+        let custom_index = instance.index;
+        if custom_index >= 16_777_216 {
+            warn!("Mesh index exceeds 24 bit storage for instance_custom_index_and_mask");
         }
+        let instance_custom_index_and_mask = Packed24_8::new(custom_index as u32, 0xFF);
 
-        // Ideally we should use this to point to materials directly. For now, just use it to
-        // point to the mesh index we should be using to extract material data in the shader.
-        let instance_custom_index_and_mask = Packed24_8::new(mesh_index as u32, 0xFF);
-
-        let name = instances.meshes[mesh_index].name.clone();
+        let name = instances.meshes[instance.index].name.clone();
         let blas = blas_map
             .get(&name)
-            .with_context(|| format!("BLAS not found {name}"))?;
+            .with_context(|| format!("BLAS not found for mesh {name}"))?;
 
-        let transform = mesh_instance.get_vulkan_acc_transform(batch_ray_time);
+        let transform = instance.get_vulkan_acc_transform(batch_ray_time);
         debug!("Transform {transform:?}");
+
+        let sbt_offset = 0; // TriangleHit is the first hit group.
+        let flags = GeometryInstanceFlags::FORCE_OPAQUE;
+        let packed = Packed24_8::new(sbt_offset, flags.into());
 
         let acc = AccelerationStructureInstance {
             transform,
             acceleration_structure_reference: blas.device_address().into(),
             instance_custom_index_and_mask,
-            ..Default::default()
+            instance_shader_binding_table_record_offset_and_flags: packed,
+        };
+        as_instances.push(acc);
+    }
+
+    for instance in instances.volume_instances.iter() {
+        let custom_index = instance.index;
+        if custom_index >= 16_777_216 {
+            warn!("Volume index exceeds 24 bit storage for instance_custom_index_and_mask");
+        }
+        let instance_custom_index_and_mask = Packed24_8::new(custom_index as u32, 0xFF);
+
+        let name = instances.volumes[instance.index].name.clone();
+        let blas = blas_map
+            .get(&name)
+            .with_context(|| format!("BLAS not found for volume {name}"))?;
+
+        let transform = instance.get_vulkan_acc_transform(batch_ray_time);
+        debug!("Transform {transform:?}");
+
+        let sbt_offset = 1; // ProceduralHit is at offset 1 relative to TriangleHit which is first.
+        let flags = GeometryInstanceFlags::FORCE_NO_OPAQUE;
+        let packed = Packed24_8::new(sbt_offset, flags.into());
+
+        let acc = AccelerationStructureInstance {
+            transform,
+            acceleration_structure_reference: blas.device_address().into(),
+            instance_custom_index_and_mask,
+            instance_shader_binding_table_record_offset_and_flags: packed,
         };
         as_instances.push(acc);
     }
