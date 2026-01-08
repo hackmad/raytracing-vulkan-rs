@@ -143,13 +143,10 @@ ScatterRecord calculateScatter(inout uint rngState, Material material, vec3 p, f
 void main() {
     Volume volume = volumeData.values[hitAttribs.volumeIndex];
 
-    float tEntry = hitAttribs.tEntry;
-    float tExit  = hitAttribs.tExit;
+    float tEntry = max(hitAttribs.tEntry, RAY_EPS);
+    float tExit  = min(hitAttribs.tExit, RAY_INF);
 
-    tEntry = max(tEntry, RAY_EPS);
-    tExit  = min(tExit, RAY_INF);
-
-    if (tEntry - tExit < RAY_EPS) {
+    if (tEntry < tExit) {
         vec3 rayOrigin = gl_WorldRayOriginEXT;
         vec3 rayDir    = gl_WorldRayDirectionEXT;
 
@@ -177,11 +174,13 @@ void main() {
             Material material = Material(volume.materialType, volume.materialIndex);
 
             ScatterRecord srec = calculateScatter(rp.rngState, material, p, rp.time);
-            if (srec.isScattered) {
-                // TODO Add contribution
+            rp.srec = srec;
+
+            if (!srec.isScattered) {
+                ignoreIntersectionEXT;
             }
+        } else {
+            ignoreIntersectionEXT;
         }
     }
-
-    ignoreIntersectionEXT;
 }
