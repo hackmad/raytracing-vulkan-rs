@@ -9,7 +9,7 @@ const float TWO_PI = 2.0 * PI;
 const float PI_OVER_2 = PI / 2.0;
 const float PI_OVER_4 = PI / 4.0;
 
-const float RAY_EPS = 1e-4;
+const float RAY_EPS = 1e-3;
 const float RAY_INF = 1e30;
 
 // --------------------------------------------------------------------------------
