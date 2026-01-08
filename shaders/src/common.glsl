@@ -9,6 +9,9 @@ const float TWO_PI = 2.0 * PI;
 const float PI_OVER_2 = PI / 2.0;
 const float PI_OVER_4 = PI / 4.0;
 
+const float RAY_EPS = 1e-4;
+const float RAY_INF = 1e30;
+
 // --------------------------------------------------------------------------------
 // Materials.
 
@@ -17,11 +20,17 @@ const uint MAT_TYPE_LAMBERTIAN = 1;
 const uint MAT_TYPE_METAL = 2;
 const uint MAT_TYPE_DIELECTRIC = 3;
 const uint MAT_TYPE_DIFFUSE_LIGHT = 4;
+const uint MAT_TYPE_ISOTROPIC = 5;
 
 const uint MAT_PROP_VALUE_TYPE_RGB = 0;
 const uint MAT_PROP_VALUE_TYPE_IMAGE = 1;
 const uint MAT_PROP_VALUE_TYPE_CHECKER = 2;
 const uint MAT_PROP_VALUE_TYPE_NOISE = 3;
+
+struct Material {
+    uint type;
+    uint index;
+};
 
 struct MaterialPropertyValue {
     uint propValueType;
@@ -43,6 +52,10 @@ struct DielectricMaterial {
 
 struct DiffuseLightMaterial {
     MaterialPropertyValue emit;
+};
+
+struct IsotropicMaterial {
+    MaterialPropertyValue albedo;
 };
 
 struct CheckerTexture {
@@ -90,6 +103,36 @@ struct HitRecord {
     vec3       normal; // Points against the incident ray.
 };
 
+// --------------------------------------------------------------------------------
+// Volume
+
+const uint VOLUME_SHAPE_BOX = 0;
+
+const uint CONSTANT_MEDIUM = 0;
+
+struct ConstantMedium {
+    float density;
+    vec3  pad;
+};
+
+// NOTE: The order of fields below will ensure data is aligned/packed correctly and
+// we can avoid having to use padding fields.
+struct Volume {
+    vec3 aabbMin;
+    uint materialType;
+    vec3 aabbMax;
+    uint materialIndex;
+    uint shape;
+    uint mediumType;
+    uint mediumIndex;
+    uint pad;
+};
+
+struct VolumeHitAttribs {
+    uint  volumeIndex;
+    float tEntry;
+    float tExit;
+};
 
 // --------------------------------------------------------------------------------
 // Light source sample.
@@ -98,7 +141,6 @@ struct LightSample {
     vec3 position;
     vec3 normal;
 };
-
 
 // --------------------------------------------------------------------------------
 // Ray payload
@@ -175,7 +217,6 @@ struct LightSourceAliasTableEntry {
     uint primitiveId;
 };
 
-
 // --------------------------------------------------------------------------------
 // Orthonormal bases
 
@@ -200,7 +241,6 @@ vec3 onbTransform(ONB onb, vec3 v) {
     return (v.x * onb.axis[0]) + (v.y * onb.axis[1]) + (v.z * onb.axis[2]);
 }
 
-
 // --------------------------------------------------------------------------------
 // Map a value from [fromMin, fromMax] to [toMin, toMax].
 
@@ -216,7 +256,6 @@ vec3 map(vec3 value, float fromMin, float fromMax, float toMin, float toMax) {
 vec4 map(vec4 value, float fromMin, float fromMax, float toMin, float toMax) {
   return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
 }
-
 
 // --------------------------------------------------------------------------------
 // General vector utility functions.
@@ -392,6 +431,24 @@ vec3 sampleTriangleUniform(inout uint rngState, vec3 p0, vec3 p1, vec3 p2) {
     return p0 + r.x * (p1 - p0) + r.y * (p2 - p0);
 }
 
+// --------------------------------------------------------------------------------
+// Ray-object intersections.
+
+// Object space intersection of a ray with a box (AABB) using slab method.
+bool rayIntersectBox(vec3 ro, vec3 rd, vec3 pMin, vec3 pMax, out float tMin, out float tMax) {
+    vec3 invDir = 1.0 / rd;
+
+    vec3 t0 = (pMin - ro) * invDir;
+    vec3 t1 = (pMax - ro) * invDir;
+
+    vec3 tNear = min(t0, t1);
+    vec3 tFar  = max(t0, t1);
+
+    tMin = max(max(tNear.x, tNear.y), tNear.z);
+    tMax = min(min(tFar.x,  tFar.y),  tFar.z);
+
+    return tMax >= max(tMin, 0.0);
+}
 
 // --------------------------------------------------------------------------------
 // Colour space conversions.

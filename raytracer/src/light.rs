@@ -9,7 +9,7 @@ use vulkano::{
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
 };
 
-use crate::{Materials, Mesh, MeshInstance, Transform, Vk};
+use crate::{Instances, Materials, Transform, Vk};
 
 struct Area {
     value: f32,
@@ -29,16 +29,16 @@ pub struct LightSourceAliasTable {
 /// The areas will be used to sample triangles that are part of meshes used as light sources.
 pub fn create_light_source_alias_table(
     vk: Arc<Vk>,
-    mesh_instances: &[MeshInstance],
-    meshes: &[Arc<Mesh>],
+    instances: &Instances,
     materials: &Materials,
 ) -> Result<LightSourceAliasTable> {
-    let light_sources: Vec<_> = mesh_instances
+    let light_sources: Vec<_> = instances
+        .mesh_instances
         .iter()
         .filter(|mesh_instance| {
             materials
                 .diffuse_light_material_indices
-                .contains_key(&meshes[mesh_instance.mesh_index].material)
+                .contains_key(&instances.meshes[mesh_instance.index].material)
         })
         .collect();
 
@@ -47,7 +47,7 @@ pub fn create_light_source_alias_table(
     let mut world_space_areas = Vec::with_capacity(1024);
 
     for light_source in light_sources {
-        let mesh = meshes[light_source.mesh_index].as_ref();
+        let mesh = instances.meshes[light_source.index].as_ref();
         let indices = mesh.indices.as_slice();
         let vertices = mesh.vertices.as_slice();
 
@@ -59,7 +59,6 @@ pub fn create_light_source_alias_table(
                 indices[i + 1] as usize,
                 indices[i + 2] as usize,
             ];
-
             let light_object_to_world = match light_source.object_to_world {
                 Transform::Static(ref t) => Ok(t.to_mat4()),
                 Transform::Animated { .. } => Err(anyhow!(
@@ -82,7 +81,7 @@ pub fn create_light_source_alias_table(
             if area > 1e-8 {
                 world_space_areas.push(Area {
                     value: area,
-                    mesh_index: light_source.mesh_index,
+                    mesh_index: light_source.index,
                     primitive_index,
                 });
             }

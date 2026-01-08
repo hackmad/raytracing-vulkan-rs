@@ -35,6 +35,7 @@
   "instances": [
     {
       "name" : "globe",
+      "type": "surface",
       "transform": {
         "animated": [
           { "rotate": { "axis": [0, 1, 0], "degrees": 0 } },

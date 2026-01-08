@@ -20,7 +20,7 @@ use vulkano::{
     sync::GpuFuture,
 };
 
-use crate::{Mesh, MeshInstance, Vk};
+use crate::{Instances, Mesh, Vk};
 
 /// Stores the acceleration structures.
 pub struct AccelerationStructures {
@@ -34,15 +34,10 @@ pub struct AccelerationStructures {
 
 impl AccelerationStructures {
     /// Create new acceleration structures for the given model.
-    pub fn new(
-        vk: Arc<Vk>,
-        mesh_instances: &[MeshInstance],
-        meshes: &[Arc<Mesh>],
-        batch_ray_time: f32,
-    ) -> Result<Self> {
+    pub fn new(vk: Arc<Vk>, instances: &Instances, batch_ray_time: f32) -> Result<Self> {
         let mut mesh_map: HashMap<String, Arc<Mesh>> = HashMap::new();
-        for mesh_instance in mesh_instances.iter() {
-            let mesh = meshes[mesh_instance.mesh_index].clone();
+        for mesh_instance in instances.mesh_instances.iter() {
+            let mesh = instances.meshes[mesh_instance.index].clone();
             let name = mesh.name.clone();
             mesh_map.entry(name).or_insert_with(|| mesh);
         }
@@ -70,7 +65,7 @@ impl AccelerationStructures {
             blas_map.insert(name.clone(), acc);
         }
 
-        let as_instances = build_as_instances(mesh_instances, meshes, &blas_map, batch_ray_time)?;
+        let as_instances = build_as_instances(instances, &blas_map, batch_ray_time)?;
 
         // Build the top-level acceleration structure.
         let tlas =
@@ -91,12 +86,10 @@ impl AccelerationStructures {
     pub fn update(
         &mut self,
         vk: Arc<Vk>,
-        mesh_instances: &[MeshInstance],
-        meshes: &[Arc<Mesh>],
+        instances: &Instances,
         batch_ray_time: f32,
     ) -> Result<()> {
-        let as_instances =
-            build_as_instances(mesh_instances, meshes, &self.blas_map, batch_ray_time)?;
+        let as_instances = build_as_instances(instances, &self.blas_map, batch_ray_time)?;
 
         // IMPORTANT:
         // Do NOT replace self.tlas or drop it. Just refit it in-place
@@ -337,15 +330,14 @@ unsafe fn build_top_level_acceleration_structure(
 }
 
 fn build_as_instances(
-    mesh_instances: &[MeshInstance],
-    meshes: &[Arc<Mesh>],
+    instances: &Instances,
     blas_map: &HashMap<String, Arc<AccelerationStructure>>,
     batch_ray_time: f32,
 ) -> Result<Vec<AccelerationStructureInstance>> {
     let mut as_instances: Vec<_> = Vec::new();
 
-    for mesh_instance in mesh_instances.iter() {
-        let mesh_index = mesh_instance.mesh_index;
+    for mesh_instance in instances.mesh_instances.iter() {
+        let mesh_index = mesh_instance.index;
         if mesh_index >= 16_777_216 {
             warn!("Mesh count exceeds 24 bit storage for instance_custom_index_and_mask");
         }
@@ -354,7 +346,7 @@ fn build_as_instances(
         // point to the mesh index we should be using to extract material data in the shader.
         let instance_custom_index_and_mask = Packed24_8::new(mesh_index as u32, 0xFF);
 
-        let name = meshes[mesh_index].name.clone();
+        let name = instances.meshes[mesh_index].name.clone();
         let blas = blas_map
             .get(&name)
             .with_context(|| format!("BLAS not found {name}"))?;

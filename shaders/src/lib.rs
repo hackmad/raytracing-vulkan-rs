@@ -29,6 +29,22 @@ pub mod ray_miss {
     }
 }
 
+pub mod intersection {
+    vulkano_shaders::shader! {
+        ty: "intersection",
+        path: "src/intersection.glsl",
+        vulkan_version: "1.3",
+    }
+}
+
+pub mod any_hit {
+    vulkano_shaders::shader! {
+        ty: "anyhit",
+        path: "src/any_hit.glsl",
+        vulkan_version: "1.3",
+    }
+}
+
 pub mod vertex {
     vulkano_shaders::shader! {
         ty: "vertex",
@@ -67,11 +83,23 @@ impl RtShaderModules {
             .entry_point("main")
             .unwrap();
 
+        let intersection = intersection::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+
+        let any_hit = any_hit::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+
         // Make a list of the shader stages that the pipeline will have.
         let stages = vec![
             PipelineShaderStageCreateInfo::new(ray_gen),
             PipelineShaderStageCreateInfo::new(ray_miss),
             PipelineShaderStageCreateInfo::new(closest_hit),
+            PipelineShaderStageCreateInfo::new(intersection),
+            PipelineShaderStageCreateInfo::new(any_hit),
         ];
 
         // Define the shader groups that will eventually turn into the shader binding table.
@@ -82,6 +110,11 @@ impl RtShaderModules {
             RayTracingShaderGroupCreateInfo::TrianglesHit {
                 closest_hit_shader: Some(2),
                 any_hit_shader: None,
+            },
+            RayTracingShaderGroupCreateInfo::ProceduralHit {
+                intersection_shader: 3,
+                any_hit_shader: Some(4),
+                closest_hit_shader: None,
             },
         ];
 
@@ -146,7 +179,37 @@ impl fmt::Debug for closest_hit::PushConstants {
     }
 }
 
+impl fmt::Debug for intersection::PushConstants {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("intersection::PushConstants")
+            .field("volumeCount", &self.volumeCount)
+            .finish()
+    }
+}
+
+impl fmt::Debug for any_hit::PushConstants {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("any_hit::PushConstants")
+            .field("isotropicMaterialCount", &self.isotropicMaterialCount)
+            .field("constantMediaCount", &self.constantMediaCount)
+            .field("imageTextureCount", &self.imageTextureCount)
+            .field("constantColourCount", &self.constantColourCount)
+            .field("checkerTextureCount", &self.checkerTextureCount)
+            .field("noiseTextureCount", &self.noiseTextureCount)
+            .finish()
+    }
+}
+
 impl fmt::Debug for closest_hit::MaterialPropertyValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("closest_hit::MaterialPropertyValue")
+            .field("propValueType", &self.propValueType)
+            .field("index", &self.index)
+            .finish()
+    }
+}
+
+impl fmt::Debug for any_hit::MaterialPropertyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("closest_hit::MaterialPropertyValue")
             .field("propValueType", &self.propValueType)
@@ -184,6 +247,14 @@ impl fmt::Debug for closest_hit::DiffuseLightMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("closest_hit::DiffuseLightMaterial")
             .field("emit", &self.emit)
+            .finish()
+    }
+}
+
+impl fmt::Debug for any_hit::IsotropicMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("any_hit::IsotropicMaterial")
+            .field("albedo", &self.albedo)
             .finish()
     }
 }

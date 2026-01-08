@@ -20,6 +20,10 @@ pub enum Material {
         name: String,
         emit: String,
     },
+    Isotropic {
+        name: String,
+        albedo: String,
+    },
 }
 
 impl Material {
@@ -29,6 +33,7 @@ impl Material {
             Self::Metal { name, .. } => name.as_ref(),
             Self::Dielectric { name, .. } => name.as_ref(),
             Self::DiffuseLight { name, .. } => name.as_ref(),
+            Self::Isotropic { name, .. } => name.as_ref(),
         }
     }
 }

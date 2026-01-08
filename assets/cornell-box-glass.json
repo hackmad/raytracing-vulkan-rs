@@ -101,14 +101,15 @@
     }
   ],
   "instances": [
-    { "name": "left-green" },
-    { "name": "right-red" },
-    { "name": "top-light" },
-    { "name": "bottom-white" },
-    { "name": "top-white" },
-    { "name": "back-white" },
+    { "name": "left-green", "type": "surface" },
+    { "name": "right-red", "type": "surface" },
+    { "name": "top-light", "type": "surface" },
+    { "name": "bottom-white", "type": "surface" },
+    { "name": "top-white", "type": "surface" },
+    { "name": "back-white", "type": "surface"  },
     {
       "name": "box",
+      "type": "surface",
       "transform": {
         "static": {
           "translate": [265, 0, 295],
@@ -116,7 +117,7 @@
         }
       }
     },
-    { "name": "sphere" }
+    { "name": "sphere", "type": "surface" }
   ],
   "sky": {
     "solid" : { "rgb": [0, 0, 0] }

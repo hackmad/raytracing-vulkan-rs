@@ -49,6 +49,8 @@ layout(set = 9, binding = 0, scalar) buffer LightSourceAliasTable {
     LightSourceAliasTableEntry values[];
 } lightSourceAliasTableData;
 
+// Make sure to check layout offsets for push constants in each of the shader files.
+// The order of these matter so make sure they are consistent across all shaders.
 layout(push_constant) uniform PushConstants {
     layout(offset = 24) uint  meshCount;
     layout(offset = 28) uint  imageTextureCount;
@@ -63,20 +65,15 @@ layout(push_constant) uniform PushConstants {
     layout(offset = 64) float lightSourceTotalArea;
 } pc;
 
-struct MeshMaterial {
-    uint type;
-    uint index;
-};
-
 struct MeshTriangle {
     MeshVertex v0;
     MeshVertex v1;
     MeshVertex v2;
 };
 
-MeshMaterial unpackInstanceMaterial(const uint meshId) {
+Material unpackInstanceMaterial(const uint meshId) {
     Mesh mesh = meshData.values[meshId];
-    return MeshMaterial(mesh.materialType, mesh.materialIndex);
+    return Material(mesh.materialType, mesh.materialIndex);
 }
 
 MeshTriangle unpackInstanceVertex(const uint meshId, const uint primitiveId) {
@@ -140,6 +137,9 @@ HitRecord getIntersection(
     );
 }
 
+// NOTE: getBasicTextureValue() and getMaterialPropertyValue() are duplicated from closest_hit. Would be nice to
+// somehow refactor it. The main issue here is that it needs access to push constants and storage buffers.
+
 // This only handles constant colour, image and noise textures. Other textures like checker texture can reference
 // these "basic" textures for their own properties.
 vec3 getBasicTextureValue(MaterialPropertyValue matPropValue, MeshVertex vertex) {
@@ -171,7 +171,6 @@ vec3 getBasicTextureValue(MaterialPropertyValue matPropValue, MeshVertex vertex)
 
     return colour;
 }
-
 vec3 getMaterialPropertyValue(MaterialPropertyValue matPropValue, MeshVertex vertex) {
     vec3 colour = vec3(0.0);
 
@@ -372,7 +371,7 @@ EmissionRecord diffuseLightMaterialEmission(inout uint rngState, uint materialIn
     return erec;
 }
 
-ScatterRecord calculateScatter(inout uint rngState, MeshMaterial material, HitRecord rec, vec3 worldRayDirection, float time) {
+ScatterRecord calculateScatter(inout uint rngState, Material material, HitRecord rec, vec3 worldRayDirection, float time) {
     switch (material.type) {
         case MAT_TYPE_LAMBERTIAN:
             return lambertianMaterialScatter(rngState, material.index, rec);
@@ -389,7 +388,7 @@ ScatterRecord calculateScatter(inout uint rngState, MeshMaterial material, HitRe
     }
 }
 
-EmissionRecord calculateEmission(inout uint rngState, MeshMaterial material, HitRecord rec) {
+EmissionRecord calculateEmission(inout uint rngState, Material material, HitRecord rec) {
     switch (material.type) {
         case MAT_TYPE_DIFFUSE_LIGHT:
             return diffuseLightMaterialEmission(rngState, material.index, rec);
@@ -407,7 +406,7 @@ void main() {
 
     rp.rec = getIntersection(hitTriangle, hitAttribs, gl_ObjectToWorldEXT, gl_WorldToObjectEXT, gl_WorldRayDirectionEXT);
 
-    MeshMaterial material = unpackInstanceMaterial(gl_InstanceCustomIndexEXT);
+    Material material = unpackInstanceMaterial(gl_InstanceCustomIndexEXT);
 
     rp.erec = calculateEmission(rp.rngState, material, rp.rec);
 

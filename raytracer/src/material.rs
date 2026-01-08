@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
 use log::debug;
 use scene_file::Material;
-use shaders::closest_hit;
+use shaders::{any_hit, closest_hit};
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
 use crate::{Vk, create_device_local_buffer, textures::Textures};
@@ -14,6 +14,7 @@ pub const MAT_TYPE_LAMBERTIAN: u32 = 1;
 pub const MAT_TYPE_METAL: u32 = 2;
 pub const MAT_TYPE_DIELECTRIC: u32 = 3;
 pub const MAT_TYPE_DIFFUSE_LIGHT: u32 = 4;
+pub const MAT_TYPE_ISOTROPIC: u32 = 5;
 
 pub const MAT_PROP_VALUE_TYPE_RGB: u32 = 0;
 pub const MAT_PROP_VALUE_TYPE_IMAGE: u32 = 1;
@@ -34,6 +35,9 @@ pub struct Materials {
     /// The diffuse light materials. This will be used to create the storage buffers for shaders.
     pub diffuse_light_materials: Vec<closest_hit::DiffuseLightMaterial>,
 
+    /// The isotropic materials. This will be used to create the storage buffers for shaders.
+    pub isotropic_materials: Vec<any_hit::IsotropicMaterial>,
+
     /// Maps unique lambertian materials to their index in `lambertian_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
     pub lambertian_material_indices: HashMap<String, u32>,
@@ -49,6 +53,10 @@ pub struct Materials {
     /// Maps unique diffuse light materials to their index in `diffuse_light_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
     pub diffuse_light_material_indices: HashMap<String, u32>,
+
+    /// Maps unique isotropic materials to their index in `isotropic_materials`. These indices
+    /// are used in the Mesh structure to be referenced in the storage buffers.
+    pub isotropic_material_indices: HashMap<String, u32>,
 }
 
 impl Materials {
@@ -57,11 +65,13 @@ impl Materials {
         let mut metal_materials = vec![];
         let mut dielectric_materials = vec![];
         let mut diffuse_light_materials = vec![];
+        let mut isotropic_materials = vec![];
 
         let mut lambertian_material_indices = HashMap::new();
         let mut metal_material_indices = HashMap::new();
         let mut dielectric_material_indices = HashMap::new();
         let mut diffuse_light_material_indices = HashMap::new();
+        let mut isotropic_material_indices = HashMap::new();
 
         for material in materials.iter() {
             match material {
@@ -70,15 +80,15 @@ impl Materials {
                         .insert(name.clone(), lambertian_materials.len() as _);
 
                     lambertian_materials.push(closest_hit::LambertianMaterial {
-                        albedo: textures.to_shader(albedo).unwrap(),
+                        albedo: textures.to_closest_hit_shader(albedo).unwrap(),
                     });
                 }
                 Material::Metal { name, albedo, fuzz } => {
                     metal_material_indices.insert(name.clone(), metal_materials.len() as _);
 
                     metal_materials.push(closest_hit::MetalMaterial {
-                        albedo: textures.to_shader(albedo).unwrap(),
-                        fuzz: textures.to_shader(fuzz).unwrap(),
+                        albedo: textures.to_closest_hit_shader(albedo).unwrap(),
+                        fuzz: textures.to_closest_hit_shader(fuzz).unwrap(),
                     });
                 }
                 Material::Dielectric {
@@ -97,7 +107,14 @@ impl Materials {
                         .insert(name.clone(), diffuse_light_materials.len() as _);
 
                     diffuse_light_materials.push(closest_hit::DiffuseLightMaterial {
-                        emit: textures.to_shader(emit).unwrap(),
+                        emit: textures.to_closest_hit_shader(emit).unwrap(),
+                    });
+                }
+                Material::Isotropic { name, albedo } => {
+                    isotropic_material_indices.insert(name.clone(), isotropic_materials.len() as _);
+
+                    isotropic_materials.push(any_hit::IsotropicMaterial {
+                        albedo: textures.to_any_hit_shader(albedo).unwrap(),
                     });
                 }
             }
@@ -108,10 +125,12 @@ impl Materials {
             metal_materials,
             dielectric_materials,
             diffuse_light_materials,
+            isotropic_materials,
             lambertian_material_indices,
             metal_material_indices,
             dielectric_material_indices,
             diffuse_light_material_indices,
+            isotropic_material_indices,
         }
     }
 
@@ -188,11 +207,28 @@ impl Materials {
             },
         )?;
 
+        debug!("Creating isotropic materials buffer");
+        let isotropic_materials_buffer = create_device_local_buffer(
+            vk.clone(),
+            buffer_usage,
+            if !self.isotropic_materials.is_empty() {
+                self.isotropic_materials.clone()
+            } else {
+                vec![any_hit::IsotropicMaterial {
+                    albedo: any_hit::MaterialPropertyValue {
+                        propValueType: 0,
+                        index: 0,
+                    },
+                }]
+            },
+        )?;
+
         Ok(MaterialBuffers {
             lambertian: lambertian_materials_buffer,
             metal: metal_materials_buffer,
             dielectric: dielectric_materials_buffer,
             diffuse_light: diffuse_light_materials_buffer,
+            isotropic: isotropic_materials_buffer,
         })
     }
 
@@ -206,6 +242,8 @@ impl Materials {
             MaterialAndIndex::new(MAT_TYPE_DIELECTRIC, *index)
         } else if let Some(index) = self.diffuse_light_material_indices.get(material) {
             MaterialAndIndex::new(MAT_TYPE_DIFFUSE_LIGHT, *index)
+        } else if let Some(index) = self.isotropic_material_indices.get(material) {
+            MaterialAndIndex::new(MAT_TYPE_ISOTROPIC, *index)
         } else {
             MaterialAndIndex::new(MAT_TYPE_NONE, 0)
         }
@@ -232,4 +270,5 @@ pub struct MaterialBuffers {
     pub metal: Subbuffer<[closest_hit::MetalMaterial]>,
     pub dielectric: Subbuffer<[closest_hit::DielectricMaterial]>,
     pub diffuse_light: Subbuffer<[closest_hit::DiffuseLightMaterial]>,
+    pub isotropic: Subbuffer<[any_hit::IsotropicMaterial]>,
 }

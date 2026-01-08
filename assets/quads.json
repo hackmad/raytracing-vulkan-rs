@@ -76,11 +76,11 @@
     }
   ],
   "instances": [
-    { "name": "left" },
-    { "name": "back" },
-    { "name": "right" },
-    { "name": "upper" },
-    { "name": "lower" }
+    { "name": "left", "type": "surface" },
+    { "name": "back", "type": "surface" },
+    { "name": "right", "type": "surface" },
+    { "name": "upper", "type": "surface" },
+    { "name": "lower", "type": "surface" }
   ],
   "sky": {
     "vertical_gradient" : {

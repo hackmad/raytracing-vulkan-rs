@@ -12,7 +12,7 @@ pub use image_texture::*;
 use log::debug;
 pub use noise_texture::*;
 use scene_file::SceneFile;
-use shaders::closest_hit;
+use shaders::{any_hit, closest_hit};
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
 use crate::{MAT_PROP_VALUE_TYPE_RGB, Vk, create_device_local_buffer};
@@ -48,18 +48,35 @@ impl Textures {
         })
     }
 
-    pub fn to_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
+    pub fn to_closest_hit_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
         // Texture names will be unique across all texture types.
-        if let Some(v) = self.constant_colour_textures.to_shader(name) {
+        if let Some(v) = self.constant_colour_textures.to_closest_hit_shader(name) {
             return Some(v);
         }
-        if let Some(v) = self.image_textures.to_shader(name) {
+        if let Some(v) = self.image_textures.to_closest_hit_shader(name) {
             return Some(v);
         }
-        if let Some(v) = self.checker_textures.to_shader(name) {
+        if let Some(v) = self.checker_textures.to_closest_hit_shader(name) {
             return Some(v);
         }
-        if let Some(v) = self.noise_textures.to_shader(name) {
+        if let Some(v) = self.noise_textures.to_closest_hit_shader(name) {
+            return Some(v);
+        }
+        None
+    }
+
+    pub fn to_any_hit_shader(&self, name: &str) -> Option<any_hit::MaterialPropertyValue> {
+        // Texture names will be unique across all texture types.
+        if let Some(v) = self.constant_colour_textures.to_any_hit_shader(name) {
+            return Some(v);
+        }
+        if let Some(v) = self.image_textures.to_any_hit_shader(name) {
+            return Some(v);
+        }
+        if let Some(v) = self.checker_textures.to_any_hit_shader(name) {
+            return Some(v);
+        }
+        if let Some(v) = self.noise_textures.to_any_hit_shader(name) {
             return Some(v);
         }
         None
@@ -82,8 +99,8 @@ impl Textures {
                     .iter()
                     .map(|t| closest_hit::CheckerTexture {
                         scale: t.scale,
-                        odd: self.to_shader(&t.odd).unwrap(), // TODO could return Err() when odd/even not found.
-                        even: self.to_shader(&t.even).unwrap(),
+                        odd: self.to_closest_hit_shader(&t.odd).unwrap(), // TODO could return Err() when odd/even not found.
+                        even: self.to_closest_hit_shader(&t.even).unwrap(),
                     })
                     .collect()
             } else {

@@ -71,10 +71,10 @@
     }
   ],
   "instances": [
-    { "name": "center sphere" },
-    { "name": "left sphere" },
-    { "name": "right sphere" },
-    { "name": "ground sphere" }
+    { "name": "center sphere", "type": "surface" },
+    { "name": "left sphere", "type": "surface" },
+    { "name": "right sphere", "type": "surface" },
+    { "name": "ground sphere", "type": "surface" }
   ],
   "sky": {
     "vertical_gradient" : {

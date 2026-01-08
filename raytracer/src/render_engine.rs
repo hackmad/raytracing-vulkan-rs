@@ -1,12 +1,9 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use random::Random;
 use scene_file::SceneFile;
-use shaders::{GfxShaderModules, RtShaderModules, closest_hit, ray_gen};
+use shaders::{GfxShaderModules, RtShaderModules, any_hit, closest_hit, intersection, ray_gen};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{
@@ -28,10 +25,11 @@ use vulkano::{
 };
 
 use crate::{
-    Camera, Materials, Mesh, MeshInstance, Transform, Vk,
+    Camera, Instances, Materials, Vk,
     acceleration::AccelerationStructures,
-    create_light_source_alias_table, create_mesh_index_buffer, create_mesh_storage_buffer,
-    create_mesh_vertex_buffer,
+    create_constant_media_storage_buffer, create_light_source_alias_table,
+    create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
+    create_volume_storage_buffer,
     pipelines::{GfxPipeline, RtPipeline},
     textures::Textures,
 };
@@ -41,6 +39,8 @@ use crate::{
 pub struct UnifiedPushConstants {
     pub ray_gen_pc: ray_gen::PushConstants,
     pub closest_hit_pc: closest_hit::PushConstants,
+    pub intersection_pc: intersection::PushConstants,
+    pub any_hit_pc: any_hit::PushConstants,
 }
 
 /// Stores resources specific to the rendering pipelines and renders an image progressively.
@@ -71,6 +71,9 @@ pub struct RenderEngine {
     /// Descriptor set for binding the light source alias table.
     light_source_alias_table_descriptor_set: Arc<DescriptorSet>,
 
+    /// Descriptor set for binding the volume data.
+    volume_data_descriptor_set: Arc<DescriptorSet>,
+
     /// The shader binding table.
     shader_binding_table: ShaderBindingTable,
 
@@ -95,11 +98,8 @@ pub struct RenderEngine {
     /// Acceleration structures.
     acceleration_structures: AccelerationStructures,
 
-    /// Meshes.
-    meshes: Vec<Arc<Mesh>>,
-
-    /// Mesh instances.
-    mesh_instances: Vec<MeshInstance>,
+    /// Instances.
+    instances: Instances,
 
     /// Ray time values for each sample batch.
     batch_ray_times: Vec<f32>,
@@ -127,27 +127,8 @@ impl RenderEngine {
         let checker_texture_count = textures.checker_textures.textures.len();
         let noise_texture_count = textures.noise_textures.textures.len();
 
-        // Get meshes.
-        let mut meshes: Vec<Arc<Mesh>> = Vec::new();
-        let mut mesh_name_to_index: HashMap<String, usize> = HashMap::new();
-        for primitive in scene_file.primitives.iter() {
-            let mesh = Arc::new(primitive.into());
-            mesh_name_to_index.insert(primitive.get_name().into(), meshes.len());
-            meshes.push(mesh);
-        }
-        let mesh_count = meshes.len();
-
-        // Get instances.
-        let mut mesh_instances: Vec<MeshInstance> = Vec::new();
-        for instance in scene_file.instances.iter() {
-            let mesh_index = mesh_name_to_index
-                .get(&instance.name)
-                .with_context(|| format!("Mesh {} not found", instance.name))?;
-
-            let object_to_world = instance.get_object_to_world_space_matrix();
-            let transform = Transform::from(object_to_world);
-            mesh_instances.push(MeshInstance::new(*mesh_index, transform));
-        }
+        // Get mesh and volume instances.
+        let instances = Instances::new(scene_file)?;
 
         // Get materials.
         let materials = Materials::new(&scene_file.materials, &textures);
@@ -155,10 +136,11 @@ impl RenderEngine {
         let metal_material_count = materials.metal_materials.len();
         let dielectric_material_count = materials.dielectric_materials.len();
         let diffuse_light_material_count = materials.diffuse_light_materials.len();
+        let isotropic_material_count = materials.isotropic_materials.len();
 
         // Get the light source alias table.
         let light_source_alias_table =
-            create_light_source_alias_table(vk.clone(), &mesh_instances, &meshes, &materials)?;
+            create_light_source_alias_table(vk.clone(), &instances, &materials)?;
 
         // Get ray time values for each sample batch. This is used for interpolating transforms for
         // each sample batch to produce the motion-blur effect.
@@ -176,7 +158,7 @@ impl RenderEngine {
                 batchRayTime: batch_ray_times[0],
             },
             closest_hit_pc: closest_hit::PushConstants {
-                meshCount: mesh_count as _,
+                meshCount: instances.meshes.len() as _,
                 imageTextureCount: image_texture_count as _,
                 constantColourCount: constant_colour_count as _,
                 checkerTextureCount: checker_texture_count as _,
@@ -187,6 +169,17 @@ impl RenderEngine {
                 diffuseLightMaterialCount: diffuse_light_material_count as _,
                 lightSourceTriangleCount: light_source_alias_table.triangle_count as _,
                 lightSourceTotalArea: light_source_alias_table.total_area as _,
+            },
+            intersection_pc: intersection::PushConstants {
+                volumeCount: instances.volumes.len() as _,
+            },
+            any_hit_pc: any_hit::PushConstants {
+                isotropicMaterialCount: isotropic_material_count as _,
+                imageTextureCount: image_texture_count as _,
+                constantColourCount: constant_colour_count as _,
+                checkerTextureCount: checker_texture_count as _,
+                noiseTextureCount: noise_texture_count as _,
+                constantMediaCount: instances.constant_media.len() as _,
             },
         };
 
@@ -212,7 +205,7 @@ impl RenderEngine {
 
         // Acceleration structures.
         let acceleration_structures =
-            AccelerationStructures::new(vk.clone(), &mesh_instances, &meshes, batch_ray_times[0])?;
+            AccelerationStructures::new(vk.clone(), &instances, batch_ray_times[0])?;
 
         let tlas_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -225,9 +218,9 @@ impl RenderEngine {
         )?;
 
         // Mesh data.
-        let vertex_buffer = create_mesh_vertex_buffer(vk.clone(), &meshes)?;
-        let index_buffer = create_mesh_index_buffer(vk.clone(), &meshes)?;
-        let mesh_buffer = create_mesh_storage_buffer(vk.clone(), &meshes, &materials)?;
+        let vertex_buffer = create_mesh_vertex_buffer(vk.clone(), &instances.meshes)?;
+        let index_buffer = create_mesh_index_buffer(vk.clone(), &instances.meshes)?;
+        let mesh_buffer = create_mesh_storage_buffer(vk.clone(), &instances.meshes, &materials)?;
 
         let mesh_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
@@ -313,6 +306,7 @@ impl RenderEngine {
                 WriteDescriptorSet::buffer(1, material_buffers.metal),
                 WriteDescriptorSet::buffer(2, material_buffers.dielectric),
                 WriteDescriptorSet::buffer(3, material_buffers.diffuse_light),
+                WriteDescriptorSet::buffer(4, material_buffers.isotropic),
             ],
             [],
         )?;
@@ -362,6 +356,22 @@ impl RenderEngine {
             [],
         )?;
 
+        // Volume data.
+        let volume_buffer =
+            create_volume_storage_buffer(vk.clone(), &instances.volumes, &materials)?;
+        let constant_media_buffer =
+            create_constant_media_storage_buffer(vk.clone(), &instances.constant_media)?;
+
+        let volume_data_descriptor_set = DescriptorSet::new(
+            vk.descriptor_set_allocator.clone(),
+            layouts[RtPipeline::VOLUME_DATA_LAYOUT].clone(),
+            [
+                WriteDescriptorSet::buffer(0, volume_buffer),
+                WriteDescriptorSet::buffer(1, constant_media_buffer),
+            ],
+            [],
+        )?;
+
         // Create render image to accumulate sample batches.
         let accum_image_view = create_accumulated_render_image_view(
             vk.clone(),
@@ -382,6 +392,7 @@ impl RenderEngine {
             materials_descriptor_set,
             sky_descriptor_set,
             light_source_alias_table_descriptor_set,
+            volume_data_descriptor_set,
             shader_binding_table,
             rt_pipeline,
             gfx_pipeline,
@@ -390,8 +401,7 @@ impl RenderEngine {
             current_sample_batch: 0,
             sample_batches,
             acceleration_structures,
-            mesh_instances,
-            meshes,
+            instances,
             batch_ray_times,
         })
     }
@@ -474,8 +484,7 @@ impl RenderEngine {
             self.acceleration_structures
                 .update(
                     vk.clone(),
-                    &self.mesh_instances,
-                    &self.meshes,
+                    &self.instances,
                     self.batch_ray_times[self.current_sample_batch as usize],
                 )
                 .unwrap();
@@ -552,6 +561,7 @@ impl RenderEngine {
                     self.other_textures_descriptor_set.clone(),
                     self.sky_descriptor_set.clone(),
                     self.light_source_alias_table_descriptor_set.clone(),
+                    self.volume_data_descriptor_set.clone(),
                 ],
             )
             .unwrap()

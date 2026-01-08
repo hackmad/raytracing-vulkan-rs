@@ -3,9 +3,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
+pub enum InstanceType {
+    Surface,
+    ConstantMedium { density: f32 },
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub struct Instance {
     pub name: String,
     pub transform: Option<TransformType>,
+
+    #[serde(rename = "type")]
+    pub instance_type: InstanceType,
 }
 
 impl Instance {

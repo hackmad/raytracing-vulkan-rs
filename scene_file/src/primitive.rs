@@ -41,4 +41,34 @@ impl Primitive {
             Self::Box { name, .. } => name,
         }
     }
+
+    pub fn get_aabb(&self) -> [[f32; 3]; 2] {
+        match self {
+            Self::UvSphere {
+                center: c,
+                radius: r,
+                ..
+            } => [
+                [c[0] - *r, c[1] - *r, c[2] - *r],
+                [c[0] + *r, c[1] + *r, c[2] + *r],
+            ],
+            Self::Triangle { points, .. } => get_aabb_points(points),
+            Self::Quad { points, .. } => get_aabb_points(points),
+            Self::Box { corners, .. } => get_aabb_points(corners),
+        }
+    }
+}
+
+fn get_aabb_points(points: &[[f32; 3]]) -> [[f32; 3]; 2] {
+    let mut min = points[0];
+    let mut max = points[0];
+
+    for p in points.iter().skip(1) {
+        for i in 0..3 {
+            min[i] = min[i].min(p[i]);
+            max[i] = max[i].max(p[i]);
+        }
+    }
+
+    [min, max]
 }

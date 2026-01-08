@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use shaders::{closest_hit, ray_gen};
+use shaders::{any_hit, closest_hit, intersection, ray_gen};
 use vulkano::{
     descriptor_set::layout::{
         DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
@@ -60,6 +60,9 @@ impl RtPipeline {
     /// Storage buffer for light source alias table.
     pub const LIGHT_SOURCE_ALIAS_TABLE: usize = 9;
 
+    /// Storage buffer used for volume data.
+    pub const VOLUME_DATA_LAYOUT: usize = 10;
+
     /// Returns the pipeline.
     pub fn get(&self) -> Arc<RayTracingPipeline> {
         self.pipeline.clone()
@@ -77,6 +80,32 @@ impl RtPipeline {
         groups: &[RayTracingShaderGroupCreateInfo],
         image_texture_count: u32,
     ) -> Result<Self> {
+        let ray_gen_pc = PushConstantRange {
+            stages: ShaderStages::RAYGEN,
+            offset: 0,
+            size: size_of::<ray_gen::PushConstants>() as _,
+        };
+
+        let closest_hit_pc = PushConstantRange {
+            stages: ShaderStages::CLOSEST_HIT,
+            offset: ray_gen_pc.size,
+            size: size_of::<closest_hit::PushConstants>() as _,
+        };
+
+        let intersection_pc = PushConstantRange {
+            stages: ShaderStages::INTERSECTION,
+            offset: ray_gen_pc.size + closest_hit_pc.size,
+            size: size_of::<intersection::PushConstants>() as _,
+        };
+
+        let any_hit_pc = PushConstantRange {
+            stages: ShaderStages::ANY_HIT,
+            offset: ray_gen_pc.size + closest_hit_pc.size + intersection_pc.size,
+            size: size_of::<any_hit::PushConstants>() as _,
+        };
+
+        let push_constant_ranges = vec![ray_gen_pc, closest_hit_pc, intersection_pc, any_hit_pc];
+
         let pipeline_layout = PipelineLayout::new(
             device.clone(),
             PipelineLayoutCreateInfo {
@@ -92,19 +121,9 @@ impl RtPipeline {
                     create_other_textures_layout(device.clone()),
                     create_sky_layout(device.clone()),
                     create_light_source_alias_table_layout(device.clone()),
+                    create_volume_data_layout(device.clone()),
                 ],
-                push_constant_ranges: vec![
-                    PushConstantRange {
-                        stages: ShaderStages::RAYGEN,
-                        offset: 0,
-                        size: size_of::<ray_gen::PushConstants>() as _,
-                    },
-                    PushConstantRange {
-                        stages: ShaderStages::CLOSEST_HIT,
-                        offset: size_of::<ray_gen::PushConstants>() as _,
-                        size: size_of::<closest_hit::PushConstants>() as _,
-                    },
-                ],
+                push_constant_ranges,
                 ..Default::default()
             },
         )?;
@@ -193,13 +212,15 @@ fn create_sampler_and_image_textures_layout(
     device: Arc<Device>,
     image_texture_count: u32,
 ) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::CLOSEST_HIT | ShaderStages::ANY_HIT;
+
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             #[rustfmt::skip]
             bindings: [
-                (0, sampler_binding(ShaderStages::CLOSEST_HIT)),
-                (1, variable_sampled_image_binding(ShaderStages::CLOSEST_HIT, image_texture_count)),
+                (0, sampler_binding(shader_stages)),
+                (1, variable_sampled_image_binding(shader_stages, image_texture_count)),
             ]
             .into_iter()
             .collect(),
@@ -211,10 +232,12 @@ fn create_sampler_and_image_textures_layout(
 
 /// Create a pipeline layout for constant colour textures (this is just unique colour values).
 fn create_constant_colour_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::CLOSEST_HIT | ShaderStages::ANY_HIT;
+
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
+            bindings: [(0, storage_buffer_binding(shader_stages))]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -225,14 +248,17 @@ fn create_constant_colour_textures_layout(device: Arc<Device>) -> Arc<Descriptor
 
 /// Create a pipeline layout for material references storage buffer.
 fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::CLOSEST_HIT | ShaderStages::ANY_HIT;
+
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Lambertian materials.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Metal materials.
-                (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Dielectric materials.
-                (3, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Diffuse light materials.
+                (0, storage_buffer_binding(shader_stages)), // Lambertian materials.
+                (1, storage_buffer_binding(shader_stages)), // Metal materials.
+                (2, storage_buffer_binding(shader_stages)), // Dielectric materials.
+                (3, storage_buffer_binding(shader_stages)), // Diffuse light materials.
+                (4, storage_buffer_binding(shader_stages)), // Isotropic materials.
             ]
             .into_iter()
             .collect(),
@@ -244,12 +270,14 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
 
 /// Create a pipeline layout for storage buffer used for other textures besides image and constant colour.
 fn create_other_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::CLOSEST_HIT | ShaderStages::ANY_HIT;
+
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Checker textures.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Noise textures.
+                (0, storage_buffer_binding(shader_stages)), // Checker textures.
+                (1, storage_buffer_binding(shader_stages)), // Noise textures.
             ]
             .into_iter()
             .collect(),
@@ -281,6 +309,25 @@ fn create_light_source_alias_table_layout(device: Arc<Device>) -> Arc<Descriptor
             bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
                 .into_iter()
                 .collect(),
+            ..Default::default()
+        },
+    )
+    .unwrap()
+}
+
+/// Create a pipeline layout for volume data references storage buffer.
+fn create_volume_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let binding = ShaderStages::INTERSECTION | ShaderStages::ANY_HIT;
+
+    DescriptorSetLayout::new(
+        device.clone(),
+        DescriptorSetLayoutCreateInfo {
+            bindings: [
+                (0, storage_buffer_binding(binding)), // Volume metadata
+                (1, storage_buffer_binding(binding)), // Constant density media
+            ]
+            .into_iter()
+            .collect(),
             ..Default::default()
         },
     )

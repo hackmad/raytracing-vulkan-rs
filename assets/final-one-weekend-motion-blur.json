@@ -15308,15 +15308,18 @@
   "instances": [
     {
       "name": "ground_sphere",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-11",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-9",
@@ -15341,15 +15344,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-8",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-6",
@@ -15374,7 +15380,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-5",
@@ -15399,7 +15406,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-4",
@@ -15424,7 +15432,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-3",
@@ -15449,7 +15458,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-2",
@@ -15474,7 +15484,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_-1",
@@ -15499,7 +15510,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_0",
@@ -15524,7 +15536,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_1",
@@ -15549,11 +15562,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_2",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-11_3",
@@ -15578,7 +15593,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_4",
@@ -15603,7 +15619,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_5",
@@ -15628,7 +15645,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_6",
@@ -15653,7 +15671,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_7",
@@ -15678,7 +15697,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_8",
@@ -15703,7 +15723,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_9",
@@ -15728,7 +15749,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-11_10",
@@ -15753,7 +15775,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-11",
@@ -15778,11 +15801,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-9",
@@ -15807,7 +15832,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-8",
@@ -15832,7 +15858,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-7",
@@ -15857,7 +15884,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-6",
@@ -15882,7 +15910,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-5",
@@ -15907,7 +15936,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-4",
@@ -15932,7 +15962,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-3",
@@ -15957,7 +15988,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-2",
@@ -15982,7 +16014,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_-1",
@@ -16007,7 +16040,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_0",
@@ -16032,7 +16066,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_1",
@@ -16057,7 +16092,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_2",
@@ -16082,7 +16118,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_3",
@@ -16107,7 +16144,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_4",
@@ -16132,7 +16170,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_5",
@@ -16157,7 +16196,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_6",
@@ -16182,7 +16222,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_7",
@@ -16207,7 +16248,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_8",
@@ -16232,7 +16274,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_9",
@@ -16257,7 +16300,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-10_10",
@@ -16282,7 +16326,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-11",
@@ -16307,7 +16352,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-10",
@@ -16332,11 +16378,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-8",
@@ -16361,7 +16409,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-7",
@@ -16386,7 +16435,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-6",
@@ -16411,7 +16461,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-5",
@@ -16436,7 +16487,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-4",
@@ -16461,7 +16513,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-3",
@@ -16486,7 +16539,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-2",
@@ -16511,7 +16565,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_-1",
@@ -16536,7 +16591,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_0",
@@ -16561,7 +16617,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_1",
@@ -16586,7 +16643,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_2",
@@ -16611,7 +16669,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_3",
@@ -16636,11 +16695,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_4",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-9_5",
@@ -16665,7 +16726,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_6",
@@ -16690,7 +16752,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_7",
@@ -16715,7 +16778,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_8",
@@ -16740,7 +16804,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_9",
@@ -16765,7 +16830,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-9_10",
@@ -16790,7 +16856,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-11",
@@ -16815,11 +16882,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-9",
@@ -16844,7 +16913,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-8",
@@ -16869,7 +16939,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-7",
@@ -16894,11 +16965,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-5",
@@ -16923,7 +16996,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-4",
@@ -16948,7 +17022,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-3",
@@ -16973,7 +17048,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-2",
@@ -16998,7 +17074,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_-1",
@@ -17023,7 +17100,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_0",
@@ -17048,7 +17126,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_1",
@@ -17073,7 +17152,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_2",
@@ -17098,11 +17178,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-8_4",
@@ -17127,11 +17209,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-8_6",
@@ -17156,7 +17240,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_7",
@@ -17181,7 +17266,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_8",
@@ -17206,7 +17292,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_9",
@@ -17231,7 +17318,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-8_10",
@@ -17256,7 +17344,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-11",
@@ -17281,7 +17370,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-10",
@@ -17306,7 +17396,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-9",
@@ -17331,7 +17422,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-8",
@@ -17356,11 +17448,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-6",
@@ -17385,7 +17479,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-5",
@@ -17410,7 +17505,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-4",
@@ -17435,7 +17531,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-3",
@@ -17460,7 +17557,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-2",
@@ -17485,7 +17583,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_-1",
@@ -17510,7 +17609,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_0",
@@ -17535,7 +17635,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_1",
@@ -17560,7 +17661,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_2",
@@ -17585,11 +17687,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-7_4",
@@ -17614,7 +17718,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_5",
@@ -17639,11 +17744,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-7_7",
@@ -17668,7 +17775,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_8",
@@ -17693,7 +17801,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_9",
@@ -17718,7 +17827,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-7_10",
@@ -17743,7 +17853,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-11",
@@ -17768,11 +17879,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-9",
@@ -17797,7 +17910,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-8",
@@ -17822,7 +17936,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-7",
@@ -17847,11 +17962,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-5",
@@ -17876,7 +17993,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-4",
@@ -17901,7 +18019,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-3",
@@ -17926,7 +18045,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-2",
@@ -17951,7 +18071,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_-1",
@@ -17976,7 +18097,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_0",
@@ -18001,7 +18123,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_1",
@@ -18026,7 +18149,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_2",
@@ -18051,7 +18175,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_3",
@@ -18076,7 +18201,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_4",
@@ -18101,7 +18227,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_5",
@@ -18126,7 +18253,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_6",
@@ -18151,7 +18279,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_7",
@@ -18176,7 +18305,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_8",
@@ -18201,7 +18331,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_9",
@@ -18226,7 +18357,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-6_10",
@@ -18251,7 +18383,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-11",
@@ -18276,7 +18409,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-10",
@@ -18301,7 +18435,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-9",
@@ -18326,7 +18461,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-8",
@@ -18351,7 +18487,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-7",
@@ -18376,7 +18513,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-6",
@@ -18401,7 +18539,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-5",
@@ -18426,7 +18565,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-4",
@@ -18451,7 +18591,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-3",
@@ -18476,7 +18617,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-2",
@@ -18501,7 +18643,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_-1",
@@ -18526,7 +18669,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_0",
@@ -18551,7 +18695,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_1",
@@ -18576,7 +18721,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_2",
@@ -18601,11 +18747,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-5_4",
@@ -18630,7 +18778,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_5",
@@ -18655,7 +18804,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_6",
@@ -18680,11 +18830,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-5_8",
@@ -18709,7 +18861,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_9",
@@ -18734,7 +18887,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-5_10",
@@ -18759,7 +18913,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-11",
@@ -18784,15 +18939,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-8",
@@ -18817,7 +18975,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-7",
@@ -18842,7 +19001,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-6",
@@ -18867,11 +19027,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-4",
@@ -18896,7 +19058,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-3",
@@ -18921,7 +19084,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-2",
@@ -18946,7 +19110,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_-1",
@@ -18971,7 +19136,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_0",
@@ -18996,7 +19162,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_1",
@@ -19021,7 +19188,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_2",
@@ -19046,7 +19214,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_3",
@@ -19071,11 +19240,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_4",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-4_5",
@@ -19100,7 +19271,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_6",
@@ -19125,7 +19297,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_7",
@@ -19150,7 +19323,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_8",
@@ -19175,7 +19349,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_9",
@@ -19200,15 +19375,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-4_10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-11",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-10",
@@ -19233,7 +19411,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-9",
@@ -19258,7 +19437,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-8",
@@ -19283,11 +19463,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-6",
@@ -19312,11 +19494,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-4",
@@ -19341,7 +19525,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-3",
@@ -19366,7 +19551,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-2",
@@ -19391,7 +19577,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_-1",
@@ -19416,7 +19603,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_0",
@@ -19441,7 +19629,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_1",
@@ -19466,7 +19655,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_2",
@@ -19491,7 +19681,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_3",
@@ -19516,7 +19707,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_4",
@@ -19541,7 +19733,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_5",
@@ -19566,15 +19759,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-3_7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-3_8",
@@ -19599,7 +19795,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_9",
@@ -19624,11 +19821,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-3_10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-11",
@@ -19653,7 +19852,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-10",
@@ -19678,7 +19878,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-9",
@@ -19703,7 +19904,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-8",
@@ -19728,11 +19930,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-6",
@@ -19757,7 +19961,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-5",
@@ -19782,7 +19987,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-4",
@@ -19807,7 +20013,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-3",
@@ -19832,7 +20039,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-2",
@@ -19857,11 +20065,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_-1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-2_0",
@@ -19886,7 +20096,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_1",
@@ -19911,7 +20122,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_2",
@@ -19936,15 +20148,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-2_4",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-2_5",
@@ -19969,7 +20184,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_6",
@@ -19994,11 +20210,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-2_8",
@@ -20023,11 +20241,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-2_9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-2_10",
@@ -20052,7 +20272,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-11",
@@ -20077,7 +20298,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-10",
@@ -20102,7 +20324,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-9",
@@ -20127,7 +20350,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-8",
@@ -20152,7 +20376,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-7",
@@ -20177,7 +20402,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-6",
@@ -20202,11 +20428,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-4",
@@ -20231,7 +20459,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-3",
@@ -20256,7 +20485,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-2",
@@ -20281,11 +20511,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_-1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-1_0",
@@ -20310,7 +20542,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_1",
@@ -20335,7 +20568,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_2",
@@ -20360,11 +20594,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_-1_4",
@@ -20389,7 +20625,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_5",
@@ -20414,7 +20651,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_6",
@@ -20439,7 +20677,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_7",
@@ -20464,7 +20703,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_8",
@@ -20489,7 +20729,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_9",
@@ -20514,7 +20755,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_-1_10",
@@ -20539,7 +20781,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_-11",
@@ -20564,7 +20807,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_-10",
@@ -20589,11 +20833,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_-9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_0_-8",
@@ -20618,15 +20864,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_-7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_0_-6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_0_-5",
@@ -20651,7 +20900,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_-4",
@@ -20676,11 +20926,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_-3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_0_-2",
@@ -20705,7 +20957,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_-1",
@@ -20730,7 +20983,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_0",
@@ -20755,7 +21009,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_1",
@@ -20780,7 +21035,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_2",
@@ -20805,7 +21061,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_3",
@@ -20830,7 +21087,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_4",
@@ -20855,11 +21113,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_0_6",
@@ -20884,11 +21144,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_0_8",
@@ -20913,7 +21175,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_9",
@@ -20938,7 +21201,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_0_10",
@@ -20963,7 +21227,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-11",
@@ -20988,7 +21253,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-10",
@@ -21013,7 +21279,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-9",
@@ -21038,11 +21305,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-8",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_1_-7",
@@ -21067,7 +21336,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-6",
@@ -21092,7 +21362,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-5",
@@ -21117,7 +21388,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-4",
@@ -21142,7 +21414,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-3",
@@ -21167,7 +21440,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-2",
@@ -21192,7 +21466,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_-1",
@@ -21217,15 +21492,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_0",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_1_1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_1_2",
@@ -21250,7 +21528,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_3",
@@ -21275,11 +21554,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_4",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_1_5",
@@ -21304,11 +21585,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_1_7",
@@ -21333,11 +21616,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_8",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_1_9",
@@ -21362,7 +21647,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_1_10",
@@ -21387,11 +21673,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_-11",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_2_-10",
@@ -21416,7 +21704,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_-9",
@@ -21441,7 +21730,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_-8",
@@ -21466,7 +21756,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_-7",
@@ -21491,19 +21782,23 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_-6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_2_-5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_2_-4",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_2_-3",
@@ -21528,7 +21823,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_-2",
@@ -21553,7 +21849,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_-1",
@@ -21578,11 +21875,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_0",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_2_1",
@@ -21607,7 +21906,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_2",
@@ -21632,7 +21932,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_3",
@@ -21657,7 +21958,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_4",
@@ -21682,7 +21984,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_5",
@@ -21707,7 +22010,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_6",
@@ -21732,7 +22036,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_7",
@@ -21757,7 +22062,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_8",
@@ -21782,11 +22088,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_2_9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_2_10",
@@ -21811,7 +22119,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-11",
@@ -21836,7 +22145,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-10",
@@ -21861,7 +22171,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-9",
@@ -21886,7 +22197,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-8",
@@ -21911,7 +22223,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-7",
@@ -21936,7 +22249,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-6",
@@ -21961,11 +22275,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_3_-4",
@@ -21990,11 +22306,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_3_-2",
@@ -22019,11 +22337,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_-1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_3_0",
@@ -22048,11 +22368,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_3_2",
@@ -22077,7 +22399,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_3",
@@ -22102,7 +22425,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_4",
@@ -22127,7 +22451,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_5",
@@ -22152,7 +22477,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_6",
@@ -22177,7 +22503,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_7",
@@ -22202,7 +22529,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_8",
@@ -22227,7 +22555,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_9",
@@ -22252,11 +22581,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_3_10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_4_-11",
@@ -22281,7 +22612,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_-10",
@@ -22306,11 +22638,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_-9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_4_-8",
@@ -22335,7 +22669,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_-7",
@@ -22360,11 +22695,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_-6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_4_-5",
@@ -22389,7 +22726,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_-4",
@@ -22414,11 +22752,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_-3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_4_-2",
@@ -22443,7 +22783,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_-1",
@@ -22468,7 +22809,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_0",
@@ -22493,7 +22835,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_1",
@@ -22518,7 +22861,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_2",
@@ -22543,11 +22887,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_4_4",
@@ -22572,7 +22918,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_5",
@@ -22597,7 +22944,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_6",
@@ -22622,7 +22970,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_7",
@@ -22647,7 +22996,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_8",
@@ -22672,7 +23022,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_9",
@@ -22697,7 +23048,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_4_10",
@@ -22722,7 +23074,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-11",
@@ -22747,7 +23100,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-10",
@@ -22772,7 +23126,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-9",
@@ -22797,7 +23152,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-8",
@@ -22822,7 +23178,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-7",
@@ -22847,7 +23204,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-6",
@@ -22872,7 +23230,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-5",
@@ -22897,7 +23256,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-4",
@@ -22922,7 +23282,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-3",
@@ -22947,7 +23308,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-2",
@@ -22972,7 +23334,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_-1",
@@ -22997,7 +23360,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_0",
@@ -23022,11 +23386,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_5_2",
@@ -23051,7 +23417,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_3",
@@ -23076,7 +23443,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_4",
@@ -23101,7 +23469,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_5",
@@ -23126,7 +23495,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_6",
@@ -23151,7 +23521,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_7",
@@ -23176,7 +23547,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_8",
@@ -23201,7 +23573,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_9",
@@ -23226,7 +23599,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_5_10",
@@ -23251,7 +23625,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_-11",
@@ -23276,7 +23651,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_-10",
@@ -23301,7 +23677,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_-9",
@@ -23326,7 +23703,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_-8",
@@ -23351,7 +23729,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_-7",
@@ -23376,7 +23755,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_-6",
@@ -23401,7 +23781,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_-5",
@@ -23426,23 +23807,28 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_-4",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_6_-3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_6_-2",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_6_-1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_6_0",
@@ -23467,7 +23853,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_1",
@@ -23492,7 +23879,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_2",
@@ -23517,7 +23905,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_3",
@@ -23542,7 +23931,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_4",
@@ -23567,7 +23957,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_5",
@@ -23592,11 +23983,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_6_7",
@@ -23621,7 +24014,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_8",
@@ -23646,7 +24040,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_9",
@@ -23671,7 +24066,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_6_10",
@@ -23696,7 +24092,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_-11",
@@ -23721,11 +24118,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_-10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_7_-9",
@@ -23750,11 +24149,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_-8",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_7_-7",
@@ -23779,11 +24180,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_-6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_7_-5",
@@ -23808,7 +24211,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_-4",
@@ -23833,7 +24237,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_-3",
@@ -23858,7 +24263,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_-2",
@@ -23883,11 +24289,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_-1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_7_0",
@@ -23912,7 +24320,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_1",
@@ -23937,7 +24346,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_2",
@@ -23962,7 +24372,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_3",
@@ -23987,7 +24398,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_4",
@@ -24012,7 +24424,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_5",
@@ -24037,7 +24450,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_6",
@@ -24062,11 +24476,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_7_8",
@@ -24091,11 +24507,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_7_9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_7_10",
@@ -24120,7 +24538,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-11",
@@ -24145,15 +24564,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_8_-9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_8_-8",
@@ -24178,7 +24600,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-7",
@@ -24203,7 +24626,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-6",
@@ -24228,7 +24652,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-5",
@@ -24253,7 +24678,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-4",
@@ -24278,7 +24704,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-3",
@@ -24303,7 +24730,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-2",
@@ -24328,7 +24756,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_-1",
@@ -24353,7 +24782,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_0",
@@ -24378,7 +24808,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_1",
@@ -24403,7 +24834,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_2",
@@ -24428,7 +24860,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_3",
@@ -24453,7 +24886,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_4",
@@ -24478,7 +24912,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_5",
@@ -24503,7 +24938,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_6",
@@ -24528,7 +24964,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_7",
@@ -24553,7 +24990,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_8",
@@ -24578,7 +25016,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_9",
@@ -24603,7 +25042,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_8_10",
@@ -24628,7 +25068,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-11",
@@ -24653,7 +25094,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-10",
@@ -24678,7 +25120,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-9",
@@ -24703,15 +25146,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-8",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_9_-7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_9_-6",
@@ -24736,7 +25182,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-5",
@@ -24761,7 +25208,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-4",
@@ -24786,7 +25234,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-3",
@@ -24811,7 +25260,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-2",
@@ -24836,7 +25286,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_-1",
@@ -24861,7 +25312,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_0",
@@ -24886,7 +25338,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_1",
@@ -24911,7 +25364,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_2",
@@ -24936,7 +25390,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_3",
@@ -24961,19 +25416,23 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_4",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_9_5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_9_6",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_9_7",
@@ -24998,7 +25457,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_8",
@@ -25023,7 +25483,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_9",
@@ -25048,15 +25509,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_9_10",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_-11",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_-10",
@@ -25081,7 +25545,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_-9",
@@ -25106,15 +25571,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_-8",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_-7",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_-6",
@@ -25139,11 +25607,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_-5",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_-4",
@@ -25168,7 +25638,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_-3",
@@ -25193,7 +25664,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_-2",
@@ -25218,7 +25690,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_-1",
@@ -25243,11 +25716,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_0",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_1",
@@ -25272,11 +25747,13 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_2",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_3",
@@ -25301,7 +25778,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_4",
@@ -25326,7 +25804,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_5",
@@ -25351,7 +25830,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_6",
@@ -25376,7 +25856,8 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_7",
@@ -25401,15 +25882,18 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere_10_8",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_9",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere_10_10",
@@ -25434,19 +25918,23 @@
             "scale": null
           }
         ]
-      }
+      },
+      "type": "surface"
     },
     {
       "name": "sphere1",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere2",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     },
     {
       "name": "sphere3",
-      "transform": null
+      "transform": null,
+      "type": "surface"
     }
   ],
   "sky": {

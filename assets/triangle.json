@@ -34,7 +34,7 @@
     }
   ],
   "instances": [
-    { "name": "triangle" }
+    { "name": "triangle", "type": "surface" }
   ],
   "sky": {
     "vertical_gradient" : {

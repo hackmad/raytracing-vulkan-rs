@@ -45,8 +45,8 @@
     }
   ],
   "instances": [
-    { "name": "center sphere" },
-    { "name": "ground sphere" }
+    { "name": "center sphere", "type": "surface" },
+    { "name": "ground sphere", "type": "surface" }
   ],
   "sky": {
     "vertical_gradient" : {

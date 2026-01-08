@@ -33,7 +33,7 @@
     }
   ],
   "instances": [
-    { "name" : "globe" }
+    { "name" : "globe", "type": "surface" }
   ],
   "sky": {
     "solid" : {

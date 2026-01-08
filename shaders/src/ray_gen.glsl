@@ -31,6 +31,9 @@ layout(set = 8, binding = 0) uniform Sky {
 
 // NOTES:
 //
+// Make sure to check layout offsets for push constants in each of the shader files.
+// The order of these matter so make sure they are consistent across all shaders.
+//
 // See https://nvpro-samples.github.io/vk_mini_path_tracer/extras.html#moresamples.
 // It explains not exceeding 64 samples per pixel and 32 batches to avoid timeouts and long renders.
 // We now do progressive rendering so 64 samples per pixel is still good and you can do higher number
@@ -168,10 +171,6 @@ void main() {
 
     uint rngState = initRNG(pc.sampleBatch, pixel, pc.resolution);
 
-    uint rayFlags = gl_RayFlagsOpaqueEXT;
-    float tMin = 0.001;
-    float tMax = 10000.0;
-
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
 
     float sqrtSpp = sqrt(float(pc.samplesPerPixel));
@@ -182,7 +181,7 @@ void main() {
     for (int sj = 0; sj < sqrtSpp; ++sj) {
         for (int si = 0; si < sqrtSpp; ++si) {
             Ray ray = getRay(rngState, pixelCenter, si, sj, recipSqrtSpp);
-            vec3 attenuation = rayColour(rngState, ray, tMin, tMax, rayFlags);
+            vec3 attenuation = rayColour(rngState, ray, RAY_EPS, RAY_INF, gl_RayFlagsNoneEXT);
             summedPixelColour += attenuation;
         }
     }
