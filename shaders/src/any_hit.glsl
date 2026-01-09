@@ -29,7 +29,7 @@ layout(set = 7, binding = 1, scalar) buffer NoiseTextures {
 layout(set = 10, binding = 0, scalar) buffer Volumes {
     Volume values[];
 } volumeData;
-layout(set = 10, binding = 1, scalar) buffer ConstantMedia {
+layout(set = 10, binding = 2, scalar) buffer ConstantMedia {
     ConstantMedium values[];
 } constantMediumData;
 
@@ -155,11 +155,14 @@ void main() {
 
         bool hasMat = false;
         float hitDistance;
+        Material material;
         switch (volume.mediumType) {
             case CONSTANT_MEDIUM:
                 if (volume.mediumIndex >= 0 && volume.mediumIndex < pc.constantMediaCount) {
                   ConstantMedium medium = constantMediumData.values[volume.mediumIndex];
                   hitDistance = -log(randomFloat(rp.rngState)) / medium.density;
+
+                  material = Material(medium.materialType, medium.materialIndex);
                   hasMat = true;
                 }
                 break;
@@ -171,7 +174,6 @@ void main() {
             vec3 p = rayOrigin + t * rayDir;
  
             Volume volume = volumeData.values[hitAttribs.volumeIndex];
-            Material material = Material(volume.materialType, volume.materialIndex);
 
             ScatterRecord srec = calculateScatter(rp.rngState, material, p, rp.time);
             rp.srec = srec;

@@ -5,9 +5,14 @@
 
 hitAttributeEXT VolumeHitAttribs hitAttribs;
 
+// Volumes will hold AABBs for all volumes. For box volumes it holds all necessary data for box shaped volumes; so we 
+// don't need a separate BoxVolumes binding.
 layout(set = 10, binding = 0, scalar) buffer Volumes {
     Volume values[];
 } volumeData;
+layout(set = 10, binding = 1, scalar) buffer SphereVolumes {
+    SphereVolume values[];
+} sphereVolumeData;
 
 // Make sure to check layout offsets for push constants in each of the shader files.
 // The order of these matter so make sure they are consistent across all shaders.
@@ -24,13 +29,14 @@ void main() {
     bool  isHit;
     switch (volume.shape) {
         case VOLUME_SHAPE_BOX:
-            isHit = rayIntersectBox(
-                    gl_ObjectRayOriginEXT,
-                    gl_ObjectRayDirectionEXT,
-                    volume.aabbMin,
-                    volume.aabbMax,
-                    tMin,
-                    tMax);
+            isHit = rayIntersectBox(gl_ObjectRayOriginEXT, gl_ObjectRayDirectionEXT,
+                    volume.aabbMin, volume.aabbMax, tMin, tMax);
+            break;
+
+        case VOLUME_SHAPE_SPHERE:
+            SphereVolume sphereVolume = sphereVolumeData.values[volume.shapeVolumeIndex];
+            isHit = rayIntersectSphere(gl_ObjectRayOriginEXT, gl_ObjectRayDirectionEXT,
+                    sphereVolume.center, sphereVolume.radius, tMin, tMax);
             break;
 
         default:

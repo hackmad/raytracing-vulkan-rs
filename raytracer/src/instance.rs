@@ -76,15 +76,18 @@ impl Instances {
                 }
             };
 
-            match instance.instance_type {
+            match &instance.instance_type {
                 InstanceType::Surface => {
                     let mesh = Arc::new(Mesh::from(primitive));
                     mesh_name_to_index.insert(instance.name.clone(), meshes.len());
                     meshes.push(mesh);
                 }
 
-                InstanceType::ConstantMedium { density } => {
-                    constant_media.push(ConstantMedium::new(density));
+                InstanceType::ConstantMedium {
+                    density,
+                    phase_function,
+                } => {
+                    constant_media.push(ConstantMedium::new(*density, phase_function.clone()));
                     let medium_index = constant_media.len() - 1;
 
                     if let Some(volume) =
@@ -110,7 +113,7 @@ impl Instances {
             let object_to_world = instance.get_object_to_world_space_matrix();
             let transform = Transform::from(object_to_world);
 
-            match instance.instance_type {
+            match &instance.instance_type {
                 InstanceType::Surface => {
                     if let Some(index) = mesh_name_to_index.get(&instance.name) {
                         mesh_instances.push(Instance::new(
@@ -123,11 +126,17 @@ impl Instances {
                     }
                 }
 
-                InstanceType::ConstantMedium { density } => {
+                InstanceType::ConstantMedium {
+                    density,
+                    phase_function,
+                } => {
                     if let Some(index) = volume_name_to_index.get(&instance.name) {
                         volume_instances.push(Instance::new(
                             *index,
-                            InstanceType::ConstantMedium { density },
+                            InstanceType::ConstantMedium {
+                                density: *density,
+                                phase_function: phase_function.clone(),
+                            },
                             transform,
                         ));
                     } else {

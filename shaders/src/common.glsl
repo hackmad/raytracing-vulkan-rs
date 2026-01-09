@@ -106,32 +106,41 @@ struct HitRecord {
 // --------------------------------------------------------------------------------
 // Volume
 
-const uint VOLUME_SHAPE_BOX = 0;
+const uint VOLUME_SHAPE_BOX    = 0;
+const uint VOLUME_SHAPE_SPHERE = 1;
 
 const uint CONSTANT_MEDIUM = 0;
 
 struct ConstantMedium {
     float density;
-    vec3  pad;
+    uint  materialType;
+    uint  materialIndex;
+    uint  pad;
 };
 
 // NOTE: The order of fields below will ensure data is aligned/packed correctly and
 // we can avoid having to use padding fields.
 struct Volume {
     vec3 aabbMin;
-    uint materialType;
-    vec3 aabbMax;
-    uint materialIndex;
     uint shape;
+    vec3 aabbMax;
+    uint shapeVolumeIndex; // Ignored for box volumes.
     uint mediumType;
     uint mediumIndex;
-    uint pad;
+    vec2 pad;
 };
 
 struct VolumeHitAttribs {
     uint  volumeIndex;
     float tEntry;
     float tExit;
+};
+
+// No need for a BoxVolume struct because AABB is same boundary as Box.
+
+struct SphereVolume {
+    vec3  center;
+    float radius;
 };
 
 // --------------------------------------------------------------------------------
@@ -448,6 +457,32 @@ bool rayIntersectBox(vec3 ro, vec3 rd, vec3 pMin, vec3 pMax, out float tMin, out
     tMax = min(min(tFar.x,  tFar.y),  tFar.z);
 
     return tMax >= max(tMin, 0.0);
+}
+
+// Object space intersection of a ray with a sphere.
+bool rayIntersectSphere(vec3 ro, vec3 rd, vec3 center, float radius, out float tMin, out float tMax) {
+    vec3  oc = ro - center;
+    float a = dot(rd, rd);
+    float b = 2.0 * dot(oc, rd);
+    float c = dot(oc, oc) - radius * radius;
+    float discriminant = b * b - 4.0 * a * c;
+
+    if (discriminant < 0.0) {
+        return false; // No intersection
+    }
+
+    float sqrtDisc = sqrt(discriminant);
+    float t0 = (-b - sqrtDisc) / (2.0 * a);
+    float t1 = (-b + sqrtDisc) / (2.0 * a);
+    if (t0 < t1) {
+        tMin = t0;
+        tMax = t1;
+    } else {
+        tMin = t1;
+        tMax = t0;
+    }
+
+    return true;
 }
 
 // --------------------------------------------------------------------------------

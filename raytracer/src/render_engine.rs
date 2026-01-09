@@ -29,7 +29,7 @@ use crate::{
     acceleration::AccelerationStructures,
     create_constant_media_storage_buffer, create_light_source_alias_table,
     create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
-    create_volume_storage_buffer,
+    create_volume_storage_buffers,
     pipelines::{GfxPipeline, RtPipeline},
     textures::Textures,
 };
@@ -357,17 +357,20 @@ impl RenderEngine {
         )?;
 
         // Volume data.
-        let volume_buffer =
-            create_volume_storage_buffer(vk.clone(), &instances.volumes, &materials)?;
-        let constant_media_buffer =
-            create_constant_media_storage_buffer(vk.clone(), &instances.constant_media)?;
+        let volume_buffers = create_volume_storage_buffers(vk.clone(), &instances.volumes)?;
+        let constant_media_buffer = create_constant_media_storage_buffer(
+            vk.clone(),
+            &instances.constant_media,
+            &materials,
+        )?;
 
         let volume_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::VOLUME_DATA_LAYOUT].clone(),
             [
-                WriteDescriptorSet::buffer(0, volume_buffer),
-                WriteDescriptorSet::buffer(1, constant_media_buffer),
+                WriteDescriptorSet::buffer(0, volume_buffers.volume_buffer),
+                WriteDescriptorSet::buffer(1, volume_buffers.sphere_volume_buffer),
+                WriteDescriptorSet::buffer(2, constant_media_buffer),
             ],
             [],
         )?;

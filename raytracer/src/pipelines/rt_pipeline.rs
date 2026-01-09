@@ -324,7 +324,8 @@ fn create_volume_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
         DescriptorSetLayoutCreateInfo {
             bindings: [
                 (0, storage_buffer_binding(binding)), // Volume metadata
-                (1, storage_buffer_binding(binding)), // Constant density media
+                (1, storage_buffer_binding(binding)), // Sphere Volume metadata
+                (2, storage_buffer_binding(binding)), // Constant density media
             ]
             .into_iter()
             .collect(),

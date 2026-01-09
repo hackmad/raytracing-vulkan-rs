@@ -19,16 +19,16 @@
     { "constant": { "name": "white", "rgb": [0.73, 0.73, 0.73] } },
     { "constant": { "name": "green", "rgb": [0.12, 0.45, 0.15] } },
     { "constant": { "name": "light", "rgb": [7, 7, 7] } },
-    { "constant": { "name": "pure-black", "rgb": [0, 0, 0] } },
-    { "constant": { "name": "pure-white", "rgb": [1, 1, 1] } }
+    { "constant": { "name": "black-fog", "rgb": [0, 0, 0] } },
+    { "constant": { "name": "white-fog", "rgb": [1, 1, 1] } }
   ],
   "materials": [
     { "lambertian": { "name": "red", "albedo": "red" } },
     { "lambertian": { "name": "white", "albedo": "white" } },
     { "lambertian": { "name": "green", "albedo": "green" } },
     { "diffuse_light": { "name": "light", "emit": "light" } },
-    { "isotropic": { "name": "black-fog", "albedo": "pure-black" } },
-    { "isotropic": { "name": "white-fog", "albedo": "pure-white" } }
+    { "isotropic": { "name": "black-fog", "albedo": "black-fog" } },
+    { "isotropic": { "name": "white-fog", "albedo": "white-fog" } }
   ],
   "primitives": [
     {
@@ -89,14 +89,14 @@
       "box": {
         "name": "box1",
         "corners": [ [0, 0, 0],  [165, -330, 165] ],
-        "material": "black-fog"
+        "material": "white"
       }
     },
     {
       "box": {
         "name": "box2",
         "corners": [ [0, 0, 0],  [165, -165, 165] ],
-        "material": "white-fog"
+        "material": "white"
       }
     }
   ],
@@ -110,7 +110,10 @@
     {
       "name": "box1",
       "type": {
-        "constant_medium": { "density": 0.01 }
+        "constant_medium": {
+          "density": 0.01,
+          "phase_function": "black-fog"
+        }
       },
       "transform": {
         "static": {
@@ -122,7 +125,10 @@
     {
       "name": "box2",
       "type": {
-        "constant_medium": { "density": 0.01 }
+        "constant_medium": {
+          "density": 0.01,
+          "phase_function": "white-fog"
+        }
       },
       "transform": {
         "static": {
