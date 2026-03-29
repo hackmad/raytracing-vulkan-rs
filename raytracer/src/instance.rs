@@ -3,7 +3,23 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::{Result, anyhow};
 use scene_file::{InstanceType, SceneFile};
 
-use crate::{ConstantMedium, MediumType, Mesh, Transform, Volume};
+use crate::{Mesh, Transform};
+
+#[derive(Debug)]
+pub struct ConstantMedium {
+    pub name: String,
+    pub density: f32,
+    pub phase_function: String,
+}
+impl ConstantMedium {
+    fn new(name: &str, density: f32, phase_function: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            density,
+            phase_function: phase_function.to_string(),
+        }
+    }
+}
 
 /// Stores instance related data.
 #[derive(Debug)]
@@ -45,21 +61,18 @@ impl Instance {
 
 pub struct Instances {
     pub meshes: Vec<Arc<Mesh>>,
-    pub volumes: Vec<Arc<Volume>>,
     pub mesh_name_to_index: HashMap<String, usize>,
-    pub volume_name_to_index: HashMap<String, usize>,
-    pub mesh_instances: Vec<Instance>,
-    pub volume_instances: Vec<Instance>,
+    pub instances: Vec<Instance>,
     pub constant_media: Vec<ConstantMedium>,
+    pub constant_medium_name_to_index: HashMap<String, usize>,
 }
 
 impl Instances {
     pub fn new(scene_file: &SceneFile) -> Result<Self> {
         let mut meshes: Vec<Arc<Mesh>> = Vec::new();
-        let mut volumes: Vec<Arc<Volume>> = Vec::new();
         let mut mesh_name_to_index: HashMap<String, usize> = HashMap::new();
-        let mut volume_name_to_index: HashMap<String, usize> = HashMap::new();
         let mut constant_media: Vec<ConstantMedium> = Vec::new();
+        let mut constant_medium_name_to_index: HashMap<String, usize> = HashMap::new();
 
         for instance in scene_file.instances.iter() {
             let primitive = match scene_file
@@ -76,39 +89,34 @@ impl Instances {
                 }
             };
 
+            // Both surfaces and volumes have meshes. In latter case the mesh is defining
+            // the volume boundary.
+            let mesh = Arc::new(Mesh::from(primitive));
+            mesh_name_to_index.insert(instance.name.clone(), meshes.len());
+            meshes.push(mesh);
+
             match &instance.instance_type {
                 InstanceType::Surface => {
-                    let mesh = Arc::new(Mesh::from(primitive));
-                    mesh_name_to_index.insert(instance.name.clone(), meshes.len());
-                    meshes.push(mesh);
+                    // Nothing else to do
                 }
 
                 InstanceType::ConstantMedium {
                     density,
                     phase_function,
                 } => {
-                    constant_media.push(ConstantMedium::new(*density, phase_function.clone()));
-                    let medium_index = constant_media.len() - 1;
-
-                    if let Some(volume) =
-                        Volume::from_primitive(primitive, MediumType::ConstantMedium, medium_index)
-                    {
-                        let volume = Arc::new(volume);
-                        volume_name_to_index.insert(primitive.get_name().into(), volumes.len());
-                        volumes.push(volume);
-                    } else {
-                        return Err(anyhow!(
-                            "Constant medium instance creation not supported for primitive {}",
-                            primitive.get_name()
-                        ));
-                    }
+                    constant_medium_name_to_index
+                        .insert(instance.name.clone(), constant_media.len());
+                    constant_media.push(ConstantMedium::new(
+                        &instance.name,
+                        *density,
+                        phase_function,
+                    ));
                 }
             }
         }
 
         // Get instances.
-        let mut mesh_instances: Vec<Instance> = Vec::new();
-        let mut volume_instances: Vec<Instance> = Vec::new();
+        let mut instances: Vec<Instance> = Vec::new();
         for instance in scene_file.instances.iter() {
             let object_to_world = instance.get_object_to_world_space_matrix();
             let transform = Transform::from(object_to_world);
@@ -116,11 +124,7 @@ impl Instances {
             match &instance.instance_type {
                 InstanceType::Surface => {
                     if let Some(index) = mesh_name_to_index.get(&instance.name) {
-                        mesh_instances.push(Instance::new(
-                            *index,
-                            InstanceType::Surface,
-                            transform,
-                        ));
+                        instances.push(Instance::new(*index, InstanceType::Surface, transform));
                     } else {
                         return Err(anyhow!("Mesh {} not found", instance.name));
                     }
@@ -130,8 +134,8 @@ impl Instances {
                     density,
                     phase_function,
                 } => {
-                    if let Some(index) = volume_name_to_index.get(&instance.name) {
-                        volume_instances.push(Instance::new(
+                    if let Some(index) = constant_medium_name_to_index.get(&instance.name) {
+                        instances.push(Instance::new(
                             *index,
                             InstanceType::ConstantMedium {
                                 density: *density,
@@ -148,12 +152,10 @@ impl Instances {
 
         Ok(Self {
             meshes,
-            volumes,
             mesh_name_to_index,
-            volume_name_to_index,
-            mesh_instances,
-            volume_instances,
+            instances,
             constant_media,
+            constant_medium_name_to_index,
         })
     }
 }

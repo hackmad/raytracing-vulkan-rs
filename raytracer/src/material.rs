@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::Result;
 use log::debug;
 use scene_file::Material;
-use shaders::{any_hit, closest_hit};
+use shaders::ray_gen;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
 use crate::{Vk, create_device_local_buffer, textures::Textures};
@@ -24,19 +24,19 @@ pub const MAT_PROP_VALUE_TYPE_NOISE: u32 = 3;
 #[derive(Debug)]
 pub struct Materials {
     /// The lambertian materials. This will be used to create the storage buffers for shaders.
-    pub lambertian_materials: Vec<closest_hit::LambertianMaterial>,
+    pub lambertian_materials: Vec<ray_gen::LambertianMaterial>,
 
     /// The lambertian materials. This will be used to create the storage buffers for shaders.
-    pub metal_materials: Vec<closest_hit::MetalMaterial>,
+    pub metal_materials: Vec<ray_gen::MetalMaterial>,
 
     /// The dielectric materials. This will be used to create the storage buffers for shaders.
-    pub dielectric_materials: Vec<closest_hit::DielectricMaterial>,
+    pub dielectric_materials: Vec<ray_gen::DielectricMaterial>,
 
     /// The diffuse light materials. This will be used to create the storage buffers for shaders.
-    pub diffuse_light_materials: Vec<closest_hit::DiffuseLightMaterial>,
+    pub diffuse_light_materials: Vec<ray_gen::DiffuseLightMaterial>,
 
     /// The isotropic materials. This will be used to create the storage buffers for shaders.
-    pub isotropic_materials: Vec<any_hit::IsotropicMaterial>,
+    pub isotropic_materials: Vec<ray_gen::IsotropicMaterial>,
 
     /// Maps unique lambertian materials to their index in `lambertian_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
@@ -79,16 +79,16 @@ impl Materials {
                     lambertian_material_indices
                         .insert(name.clone(), lambertian_materials.len() as _);
 
-                    lambertian_materials.push(closest_hit::LambertianMaterial {
-                        albedo: textures.to_closest_hit_shader(albedo).unwrap(),
+                    lambertian_materials.push(ray_gen::LambertianMaterial {
+                        albedo: textures.to_shader(albedo).unwrap(),
                     });
                 }
                 Material::Metal { name, albedo, fuzz } => {
                     metal_material_indices.insert(name.clone(), metal_materials.len() as _);
 
-                    metal_materials.push(closest_hit::MetalMaterial {
-                        albedo: textures.to_closest_hit_shader(albedo).unwrap(),
-                        fuzz: textures.to_closest_hit_shader(fuzz).unwrap(),
+                    metal_materials.push(ray_gen::MetalMaterial {
+                        albedo: textures.to_shader(albedo).unwrap(),
+                        fuzz: textures.to_shader(fuzz).unwrap(),
                     });
                 }
                 Material::Dielectric {
@@ -98,7 +98,7 @@ impl Materials {
                     dielectric_material_indices
                         .insert(name.clone(), dielectric_materials.len() as _);
 
-                    dielectric_materials.push(closest_hit::DielectricMaterial {
+                    dielectric_materials.push(ray_gen::DielectricMaterial {
                         refractionIndex: *refraction_index,
                     });
                 }
@@ -106,15 +106,18 @@ impl Materials {
                     diffuse_light_material_indices
                         .insert(name.clone(), diffuse_light_materials.len() as _);
 
-                    diffuse_light_materials.push(closest_hit::DiffuseLightMaterial {
-                        emit: textures.to_closest_hit_shader(emit).unwrap(),
+                    diffuse_light_materials.push(ray_gen::DiffuseLightMaterial {
+                        emit: textures.to_shader(emit).unwrap(),
                     });
                 }
-                Material::Isotropic { name, albedo } => {
+                Material::Isotropic {
+                    name,
+                    phase_function,
+                } => {
                     isotropic_material_indices.insert(name.clone(), isotropic_materials.len() as _);
 
-                    isotropic_materials.push(any_hit::IsotropicMaterial {
-                        albedo: textures.to_any_hit_shader(albedo).unwrap(),
+                    isotropic_materials.push(ray_gen::IsotropicMaterial {
+                        phaseFunction: textures.to_shader(phase_function).unwrap(),
                     });
                 }
             }
@@ -149,8 +152,8 @@ impl Materials {
             if !self.lambertian_materials.is_empty() {
                 self.lambertian_materials.clone()
             } else {
-                vec![closest_hit::LambertianMaterial {
-                    albedo: closest_hit::MaterialPropertyValue {
+                vec![ray_gen::LambertianMaterial {
+                    albedo: ray_gen::MaterialPropertyValue {
                         propValueType: 0,
                         index: 0,
                     },
@@ -165,12 +168,12 @@ impl Materials {
             if !self.metal_materials.is_empty() {
                 self.metal_materials.clone()
             } else {
-                vec![closest_hit::MetalMaterial {
-                    albedo: closest_hit::MaterialPropertyValue {
+                vec![ray_gen::MetalMaterial {
+                    albedo: ray_gen::MaterialPropertyValue {
                         propValueType: 0,
                         index: 0,
                     },
-                    fuzz: closest_hit::MaterialPropertyValue {
+                    fuzz: ray_gen::MaterialPropertyValue {
                         propValueType: 0,
                         index: 0,
                     },
@@ -185,7 +188,7 @@ impl Materials {
             if !self.dielectric_materials.is_empty() {
                 self.dielectric_materials.clone()
             } else {
-                vec![closest_hit::DielectricMaterial {
+                vec![ray_gen::DielectricMaterial {
                     refractionIndex: 1.0,
                 }]
             },
@@ -198,8 +201,8 @@ impl Materials {
             if !self.diffuse_light_materials.is_empty() {
                 self.diffuse_light_materials.clone()
             } else {
-                vec![closest_hit::DiffuseLightMaterial {
-                    emit: closest_hit::MaterialPropertyValue {
+                vec![ray_gen::DiffuseLightMaterial {
+                    emit: ray_gen::MaterialPropertyValue {
                         propValueType: 0,
                         index: 0,
                     },
@@ -214,8 +217,8 @@ impl Materials {
             if !self.isotropic_materials.is_empty() {
                 self.isotropic_materials.clone()
             } else {
-                vec![any_hit::IsotropicMaterial {
-                    albedo: any_hit::MaterialPropertyValue {
+                vec![ray_gen::IsotropicMaterial {
+                    phaseFunction: ray_gen::MaterialPropertyValue {
                         propValueType: 0,
                         index: 0,
                     },
@@ -266,9 +269,9 @@ impl MaterialAndIndex {
 
 /// Holds the storage buffers for the different material types.
 pub struct MaterialBuffers {
-    pub lambertian: Subbuffer<[closest_hit::LambertianMaterial]>,
-    pub metal: Subbuffer<[closest_hit::MetalMaterial]>,
-    pub dielectric: Subbuffer<[closest_hit::DielectricMaterial]>,
-    pub diffuse_light: Subbuffer<[closest_hit::DiffuseLightMaterial]>,
-    pub isotropic: Subbuffer<[any_hit::IsotropicMaterial]>,
+    pub lambertian: Subbuffer<[ray_gen::LambertianMaterial]>,
+    pub metal: Subbuffer<[ray_gen::MetalMaterial]>,
+    pub dielectric: Subbuffer<[ray_gen::DielectricMaterial]>,
+    pub diffuse_light: Subbuffer<[ray_gen::DiffuseLightMaterial]>,
+    pub isotropic: Subbuffer<[ray_gen::IsotropicMaterial]>,
 }

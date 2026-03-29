@@ -27,8 +27,8 @@
     { "lambertian": { "name": "white", "albedo": "white" } },
     { "lambertian": { "name": "green", "albedo": "green" } },
     { "diffuse_light": { "name": "light", "emit": "light" } },
-    { "isotropic": { "name": "black-fog", "albedo": "black-fog" } },
-    { "isotropic": { "name": "white-fog", "albedo": "white-fog" } }
+    { "isotropic": { "name": "black-fog", "phase_function": "black-fog" } },
+    { "isotropic": { "name": "white-fog", "phase_function": "white-fog" } }
   ],
   "primitives": [
     {

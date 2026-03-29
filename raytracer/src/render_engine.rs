@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use anyhow::Result;
 use random::Random;
 use scene_file::SceneFile;
-use shaders::{GfxShaderModules, RtShaderModules, any_hit, closest_hit, intersection, ray_gen};
+use shaders::{GfxShaderModules, RtShaderModules, ray_gen};
 use vulkano::{
     buffer::{Buffer, BufferContents, BufferCreateInfo, BufferUsage},
     command_buffer::{
@@ -29,7 +29,6 @@ use crate::{
     acceleration::AccelerationStructures,
     create_constant_media_storage_buffer, create_light_source_alias_table,
     create_mesh_index_buffer, create_mesh_storage_buffer, create_mesh_vertex_buffer,
-    create_volume_storage_buffers,
     pipelines::{GfxPipeline, RtPipeline},
     textures::Textures,
 };
@@ -38,9 +37,6 @@ use crate::{
 #[derive(BufferContents, Clone, Copy)]
 pub struct UnifiedPushConstants {
     pub ray_gen_pc: ray_gen::PushConstants,
-    pub closest_hit_pc: closest_hit::PushConstants,
-    pub intersection_pc: intersection::PushConstants,
-    pub any_hit_pc: any_hit::PushConstants,
 }
 
 /// Stores resources specific to the rendering pipelines and renders an image progressively.
@@ -156,8 +152,6 @@ impl RenderEngine {
                 sampleBatch: 0,
                 maxRayDepth: scene_file.render.max_ray_depth,
                 batchRayTime: batch_ray_times[0],
-            },
-            closest_hit_pc: closest_hit::PushConstants {
                 meshCount: instances.meshes.len() as _,
                 imageTextureCount: image_texture_count as _,
                 constantColourCount: constant_colour_count as _,
@@ -167,18 +161,9 @@ impl RenderEngine {
                 metalMaterialCount: metal_material_count as _,
                 dielectricMaterialCount: dielectric_material_count as _,
                 diffuseLightMaterialCount: diffuse_light_material_count as _,
+                isotropicMaterialCount: isotropic_material_count as _,
                 lightSourceTriangleCount: light_source_alias_table.triangle_count as _,
                 lightSourceTotalArea: light_source_alias_table.total_area as _,
-            },
-            intersection_pc: intersection::PushConstants {
-                volumeCount: instances.volumes.len() as _,
-            },
-            any_hit_pc: any_hit::PushConstants {
-                isotropicMaterialCount: isotropic_material_count as _,
-                imageTextureCount: image_texture_count as _,
-                constantColourCount: constant_colour_count as _,
-                checkerTextureCount: checker_texture_count as _,
-                noiseTextureCount: noise_texture_count as _,
                 constantMediaCount: instances.constant_media.len() as _,
             },
         };
@@ -306,7 +291,7 @@ impl RenderEngine {
                 WriteDescriptorSet::buffer(1, material_buffers.metal),
                 WriteDescriptorSet::buffer(2, material_buffers.dielectric),
                 WriteDescriptorSet::buffer(3, material_buffers.diffuse_light),
-                WriteDescriptorSet::buffer(4, material_buffers.isotropic),
+                //WriteDescriptorSet::buffer(4, material_buffers.isotropic),
             ],
             [],
         )?;
@@ -357,7 +342,6 @@ impl RenderEngine {
         )?;
 
         // Volume data.
-        let volume_buffers = create_volume_storage_buffers(vk.clone(), &instances.volumes)?;
         let constant_media_buffer = create_constant_media_storage_buffer(
             vk.clone(),
             &instances.constant_media,
@@ -367,11 +351,7 @@ impl RenderEngine {
         let volume_data_descriptor_set = DescriptorSet::new(
             vk.descriptor_set_allocator.clone(),
             layouts[RtPipeline::VOLUME_DATA_LAYOUT].clone(),
-            [
-                WriteDescriptorSet::buffer(0, volume_buffers.volume_buffer),
-                WriteDescriptorSet::buffer(1, volume_buffers.sphere_volume_buffer),
-                WriteDescriptorSet::buffer(2, constant_media_buffer),
-            ],
+            [WriteDescriptorSet::buffer(0, constant_media_buffer)],
             [],
         )?;
 

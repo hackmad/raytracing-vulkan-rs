@@ -510,7 +510,7 @@ fn generate_final_next_week_scene(file_path: &str) -> Result<()> {
     };
     let phase_function_isotropic_material_1 = Material::Isotropic {
         name: "phase_function_isotropic_material_1".to_string(),
-        albedo: phase_function_texture_1.get_name().to_string(),
+        phase_function: phase_function_texture_1.get_name().to_string(),
     };
     let glass_sphere_boundary_1 = Primitive::UvSphere {
         name: "glass_sphere_boundary_1".to_string(),
@@ -544,7 +544,7 @@ fn generate_final_next_week_scene(file_path: &str) -> Result<()> {
     };
     let phase_function_isotropic_material_2 = Material::Isotropic {
         name: "phase_function_isotropic_material_2".to_string(),
-        albedo: phase_function_texture_2.get_name().to_string(),
+        phase_function: phase_function_texture_2.get_name().to_string(),
     };
     let glass_sphere_boundary_2 = Primitive::UvSphere {
         name: "glass_sphere_boundary_2".to_string(),
@@ -685,7 +685,7 @@ fn generate_final_next_week_scene(file_path: &str) -> Result<()> {
     let render = Render {
         camera: cameras[0].get_name().to_string(),
         samples_per_pixel: 64,
-        sample_batches: 256,
+        sample_batches: 2,
         max_ray_depth: 4,
         aspect_ratio: 1.0,
     };

@@ -12,7 +12,6 @@ mod scene;
 mod textures;
 mod transform;
 mod vk;
-mod volume;
 
 pub use camera::*;
 pub use decomposed_transform::*;
@@ -24,4 +23,3 @@ pub use obj_loader::*;
 pub use scene::*;
 pub use transform::*;
 pub use vk::*;
-pub use volume::*;

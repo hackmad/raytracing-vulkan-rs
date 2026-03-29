@@ -3,8 +3,8 @@
 
 #include "common.glsl"
 
-layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
+layout(location = 0) rayPayloadInEXT RayPayload rp;
 
 void main() {
-    rayPayload.isMissed = true;
+    rp.isMissed = true;
 }

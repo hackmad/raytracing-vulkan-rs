@@ -29,22 +29,6 @@ pub mod ray_miss {
     }
 }
 
-pub mod intersection {
-    vulkano_shaders::shader! {
-        ty: "intersection",
-        path: "src/intersection.glsl",
-        vulkan_version: "1.3",
-    }
-}
-
-pub mod any_hit {
-    vulkano_shaders::shader! {
-        ty: "anyhit",
-        path: "src/any_hit.glsl",
-        vulkan_version: "1.3",
-    }
-}
-
 pub mod vertex {
     vulkano_shaders::shader! {
         ty: "vertex",
@@ -83,23 +67,11 @@ impl RtShaderModules {
             .entry_point("main")
             .unwrap();
 
-        let intersection = intersection::load(device.clone())
-            .unwrap()
-            .entry_point("main")
-            .unwrap();
-
-        let any_hit = any_hit::load(device.clone())
-            .unwrap()
-            .entry_point("main")
-            .unwrap();
-
         // Make a list of the shader stages that the pipeline will have.
         let stages = vec![
             PipelineShaderStageCreateInfo::new(ray_gen),
             PipelineShaderStageCreateInfo::new(ray_miss),
             PipelineShaderStageCreateInfo::new(closest_hit),
-            PipelineShaderStageCreateInfo::new(intersection),
-            PipelineShaderStageCreateInfo::new(any_hit),
         ];
 
         // Define the shader groups that will eventually turn into the shader binding table.
@@ -110,11 +82,6 @@ impl RtShaderModules {
             RayTracingShaderGroupCreateInfo::TrianglesHit {
                 closest_hit_shader: Some(2),
                 any_hit_shader: None,
-            },
-            RayTracingShaderGroupCreateInfo::ProceduralHit {
-                intersection_shader: 3,
-                any_hit_shader: Some(4),
-                closest_hit_shader: None,
             },
         ];
 
@@ -156,13 +123,6 @@ impl fmt::Debug for ray_gen::PushConstants {
             .field("sampleBatch", &self.sampleBatch)
             .field("maxRayDepth", &self.maxRayDepth)
             .field("batchRayTime", &self.batchRayTime)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::PushConstants {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::PushConstants")
             .field("meshCount", &self.meshCount)
             .field("imageTextureCount", &self.imageTextureCount)
             .field("checkerTextureCount", &self.checkerTextureCount)
@@ -179,82 +139,52 @@ impl fmt::Debug for closest_hit::PushConstants {
     }
 }
 
-impl fmt::Debug for intersection::PushConstants {
+impl fmt::Debug for ray_gen::MaterialPropertyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("intersection::PushConstants")
-            .field("volumeCount", &self.volumeCount)
-            .finish()
-    }
-}
-
-impl fmt::Debug for any_hit::PushConstants {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("any_hit::PushConstants")
-            .field("isotropicMaterialCount", &self.isotropicMaterialCount)
-            .field("constantMediaCount", &self.constantMediaCount)
-            .field("imageTextureCount", &self.imageTextureCount)
-            .field("constantColourCount", &self.constantColourCount)
-            .field("checkerTextureCount", &self.checkerTextureCount)
-            .field("noiseTextureCount", &self.noiseTextureCount)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::MaterialPropertyValue {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::MaterialPropertyValue")
+        f.debug_struct("ray_gen::MaterialPropertyValue")
             .field("propValueType", &self.propValueType)
             .field("index", &self.index)
             .finish()
     }
 }
 
-impl fmt::Debug for any_hit::MaterialPropertyValue {
+impl fmt::Debug for ray_gen::LambertianMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::MaterialPropertyValue")
-            .field("propValueType", &self.propValueType)
-            .field("index", &self.index)
-            .finish()
-    }
-}
-
-impl fmt::Debug for closest_hit::LambertianMaterial {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::LambertianMaterial")
+        f.debug_struct("ray_gen::LambertianMaterial")
             .field("albedo", &self.albedo)
             .finish()
     }
 }
 
-impl fmt::Debug for closest_hit::MetalMaterial {
+impl fmt::Debug for ray_gen::MetalMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::MetalMaterial")
+        f.debug_struct("ray_gen::MetalMaterial")
             .field("albedo", &self.albedo)
             .field("fuzz", &self.fuzz)
             .finish()
     }
 }
 
-impl fmt::Debug for closest_hit::DielectricMaterial {
+impl fmt::Debug for ray_gen::DielectricMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::DielectricMaterial")
+        f.debug_struct("ray_gen::DielectricMaterial")
             .field("refractionIndex", &self.refractionIndex)
             .finish()
     }
 }
 
-impl fmt::Debug for closest_hit::DiffuseLightMaterial {
+impl fmt::Debug for ray_gen::DiffuseLightMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("closest_hit::DiffuseLightMaterial")
+        f.debug_struct("ray_gen::DiffuseLightMaterial")
             .field("emit", &self.emit)
             .finish()
     }
 }
 
-impl fmt::Debug for any_hit::IsotropicMaterial {
+impl fmt::Debug for ray_gen::IsotropicMaterial {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("any_hit::IsotropicMaterial")
-            .field("albedo", &self.albedo)
+        f.debug_struct("ray_gen::IsotropicMaterial")
+            .field("phaseFunction", &self.phaseFunction)
             .finish()
     }
 }

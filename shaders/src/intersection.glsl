@@ -3,8 +3,6 @@
 
 #include "common.glsl"
 
-hitAttributeEXT VolumeHitAttribs hitAttribs;
-
 // Volumes will hold AABBs for all volumes. For box volumes it holds all necessary data for box shaped volumes; so we 
 // don't need a separate BoxVolumes binding.
 layout(set = 10, binding = 0, scalar) buffer Volumes {
@@ -17,11 +15,15 @@ layout(set = 10, binding = 1, scalar) buffer SphereVolumes {
 // Make sure to check layout offsets for push constants in each of the shader files.
 // The order of these matter so make sure they are consistent across all shaders.
 layout(push_constant) uniform PushConstants {
-    layout(offset = 68) uint volumeCount;
+    layout(offset = 76) uint volumeCount;
 } pc;
 
 void main() {
     uint volumeIndex = gl_InstanceCustomIndexEXT + gl_PrimitiveID;
+    if (volumeIndex >= pc.volumeCount) {
+        return;
+    }
+
     Volume volume = volumeData.values[volumeIndex];
 
     float tMin;
@@ -44,16 +46,20 @@ void main() {
             break;
     }
 
-    if (!isHit) return;
+    if (!isHit || tMax < gl_RayTminEXT || tMin > gl_RayTmaxEXT || tMin >= tMax) {
+        return;
+    }
 
-    // Clamp to ray interval.
-    tMin = max(tMin, gl_RayTminEXT);
-    tMax = min(tMax, gl_RayTmaxEXT);
-    if (tMin >= tMax) return;
+    float tHit;
+    uint  hitKind;
+    if (tMin >= gl_RayTminEXT) {
+        tHit = tMin;
+        hitKind = HIT_VOLUME_ENTER;
+    } else {
+        tHit = tMax;
+        hitKind = HIT_VOLUME_EXIT;
+    }
 
-    hitAttribs.volumeIndex = volumeIndex;
-    hitAttribs.tEntry = tMin;
-    hitAttribs.tExit  = tMax;
-    reportIntersectionEXT(tMin, 0);
+    reportIntersectionEXT(tHit, hitKind);
 }
 

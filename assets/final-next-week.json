@@ -149,13 +149,13 @@
     {
       "isotropic": {
         "name": "phase_function_isotropic_material_1",
-        "albedo": "phase_function_texture_1"
+        "phase_function": "phase_function_texture_1"
       }
     },
     {
       "isotropic": {
         "name": "phase_function_isotropic_material_2",
-        "albedo": "phase_function_texture_2"
+        "phase_function": "phase_function_texture_2"
       }
     },
     {
@@ -24634,7 +24634,7 @@
   "render": {
     "camera": "default",
     "samples_per_pixel": 64,
-    "sample_batches": 256,
+    "sample_batches": 2,
     "max_ray_depth": 4,
     "aspect_ratio": 1.0
   }

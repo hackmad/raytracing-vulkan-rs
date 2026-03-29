@@ -4,7 +4,7 @@ use anyhow::Result;
 use glam::Vec3;
 use log::{debug, info};
 use scene_file::Primitive;
-use shaders::closest_hit;
+use shaders::ray_gen;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
@@ -26,7 +26,7 @@ impl Vertex {
     }
 }
 
-impl From<&Vertex> for closest_hit::MeshVertex {
+impl From<&Vertex> for ray_gen::MeshVertex {
     // Convert Vertex to shader struct.
     fn from(value: &Vertex) -> Self {
         Self {
@@ -51,14 +51,14 @@ impl Mesh {
     pub fn create_blas_vertex_buffer(
         &self,
         vk: Arc<Vk>,
-    ) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
+    ) -> Result<Subbuffer<[ray_gen::MeshVertex]>> {
         debug!("Creating BLAS vertex buffer");
         create_device_local_buffer(
             vk.clone(),
             BufferUsage::VERTEX_BUFFER
                 | BufferUsage::SHADER_DEVICE_ADDRESS
                 | BufferUsage::ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY,
-            self.vertices.iter().map(closest_hit::MeshVertex::from),
+            self.vertices.iter().map(ray_gen::MeshVertex::from),
         )
     }
 
@@ -366,7 +366,7 @@ pub fn create_mesh_storage_buffer(
     vk: Arc<Vk>,
     meshes: &[Arc<Mesh>],
     materials: &Materials,
-) -> Result<Subbuffer<[closest_hit::Mesh]>> {
+) -> Result<Subbuffer<[ray_gen::Mesh]>> {
     let vertex_buffer_sizes = meshes.iter().map(|mesh| mesh.vertices.len());
 
     let index_buffer_sizes = meshes.iter().map(|mesh| mesh.indices.len());
@@ -387,7 +387,7 @@ pub fn create_mesh_storage_buffer(
         .zip(materials)
         .map(
             |((vertex_buffer_size, index_buffer_size), (material_type, material_index))| {
-                closest_hit::Mesh {
+                ray_gen::Mesh {
                     vertexBufferSize: vertex_buffer_size as _,
                     indexBufferSize: index_buffer_size as _,
                     materialType: material_type,
@@ -412,7 +412,7 @@ pub fn create_mesh_storage_buffer(
         if !mesh_data.is_empty() {
             mesh_data
         } else {
-            vec![closest_hit::Mesh {
+            vec![ray_gen::Mesh {
                 vertexBufferSize: 0,
                 indexBufferSize: 0,
                 materialType: 0,
@@ -428,10 +428,10 @@ pub fn create_mesh_storage_buffer(
 pub fn create_mesh_vertex_buffer(
     vk: Arc<Vk>,
     meshes: &[Arc<Mesh>],
-) -> Result<Subbuffer<[closest_hit::MeshVertex]>> {
+) -> Result<Subbuffer<[ray_gen::MeshVertex]>> {
     let vertex_buffer_data: Vec<_> = meshes
         .iter()
-        .flat_map(|mesh| mesh.vertices.iter().map(closest_hit::MeshVertex::from))
+        .flat_map(|mesh| mesh.vertices.iter().map(ray_gen::MeshVertex::from))
         .collect();
 
     debug!("Creating vertex buffer");
@@ -449,7 +449,7 @@ pub fn create_mesh_vertex_buffer(
         if !vertex_buffer_data.is_empty() {
             vertex_buffer_data
         } else {
-            vec![closest_hit::MeshVertex {
+            vec![ray_gen::MeshVertex {
                 p: [0.0, 0.0, 0.0],
                 n: [0.0, 0.0, 0.0],
                 u: 0.0,

@@ -55,7 +55,7 @@ struct DiffuseLightMaterial {
 };
 
 struct IsotropicMaterial {
-    MaterialPropertyValue albedo;
+    MaterialPropertyValue phaseFunction;
 };
 
 struct CheckerTexture {
@@ -78,6 +78,9 @@ const uint SKY_TYPE_VERTICAL_GRADIENT = 2;
 // --------------------------------------------------------------------------------
 // Mesh
 
+const uint SURFACE = 0;
+const uint VOLUME  = 1;
+
 // NOTE: The order of fields below will ensure data is aligned/packed correctly and
 // we can avoid having to use padding fields.
 struct MeshVertex {
@@ -92,22 +95,18 @@ struct Mesh {
     uint indexBufferSize;
     uint materialType;
     uint materialIndex;
-};
 
-// --------------------------------------------------------------------------------
-// Hit record
+    uint meshType;
 
-struct HitRecord {
-    MeshVertex meshVertex;
-    bool       isFrontFace;
-    vec3       normal; // Points against the incident ray.
+    // meshType = VOLUME
+    uint mediumType;
+    uint mediumIndex;
+
+    uint pad;
 };
 
 // --------------------------------------------------------------------------------
 // Volume
-
-const uint VOLUME_SHAPE_BOX    = 0;
-const uint VOLUME_SHAPE_SPHERE = 1;
 
 const uint CONSTANT_MEDIUM = 0;
 
@@ -118,29 +117,13 @@ struct ConstantMedium {
     uint  pad;
 };
 
-// NOTE: The order of fields below will ensure data is aligned/packed correctly and
-// we can avoid having to use padding fields.
-struct Volume {
-    vec3 aabbMin;
-    uint shape;
-    vec3 aabbMax;
-    uint shapeVolumeIndex; // Ignored for box volumes.
-    uint mediumType;
-    uint mediumIndex;
-    vec2 pad;
-};
+// --------------------------------------------------------------------------------
+// Hit record
 
-struct VolumeHitAttribs {
-    uint  volumeIndex;
-    float tEntry;
-    float tExit;
-};
-
-// No need for a BoxVolume struct because AABB is same boundary as Box.
-
-struct SphereVolume {
-    vec3  center;
-    float radius;
+struct HitRecord {
+    MeshVertex meshVertex;
+    bool       isFrontFace;
+    vec3       normal; // Points against the incident ray.
 };
 
 // --------------------------------------------------------------------------------
@@ -159,6 +142,9 @@ const uint SPHERE_PDF  = 1;
 const uint COSINE_PDF  = 2;
 const uint LIGHT_PDF   = 3; // hittable_pdf
 const uint MIXTURE_PDF = 4; // For now COSINE_PDF and LIGHT_PDF 50-50 chance of pick.
+
+const uint HIT_VOLUME_ENTER = 1;
+const uint HIT_VOLUME_EXIT  = 2;
 
 struct Ray {
     vec3  origin;
@@ -202,16 +188,21 @@ struct RayPayload {
     float  time;
     bool   isMissed;
 
-    HitRecord      rec;
-    EmissionRecord erec;
-    ScatterRecord  srec;
+    bool   isSurface;
+    float  t;
+    vec2   surfaceHitAttribs;
+    uint   meshId;
+    uint   primitiveId;
+
+    mat4x3 objectToWorld;
+    mat4x3 worldToObject;
 };
 
 RayPayload initRayPayload(uint rngState, float time) {
     RayPayload rp;
-    rp.rngState = rngState;
-    rp.isMissed = false;
-    rp.time     = time;
+    rp.rngState  = rngState;
+    rp.isMissed  = true;
+    rp.time      = time;
     return rp;
 }
 
@@ -438,51 +429,6 @@ vec3 sampleTriangleUniform(inout uint rngState, vec3 p0, vec3 p1, vec3 p2) {
     }
 
     return p0 + r.x * (p1 - p0) + r.y * (p2 - p0);
-}
-
-// --------------------------------------------------------------------------------
-// Ray-object intersections.
-
-// Object space intersection of a ray with a box (AABB) using slab method.
-bool rayIntersectBox(vec3 ro, vec3 rd, vec3 pMin, vec3 pMax, out float tMin, out float tMax) {
-    vec3 invDir = 1.0 / rd;
-
-    vec3 t0 = (pMin - ro) * invDir;
-    vec3 t1 = (pMax - ro) * invDir;
-
-    vec3 tNear = min(t0, t1);
-    vec3 tFar  = max(t0, t1);
-
-    tMin = max(max(tNear.x, tNear.y), tNear.z);
-    tMax = min(min(tFar.x,  tFar.y),  tFar.z);
-
-    return tMax >= max(tMin, 0.0);
-}
-
-// Object space intersection of a ray with a sphere.
-bool rayIntersectSphere(vec3 ro, vec3 rd, vec3 center, float radius, out float tMin, out float tMax) {
-    vec3  oc = ro - center;
-    float a = dot(rd, rd);
-    float b = 2.0 * dot(oc, rd);
-    float c = dot(oc, oc) - radius * radius;
-    float discriminant = b * b - 4.0 * a * c;
-
-    if (discriminant < 0.0) {
-        return false; // No intersection
-    }
-
-    float sqrtDisc = sqrt(discriminant);
-    float t0 = (-b - sqrtDisc) / (2.0 * a);
-    float t1 = (-b + sqrtDisc) / (2.0 * a);
-    if (t0 < t1) {
-        tMin = t0;
-        tMax = t1;
-    } else {
-        tMin = t1;
-        tMax = t0;
-    }
-
-    return true;
 }
 
 // --------------------------------------------------------------------------------

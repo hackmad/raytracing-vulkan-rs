@@ -2,7 +2,7 @@ use core::fmt;
 use std::collections::{HashMap, hash_map::Entry};
 
 use scene_file::Texture;
-use shaders::{any_hit, closest_hit};
+use shaders::ray_gen;
 
 use crate::MAT_PROP_VALUE_TYPE_NOISE;
 
@@ -33,19 +33,10 @@ impl NoiseTextures {
         Self { textures, indices }
     }
 
-    pub fn to_closest_hit_shader(&self, name: &str) -> Option<closest_hit::MaterialPropertyValue> {
+    pub fn to_shader(&self, name: &str) -> Option<ray_gen::MaterialPropertyValue> {
         self.indices
             .get(name)
-            .map(|i| closest_hit::MaterialPropertyValue {
-                propValueType: MAT_PROP_VALUE_TYPE_NOISE,
-                index: *i,
-            })
-    }
-
-    pub fn to_any_hit_shader(&self, name: &str) -> Option<any_hit::MaterialPropertyValue> {
-        self.indices
-            .get(name)
-            .map(|i| any_hit::MaterialPropertyValue {
+            .map(|i| ray_gen::MaterialPropertyValue {
                 propValueType: MAT_PROP_VALUE_TYPE_NOISE,
                 index: *i,
             })

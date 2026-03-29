@@ -22,7 +22,7 @@ pub enum Material {
     },
     Isotropic {
         name: String,
-        albedo: String,
+        phase_function: String,
     },
 }
 

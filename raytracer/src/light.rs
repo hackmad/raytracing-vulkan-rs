@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use glam::Vec3;
 use log::debug;
-use shaders::closest_hit;
+use shaders::ray_gen;
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter},
@@ -18,7 +18,7 @@ struct Area {
 }
 
 pub struct LightSourceAliasTable {
-    pub buffer: Subbuffer<[closest_hit::LightSourceAliasTableEntry]>,
+    pub buffer: Subbuffer<[ray_gen::LightSourceAliasTableEntry]>,
     pub triangle_count: usize,
     pub total_area: f32,
 }
@@ -33,7 +33,7 @@ pub fn create_light_source_alias_table(
     materials: &Materials,
 ) -> Result<LightSourceAliasTable> {
     let light_sources: Vec<_> = instances
-        .mesh_instances
+        .instances
         .iter()
         .filter(|mesh_instance| {
             materials
@@ -98,7 +98,7 @@ pub fn create_light_source_alias_table(
         // Use dummy table so descriptor set can be built without crashing.
         // The count will be 0 which should be used to check GPU-side to
         // not do light sampling if we do not have a table to use.
-        let table = vec![closest_hit::LightSourceAliasTableEntry {
+        let table = vec![ray_gen::LightSourceAliasTableEntry {
             probability: 0.0,
             alias: 0,
             meshId: 0,
@@ -132,7 +132,7 @@ pub fn create_light_source_alias_table(
     })
 }
 
-fn build_alias_table(areas: &[Area]) -> (Vec<closest_hit::LightSourceAliasTableEntry>, f32) {
+fn build_alias_table(areas: &[Area]) -> (Vec<ray_gen::LightSourceAliasTableEntry>, f32) {
     let n = areas.len();
     let total_area = areas
         .iter()
@@ -180,7 +180,7 @@ fn build_alias_table(areas: &[Area]) -> (Vec<closest_hit::LightSourceAliasTableE
         .zip(aliases.iter())
         .enumerate()
         .map(
-            |(i, (probability, alias))| closest_hit::LightSourceAliasTableEntry {
+            |(i, (probability, alias))| ray_gen::LightSourceAliasTableEntry {
                 probability: *probability,
                 alias: *alias,
                 meshId: areas[i].mesh_index as _,

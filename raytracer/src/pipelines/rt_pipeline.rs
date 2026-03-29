@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use shaders::{any_hit, closest_hit, intersection, ray_gen};
+use shaders::ray_gen;
 use vulkano::{
     descriptor_set::layout::{
         DescriptorBindingFlags, DescriptorSetLayout, DescriptorSetLayoutBinding,
@@ -86,25 +86,7 @@ impl RtPipeline {
             size: size_of::<ray_gen::PushConstants>() as _,
         };
 
-        let closest_hit_pc = PushConstantRange {
-            stages: ShaderStages::CLOSEST_HIT,
-            offset: ray_gen_pc.size,
-            size: size_of::<closest_hit::PushConstants>() as _,
-        };
-
-        let intersection_pc = PushConstantRange {
-            stages: ShaderStages::INTERSECTION,
-            offset: ray_gen_pc.size + closest_hit_pc.size,
-            size: size_of::<intersection::PushConstants>() as _,
-        };
-
-        let any_hit_pc = PushConstantRange {
-            stages: ShaderStages::ANY_HIT,
-            offset: ray_gen_pc.size + closest_hit_pc.size + intersection_pc.size,
-            size: size_of::<any_hit::PushConstants>() as _,
-        };
-
-        let push_constant_ranges = vec![ray_gen_pc, closest_hit_pc, intersection_pc, any_hit_pc];
+        let push_constant_ranges = vec![ray_gen_pc];
 
         let pipeline_layout = PipelineLayout::new(
             device.clone(),
@@ -148,11 +130,13 @@ impl RtPipeline {
 
 /// Create a pipeline layout for top level acceleration structure.
 fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::RAYGEN;
+
     DescriptorSetLayout::new(
         device,
         DescriptorSetLayoutCreateInfo {
             #[rustfmt::skip]
-            bindings: [(0, as_binding(ShaderStages::RAYGEN))]
+            bindings: [(0, as_binding(shader_stages))]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -163,10 +147,12 @@ fn create_tlas_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
 
 /// Create a pipeline layout for uniform buffer containing camera matrices.
 fn create_camera_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::RAYGEN;
+
     DescriptorSetLayout::new(
         device,
         DescriptorSetLayoutCreateInfo {
-            bindings: [(0, uniform_buffer_binding(ShaderStages::RAYGEN))]
+            bindings: [(0, uniform_buffer_binding(shader_stages))]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -177,10 +163,12 @@ fn create_camera_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
 
 /// Create a pipeline layout for the render image storage buffer.
 fn create_render_image_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::RAYGEN;
+
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(0, storage_image_binding(ShaderStages::RAYGEN))]
+            bindings: [(0, storage_image_binding(shader_stages))]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -191,13 +179,15 @@ fn create_render_image_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
 
 /// Create a pipeline layout for mesh data references storage buffer.
 fn create_mesh_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::RAYGEN;
+
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (0, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Vertex buffer.
-                (1, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Index buffer.
-                (2, storage_buffer_binding(ShaderStages::CLOSEST_HIT)), // Meshes.
+                (0, storage_buffer_binding(shader_stages)), // Vertex buffer.
+                (1, storage_buffer_binding(shader_stages)), // Index buffer.
+                (2, storage_buffer_binding(shader_stages)), // Meshes.
             ]
             .into_iter()
             .collect(),
@@ -212,7 +202,7 @@ fn create_sampler_and_image_textures_layout(
     device: Arc<Device>,
     image_texture_count: u32,
 ) -> Arc<DescriptorSetLayout> {
-    let shader_stages = ShaderStages::CLOSEST_HIT | ShaderStages::ANY_HIT;
+    let shader_stages = ShaderStages::RAYGEN;
 
     DescriptorSetLayout::new(
         device.clone(),
@@ -232,7 +222,7 @@ fn create_sampler_and_image_textures_layout(
 
 /// Create a pipeline layout for constant colour textures (this is just unique colour values).
 fn create_constant_colour_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    let shader_stages = ShaderStages::CLOSEST_HIT | ShaderStages::ANY_HIT;
+    let shader_stages = ShaderStages::RAYGEN;
 
     DescriptorSetLayout::new(
         device.clone(),
@@ -248,7 +238,7 @@ fn create_constant_colour_textures_layout(device: Arc<Device>) -> Arc<Descriptor
 
 /// Create a pipeline layout for material references storage buffer.
 fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    let shader_stages = ShaderStages::CLOSEST_HIT | ShaderStages::ANY_HIT;
+    let shader_stages = ShaderStages::RAYGEN;
 
     DescriptorSetLayout::new(
         device.clone(),
@@ -270,7 +260,7 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
 
 /// Create a pipeline layout for storage buffer used for other textures besides image and constant colour.
 fn create_other_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    let shader_stages = ShaderStages::CLOSEST_HIT | ShaderStages::ANY_HIT;
+    let shader_stages = ShaderStages::RAYGEN;
 
     DescriptorSetLayout::new(
         device.clone(),
@@ -289,10 +279,12 @@ fn create_other_textures_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout>
 
 /// Create a pipeline layout for uniform buffer containing sky.
 fn create_sky_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::RAYGEN;
+
     DescriptorSetLayout::new(
         device,
         DescriptorSetLayoutCreateInfo {
-            bindings: [(0, uniform_buffer_binding(ShaderStages::RAYGEN))]
+            bindings: [(0, uniform_buffer_binding(shader_stages))]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -303,10 +295,12 @@ fn create_sky_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
 
 /// Create a pipeline layout for light source alias table storage buffer.
 fn create_light_source_alias_table_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
+    let shader_stages = ShaderStages::RAYGEN;
+
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
-            bindings: [(0, storage_buffer_binding(ShaderStages::CLOSEST_HIT))]
+            bindings: [(0, storage_buffer_binding(shader_stages))]
                 .into_iter()
                 .collect(),
             ..Default::default()
@@ -317,15 +311,13 @@ fn create_light_source_alias_table_layout(device: Arc<Device>) -> Arc<Descriptor
 
 /// Create a pipeline layout for volume data references storage buffer.
 fn create_volume_data_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
-    let binding = ShaderStages::INTERSECTION | ShaderStages::ANY_HIT;
+    let shader_stages = ShaderStages::RAYGEN;
 
     DescriptorSetLayout::new(
         device.clone(),
         DescriptorSetLayoutCreateInfo {
             bindings: [
-                (0, storage_buffer_binding(binding)), // Volume metadata
-                (1, storage_buffer_binding(binding)), // Sphere Volume metadata
-                (2, storage_buffer_binding(binding)), // Constant density media
+                (0, storage_buffer_binding(shader_stages)), // Constant density media
             ]
             .into_iter()
             .collect(),
