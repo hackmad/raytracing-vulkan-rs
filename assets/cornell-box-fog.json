@@ -18,7 +18,9 @@
     { "constant": { "name": "red", "rgb": [0.65, 0.05, 0.05] } },
     { "constant": { "name": "white", "rgb": [0.73, 0.73, 0.73] } },
     { "constant": { "name": "green", "rgb": [0.12, 0.45, 0.15] } },
-    { "constant": { "name": "light", "rgb": [15, 15, 15] } }
+    { "constant": { "name": "light", "rgb": [15, 15, 15] } },
+    { "constant": { "name": "pure-black", "rgb": [0, 0, 0] } },
+    { "constant": { "name": "pure-white", "rgb": [1, 1, 1] } }
   ],
   "materials": [
     { "lambertian": { "name": "red", "albedo": "red" } },
@@ -105,7 +107,7 @@
     { "name": "back-white", "type": "surface" },
     {
       "name": "box1",
-      "type": "surface",
+      "type": { "constant_density": { "density": 0.01, "phase_function": "pure-black" } },
       "transform": {
         "static": {
           "translate": [265, 0, 295],
@@ -115,7 +117,7 @@
     },
     {
       "name": "box2",
-      "type": "surface",
+      "type": { "constant_density": { "density": 0.01, "phase_function": "pure-white" } },
       "transform": {
         "static": {
           "translate": [130, 0, 65],
