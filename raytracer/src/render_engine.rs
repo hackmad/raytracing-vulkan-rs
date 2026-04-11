@@ -149,7 +149,7 @@ impl RenderEngine {
         }
 
         // Get materials.
-        let materials = Materials::new(&scene_file.instances, &scene_file.materials, &textures);
+        let materials = Materials::new(&scene_file.materials, &textures);
         let lambertian_material_count = materials.lambertian_materials.len();
         let metal_material_count = materials.metal_materials.len();
         let dielectric_material_count = materials.dielectric_materials.len();

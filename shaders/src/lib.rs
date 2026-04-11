@@ -179,3 +179,12 @@ impl fmt::Debug for ray_gen::DiffuseLightMaterial {
             .finish()
     }
 }
+
+impl fmt::Debug for ray_gen::IsotropicMaterial {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ray_gen::IsotropicMaterial")
+            .field("phaseFunction", &self.phaseFunction)
+            .field("density", &self.density)
+            .finish()
+    }
+}

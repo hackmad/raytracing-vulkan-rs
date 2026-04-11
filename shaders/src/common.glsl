@@ -46,8 +46,10 @@ struct DiffuseLightMaterial {
     MaterialPropertyValue emit;
 };
 
+// For now only used for Constant Density Medium
 struct IsotropicMaterial {
-    MaterialPropertyValue albedo;
+    float density;
+    MaterialPropertyValue phaseFunction;
 };
 
 struct CheckerTexture {

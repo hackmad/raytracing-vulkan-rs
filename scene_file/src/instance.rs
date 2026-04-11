@@ -3,28 +3,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum InstanceType {
-    Surface,
-    ConstantDensity {
-        density: f32,
-        phase_function: String,
-    },
-}
-
-impl Default for InstanceType {
-    fn default() -> Self {
-        Self::Surface
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
 pub struct Instance {
     pub name: String,
-
-    #[serde(rename = "type", default = "InstanceType::default")]
-    pub instance_type: InstanceType,
-
     pub transform: Option<TransformType>,
 }
 

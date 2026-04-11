@@ -49,6 +49,9 @@ layout(set = 6, binding = 2, scalar) buffer DielectricMaterials {
 layout(set = 6, binding = 3, scalar) buffer DiffuseLightMaterials {
     DiffuseLightMaterial values[];
 } diffuseLightMaterial;
+layout(set = 6, binding = 4, scalar) buffer IsotropicMaterials {
+    IsotropicMaterial values[];
+} isotropicMaterial;
 
 layout(set = 7, binding = 0, scalar) buffer CheckerTextures {
     CheckerTexture values[];

@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use log::debug;
-use scene_file::{Instance, InstanceType, Material};
+use scene_file::Material;
 use shaders::ray_gen;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
@@ -36,7 +36,7 @@ pub struct Materials {
     pub diffuse_light_materials: Vec<ray_gen::DiffuseLightMaterial>,
 
     /// The isotropic materials. This will be used to create the storage buffers for shaders.
-    pub isotropic_materials: Vec<ray_gen::DiffuseLightMaterial>,
+    pub isotropic_materials: Vec<ray_gen::IsotropicMaterial>,
 
     /// Maps unique lambertian materials to their index in `lambertian_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
@@ -60,7 +60,7 @@ pub struct Materials {
 }
 
 impl Materials {
-    pub fn new(instances: &[Instance], materials: &[Material], textures: &Textures) -> Self {
+    pub fn new(materials: &[Material], textures: &Textures) -> Self {
         let mut lambertian_materials = vec![];
         let mut metal_materials = vec![];
         let mut dielectric_materials = vec![];
@@ -110,23 +110,18 @@ impl Materials {
                         emit: textures.to_shader(emit).unwrap(),
                     });
                 }
-            }
-        }
-
-        for instance in instances.iter() {
-            match &instance.instance_type {
-                InstanceType::ConstantDensity {
-                    density: _,
+                Material::Isotropic {
+                    name,
+                    density,
                     phase_function,
                 } => {
-                    isotropic_material_indices
-                        .insert(instance.name.clone(), isotropic_materials.len() as _);
+                    isotropic_material_indices.insert(name.clone(), isotropic_materials.len() as _);
 
-                    isotropic_materials.push(ray_gen::DiffuseLightMaterial {
-                        emit: textures.to_shader(&phase_function).unwrap(),
+                    isotropic_materials.push(ray_gen::IsotropicMaterial {
+                        density: *density,
+                        phaseFunction: textures.to_shader(phase_function).unwrap(),
                     });
                 }
-                InstanceType::Surface => {}
             }
         }
 
@@ -217,11 +212,29 @@ impl Materials {
             },
         )?;
 
+        debug!("Creating isotropic materials buffer");
+        let isotropic_materials_buffer = create_device_local_buffer(
+            vk.clone(),
+            buffer_usage,
+            if !self.isotropic_materials.is_empty() {
+                self.isotropic_materials.clone()
+            } else {
+                vec![ray_gen::IsotropicMaterial {
+                    density: 1.0,
+                    phaseFunction: ray_gen::MaterialPropertyValue {
+                        propValueType: 0,
+                        index: 0,
+                    },
+                }]
+            },
+        )?;
+
         Ok(MaterialBuffers {
             lambertian: lambertian_materials_buffer,
             metal: metal_materials_buffer,
             dielectric: dielectric_materials_buffer,
             diffuse_light: diffuse_light_materials_buffer,
+            isotropic: isotropic_materials_buffer,
         })
     }
 
@@ -263,4 +276,5 @@ pub struct MaterialBuffers {
     pub metal: Subbuffer<[ray_gen::MetalMaterial]>,
     pub dielectric: Subbuffer<[ray_gen::DielectricMaterial]>,
     pub diffuse_light: Subbuffer<[ray_gen::DiffuseLightMaterial]>,
+    pub isotropic: Subbuffer<[ray_gen::IsotropicMaterial]>,
 }

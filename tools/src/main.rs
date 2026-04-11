@@ -3,8 +3,8 @@ use clap::{Parser, Subcommand};
 use glam::Vec3;
 use random::Random;
 use scene_file::{
-    Camera, Instance, InstanceType, Material, Primitive, Render, SceneFile, Sky, Texture,
-    Transform, TransformType,
+    Camera, Instance, Material, Primitive, Render, SceneFile, Sky, Texture, Transform,
+    TransformType,
 };
 
 #[derive(Debug, Parser)]
@@ -102,7 +102,6 @@ fn generate_final_one_weekend_scene(file_path: &str, do_motion_blur: bool) -> Re
     materials.push(ground_material);
     instances.push(Instance {
         name: "ground_sphere".to_string(),
-        instance_type: InstanceType::Surface,
         transform: None,
     });
 
@@ -211,11 +210,7 @@ fn generate_final_one_weekend_scene(file_path: &str, do_motion_blur: bool) -> Re
                 segments: 64,
                 material: material.get_name().to_string(),
             });
-            instances.push(Instance {
-                name,
-                transform,
-                instance_type: InstanceType::Surface,
-            });
+            instances.push(Instance { name, transform });
 
             textures.extend_from_slice(&tex);
             materials.push(material);
@@ -237,7 +232,6 @@ fn generate_final_one_weekend_scene(file_path: &str, do_motion_blur: bool) -> Re
     materials.push(material1);
     instances.push(Instance {
         name: "sphere1".to_string(),
-        instance_type: InstanceType::Surface,
         transform: None,
     });
 
@@ -261,7 +255,6 @@ fn generate_final_one_weekend_scene(file_path: &str, do_motion_blur: bool) -> Re
     materials.push(material2);
     instances.push(Instance {
         name: "sphere2".to_string(),
-        instance_type: InstanceType::Surface,
         transform: None,
     });
 
@@ -291,7 +284,6 @@ fn generate_final_one_weekend_scene(file_path: &str, do_motion_blur: bool) -> Re
     materials.push(material3);
     instances.push(Instance {
         name: "sphere3".to_string(),
-        instance_type: InstanceType::Surface,
         transform: None,
     });
 
