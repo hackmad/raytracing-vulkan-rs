@@ -96,9 +96,10 @@ layout(push_constant) uniform RayGenPushConstants {
     layout(offset = 44) uint  metalMaterialCount;
     layout(offset = 48) uint  dielectricMaterialCount;
     layout(offset = 52) uint  diffuseLightMaterialCount;
-    layout(offset = 56) uint  lightSourceTriangleCount;
-    layout(offset = 60) float lightSourceTotalArea;
-    layout(offset = 64) float batchRayTime;
+    layout(offset = 56) uint  isotropicMaterialCount;
+    layout(offset = 60) uint  lightSourceTriangleCount;
+    layout(offset = 64) float lightSourceTotalArea;
+    layout(offset = 68) float batchRayTime;
 } pc;
 
 

@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use log::debug;
-use scene_file::Material;
+use scene_file::{Instance, InstanceType, Material};
 use shaders::ray_gen;
 use vulkano::buffer::{BufferUsage, Subbuffer};
 
@@ -14,6 +14,7 @@ pub const MAT_TYPE_LAMBERTIAN: u32 = 1;
 pub const MAT_TYPE_METAL: u32 = 2;
 pub const MAT_TYPE_DIELECTRIC: u32 = 3;
 pub const MAT_TYPE_DIFFUSE_LIGHT: u32 = 4;
+pub const MAT_TYPE_ISOTROPIC: u32 = 5;
 
 pub const MAT_PROP_VALUE_TYPE_RGB: u32 = 0;
 pub const MAT_PROP_VALUE_TYPE_IMAGE: u32 = 1;
@@ -34,6 +35,9 @@ pub struct Materials {
     /// The diffuse light materials. This will be used to create the storage buffers for shaders.
     pub diffuse_light_materials: Vec<ray_gen::DiffuseLightMaterial>,
 
+    /// The isotropic materials. This will be used to create the storage buffers for shaders.
+    pub isotropic_materials: Vec<ray_gen::DiffuseLightMaterial>,
+
     /// Maps unique lambertian materials to their index in `lambertian_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
     pub lambertian_material_indices: HashMap<String, u32>,
@@ -49,19 +53,25 @@ pub struct Materials {
     /// Maps unique diffuse light materials to their index in `diffuse_light_materials`. These indices
     /// are used in the Mesh structure to be referenced in the storage buffers.
     pub diffuse_light_material_indices: HashMap<String, u32>,
+
+    /// Maps unique isotropic materials to their index in `isotropic_materials`. These indices
+    /// are used in the Mesh structure to be referenced in the storage buffers.
+    pub isotropic_material_indices: HashMap<String, u32>,
 }
 
 impl Materials {
-    pub fn new(materials: &[Material], textures: &Textures) -> Self {
+    pub fn new(instances: &[Instance], materials: &[Material], textures: &Textures) -> Self {
         let mut lambertian_materials = vec![];
         let mut metal_materials = vec![];
         let mut dielectric_materials = vec![];
         let mut diffuse_light_materials = vec![];
+        let mut isotropic_materials = vec![];
 
         let mut lambertian_material_indices = HashMap::new();
         let mut metal_material_indices = HashMap::new();
         let mut dielectric_material_indices = HashMap::new();
         let mut diffuse_light_material_indices = HashMap::new();
+        let mut isotropic_material_indices = HashMap::new();
 
         for material in materials.iter() {
             match material {
@@ -103,15 +113,34 @@ impl Materials {
             }
         }
 
+        for instance in instances.iter() {
+            match &instance.instance_type {
+                InstanceType::ConstantDensity {
+                    density: _,
+                    phase_function,
+                } => {
+                    isotropic_material_indices
+                        .insert(instance.name.clone(), isotropic_materials.len() as _);
+
+                    isotropic_materials.push(ray_gen::DiffuseLightMaterial {
+                        emit: textures.to_shader(&phase_function).unwrap(),
+                    });
+                }
+                InstanceType::Surface => {}
+            }
+        }
+
         Materials {
             lambertian_materials,
             metal_materials,
             dielectric_materials,
             diffuse_light_materials,
+            isotropic_materials,
             lambertian_material_indices,
             metal_material_indices,
             dielectric_material_indices,
             diffuse_light_material_indices,
+            isotropic_material_indices,
         }
     }
 
@@ -206,6 +235,8 @@ impl Materials {
             MaterialAndIndex::new(MAT_TYPE_DIELECTRIC, *index)
         } else if let Some(index) = self.diffuse_light_material_indices.get(material) {
             MaterialAndIndex::new(MAT_TYPE_DIFFUSE_LIGHT, *index)
+        } else if let Some(index) = self.isotropic_material_indices.get(material) {
+            MaterialAndIndex::new(MAT_TYPE_ISOTROPIC, *index)
         } else {
             MaterialAndIndex::new(MAT_TYPE_NONE, 0)
         }

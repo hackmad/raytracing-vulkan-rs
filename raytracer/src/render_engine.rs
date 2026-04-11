@@ -149,11 +149,12 @@ impl RenderEngine {
         }
 
         // Get materials.
-        let materials = Materials::new(&scene_file.materials, &textures);
+        let materials = Materials::new(&scene_file.instances, &scene_file.materials, &textures);
         let lambertian_material_count = materials.lambertian_materials.len();
         let metal_material_count = materials.metal_materials.len();
         let dielectric_material_count = materials.dielectric_materials.len();
         let diffuse_light_material_count = materials.diffuse_light_materials.len();
+        let isotropic_material_count = materials.isotropic_materials.len();
 
         // Get the light source alias table.
         let light_source_alias_table =
@@ -181,6 +182,7 @@ impl RenderEngine {
                 metalMaterialCount: metal_material_count as _,
                 dielectricMaterialCount: dielectric_material_count as _,
                 diffuseLightMaterialCount: diffuse_light_material_count as _,
+                isotropicMaterialCount: isotropic_material_count as _,
                 lightSourceTriangleCount: light_source_alias_table.triangle_count as _,
                 lightSourceTotalArea: light_source_alias_table.total_area as _,
                 batchRayTime: batch_ray_times[0],

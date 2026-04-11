@@ -17,6 +17,7 @@ const uint MAT_TYPE_LAMBERTIAN = 1;
 const uint MAT_TYPE_METAL = 2;
 const uint MAT_TYPE_DIELECTRIC = 3;
 const uint MAT_TYPE_DIFFUSE_LIGHT = 4;
+const uint MAT_TYPE_ISOTROPIC = 5;
 
 const uint MAT_PROP_VALUE_TYPE_RGB = 0;
 const uint MAT_PROP_VALUE_TYPE_IMAGE = 1;
@@ -43,6 +44,10 @@ struct DielectricMaterial {
 
 struct DiffuseLightMaterial {
     MaterialPropertyValue emit;
+};
+
+struct IsotropicMaterial {
+    MaterialPropertyValue albedo;
 };
 
 struct CheckerTexture {
