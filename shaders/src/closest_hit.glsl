@@ -16,5 +16,7 @@ void main() {
     rayPayload.objectToWorld     = gl_ObjectToWorldEXT;
     rayPayload.worldToObject     = gl_WorldToObjectEXT;
     rayPayload.worldRayDirection = gl_WorldRayDirectionEXT;
+
+    rayPayload.t = gl_HitTEXT;
 }
 

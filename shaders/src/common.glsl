@@ -106,6 +106,7 @@ struct HitRecord {
     MeshVertex meshVertex;
     bool       isFrontFace;
     vec3       normal; // Points against the incident ray.
+    float      t;
 };
 
 
@@ -141,6 +142,7 @@ struct RayPayload {
     mat4x3 objectToWorld;
     mat4x3 worldToObject;
     vec3   worldRayDirection;
+    float  t;
 };
 
 struct ScatterRecord {

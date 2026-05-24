@@ -312,6 +312,7 @@ impl RenderEngine {
                 WriteDescriptorSet::buffer(1, material_buffers.metal),
                 WriteDescriptorSet::buffer(2, material_buffers.dielectric),
                 WriteDescriptorSet::buffer(3, material_buffers.diffuse_light),
+                WriteDescriptorSet::buffer(4, material_buffers.isotropic),
             ],
             [],
         )?;

@@ -148,7 +148,8 @@ HitRecord getIntersection(
         vec2         hitAttribs,
         mat4x3       objectToWorld,
         mat4x3       worldToObject,
-        vec3         worldRayDirection) {
+        vec3         worldRayDirection,
+        float        t) {
     vec3 barycentricCoords = vec3(1.0 - hitAttribs.x - hitAttribs.y, hitAttribs.x, hitAttribs.y);
 
     const vec3 position =
@@ -179,7 +180,8 @@ HitRecord getIntersection(
     return HitRecord(
         MeshVertex(worldSpacePosition, u, worldSpaceNormal, v),
         frontFace,
-        frontFace ? worldSpaceNormal : -worldSpaceNormal
+        frontFace ? worldSpaceNormal : -worldSpaceNormal,
+        t
     );
 }
 
@@ -338,8 +340,8 @@ ScatterRecord lambertianMaterialScatter(inout uint rngState, uint materialIndex,
 
         srec.attenuation = albedo;
         srec.isScattered = true;
-        srec.skipPdf     = false;
         srec.matPdfType  = COSINE_PDF;
+        srec.skipPdf     = false;
     }
 
     return srec;
@@ -402,6 +404,25 @@ ScatterRecord dielectricMaterialScatter(inout uint rngState, uint materialIndex,
     return srec;
 }
 
+ScatterRecord isotropicMaterialScatter(inout uint rngState, uint materialIndex, HitRecord rec, float time) {
+    ScatterRecord srec = initScatterRecord();
+
+    if (materialIndex >= 0 && materialIndex < pc.isotropicMaterialCount) {
+        IsotropicMaterial material = isotropicMaterial.values[materialIndex];
+        vec3 phaseFunction = getMaterialPropertyValue(material.phaseFunction, rec.meshVertex);
+
+        srec.attenuation          = phaseFunction;
+        srec.isScattered          = true;
+        srec.matPdfType           = NO_PDF;
+        srec.skipPdf              = true;
+        srec.skipPdfRay.origin    = rec.meshVertex.p;
+        srec.skipPdfRay.direction = randomUnitVec3(rngState);
+        srec.skipPdfRay.time      = time;
+    }
+
+    return srec;
+}
+
 EmissionRecord diffuseLightMaterialEmission(inout uint rngState, uint materialIndex, HitRecord rec) {
     EmissionRecord erec =  initEmissionRecord();
 
@@ -425,6 +446,9 @@ ScatterRecord calculateScatter(inout uint rngState, MeshMaterial material, HitRe
 
         case MAT_TYPE_DIELECTRIC:
             return dielectricMaterialScatter(rngState, material.index, rec, worldRayDirection, time);
+
+        case MAT_TYPE_ISOTROPIC:
+            return isotropicMaterialScatter(rngState, material.index, rec, time);
 
         default:
             // Materials that don't support scattering.
@@ -458,53 +482,112 @@ vec3 getBackgroundColour(Ray ray) {
     }
 }
 
-vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFlags) {
+RayPayload traceRay(Ray ray, float tMin, float tMax) {
+    // sbtRecordOffset, sbtRecordStride control how the hitGroupId (VkAccelerationStructureInstanceKHR::
+    // instanceShaderBindingTablerecordOffset) of each instance is used to look up a hit group in the 
+    // SBT's hit group array. Since we only have one hit group, both are set to 0.
+    //
+    // missIndex is the index, within the miss shader group array of the SBT to call if no intersection is found.
+    traceRayEXT(
+            topLevelAS,             // acceleration structure
+            gl_RayFlagsOpaqueEXT,   // rayFlags
+            0xFF,                   // cullMask
+            0,                      // sbtRecordOffset
+            0,                      // sbtRecordStride
+            0,                      // missIndex
+            ray.origin,             // ray origin
+            tMin,                   // ray min range
+            ray.direction,          // ray direction
+            tMax,                   // ray max range
+            0);                     // payload (location = 0)
+
+    return rayPayload;
+}
+
+vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax) {
     vec3 accumulated = vec3(0.0);
     vec3 throughput  = vec3(1.0);
 
-    for (uint depth = pc.maxRayDepth; depth > 0; --depth) {
-        // sbtRecordOffset, sbtRecordStride control how the hitGroupId (VkAccelerationStructureInstanceKHR::
-        // instanceShaderBindingTablerecordOffset) of each instance is used to look up a hit group in the 
-        // SBT's hit group array. Since we only have one hit group, both are set to 0.
-        //
-        // missIndex is the index, within the miss shader group array of the SBT to call if no intersection is found.
-        traceRayEXT(
-                topLevelAS,    // acceleration structure
-                rayFlags,      // rayFlags
-                0xFF,          // cullMask
-                0,             // sbtRecordOffset
-                0,             // sbtRecordStride
-                0,             // missIndex
-                ray.origin,    // ray origin
-                tMin,          // ray min range
-                ray.direction, // ray direction
-                tMax,          // ray max range
-                0);            // payload (location = 0)
+    // Track which medium we are currently in.
+    const uint MAX_MEDIUM = 4;          // How many nested media we are prepared to handle.
+    uint mediumMeshStack[MAX_MEDIUM];   // Holds meshIds
+    uint mediumMeshStackIdx = -1;       // TODO: Handle edge case where ray starts inside a medium.
 
-        // Closest hit and miss shader will set rayPayload.isMissed.
-        if (rayPayload.isMissed) {
+    for (uint depth = pc.maxRayDepth; depth > 0; --depth) {
+        RayPayload rp1 = traceRay(ray, tMin, tMax);
+
+        // Closest hit and miss shader will set rp1.isMissed.
+        if (rp1.isMissed) {
             vec3 bgColour = getBackgroundColour(ray);
             accumulated += throughput * bgColour;
             break;
         }
 
-        MeshTriangle hitTriangle = unpackInstanceVertex(rayPayload.meshId, rayPayload.primitiveId);
-
-        HitRecord rec = getIntersection(
+        MeshTriangle hitTriangle = unpackInstanceVertex(rp1.meshId, rp1.primitiveId);
+        HitRecord rec1 = getIntersection(
                 hitTriangle,
-                rayPayload.hitAttribs,
-                rayPayload.objectToWorld,
-                rayPayload.worldToObject,
-                rayPayload.worldRayDirection);
+                rp1.hitAttribs,
+                rp1.objectToWorld,
+                rp1.worldToObject,
+                rp1.worldRayDirection,
+                rp1.t);
 
-        MeshMaterial material = unpackInstanceMaterial(rayPayload.meshId);
+        MeshMaterial material = unpackInstanceMaterial(rp1.meshId);
+        if (material.type == MAT_TYPE_ISOTROPIC) {
+            bool isMissed = true;
+            if (material.index >= 0 && material.index < pc.isotropicMaterialCount) {
+                // Are we entering or leaving?
+
+                // Figure out the next hit.
+                RayPayload rp2 = traceRay(ray, rp1.t + tMin, tMax);
+
+                if (!rp2.isMissed) {
+                    MeshTriangle hitTriangle2 = unpackInstanceVertex(rp2.meshId, rp2.primitiveId);
+                    HitRecord rec2 = getIntersection(
+                            hitTriangle2,
+                            rp2.hitAttribs,
+                            rp2.objectToWorld,
+                            rp2.worldToObject,
+                            rp2.worldRayDirection,
+                            rp2.t);
+
+                    if (rec1.t < tMin) rec1.t = tMin;
+                    if (rec2.t > tMax) rec2.t = tMax;
+
+                    if (rec1.t < rec2.t) {
+                        if (rec1.t < 0) {
+                            rec1.t = 0;
+                        }
+
+                        IsotropicMaterial mat = isotropicMaterial.values[material.index];
+
+                        float rayLength = length(ray.direction);
+                        float distanceInsideBoundary = (rec2.t - rec1.t) * rayLength;
+                        float hitDistance = (-1.0 / mat.density) * log(randomFloat(rngState));
+
+                        if (hitDistance <= distanceInsideBoundary) {
+                            rec1.t += hitDistance / rayLength;
+                            rec1.meshVertex.p = ray.origin + rec1.t * ray.direction;
+                            isMissed = false;
+                        }
+
+                    }
+                }
+            }
+
+            if (isMissed) {
+                vec3 bgColour = getBackgroundColour(ray);
+                accumulated += throughput * bgColour;
+                break;
+            }
+        }
 
         // Emission
-        EmissionRecord erec = calculateEmission(rngState, material, rec);
+        EmissionRecord erec = calculateEmission(rngState, material, rec1);
         accumulated += throughput * erec.emissionColour;
 
         // Scatter
-        ScatterRecord srec = calculateScatter(rngState, material, rec, rayPayload.worldRayDirection, ray.time);
+        ScatterRecord srec = calculateScatter(rngState, material, rec1, rp1.worldRayDirection, ray.time);
         if (!srec.isScattered) {
             break;
         }
@@ -517,20 +600,20 @@ vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFla
         }
 
         // Get a the light source sample.
-        LightSample lightSample = sampleLightSources(rngState, rayPayload.objectToWorld);
+        LightSample lightSample = sampleLightSources(rngState, rp1.objectToWorld);
 
         // Choose between material and light PDF with a 50-50 chance.
         uint chosenPdfType = chooseMixturePdf(rngState, srec.matPdfType);
-        vec3 scatterDirection = genScatterDirection(rngState, chosenPdfType, rec, rayPayload.objectToWorld, lightSample);
+        vec3 scatterDirection = genScatterDirection(rngState, chosenPdfType, rec1, rp1.objectToWorld, lightSample);
 
         // Use material PDFs.
-        float scatteringPdf = getPdfValue(srec.matPdfType, scatterDirection, rec, lightSample);
+        float scatteringPdf = getPdfValue(srec.matPdfType, scatterDirection, rec1, lightSample);
         float pdfMat        = scatteringPdf;
         float pdfValue      = pdfMat;
 
         // See if we want to use a Mixture PDF.
         if (pc.lightSourceTriangleCount > 0 && pc.lightSourceTotalArea > 0.0) {
-            float pdfLight = getPdfValue(LIGHT_PDF, scatterDirection, rec, lightSample);
+            float pdfLight = getPdfValue(LIGHT_PDF, scatterDirection, rec1, lightSample);
             pdfValue = 0.5 * pdfLight + 0.5 * pdfMat;
         }
 
@@ -538,7 +621,7 @@ vec3 rayColour(inout uint rngState, Ray ray, float tMin, float tMax, uint rayFla
         throughput *= srec.attenuation * scatteringPdf / pdfValue;
 
         // Calculate ray for next depth.
-        ray = Ray(rec.meshVertex.p, normalize(scatterDirection), ray.time);
+        ray = Ray(rec1.meshVertex.p, normalize(scatterDirection), ray.time);
     }
 
     return accumulated;
@@ -579,7 +662,6 @@ void main() {
 
     uint rngState = initRNG(pc.sampleBatch, pixel, pc.resolution);
 
-    uint rayFlags = gl_RayFlagsOpaqueEXT;
     float tMin = 0.001;
     float tMax = 10000.0;
 
@@ -593,7 +675,7 @@ void main() {
     for (int sj = 0; sj < sqrtSpp; ++sj) {
         for (int si = 0; si < sqrtSpp; ++si) {
             Ray ray = getRay(rngState, pixelCenter, si, sj, recipSqrtSpp);
-            vec3 attenuation = rayColour(rngState, ray, tMin, tMax, rayFlags);
+            vec3 attenuation = rayColour(rngState, ray, tMin, tMax);
             summedPixelColour += attenuation;
         }
     }

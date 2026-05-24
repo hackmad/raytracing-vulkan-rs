@@ -226,6 +226,7 @@ fn create_materials_layout(device: Arc<Device>) -> Arc<DescriptorSetLayout> {
                 (1, storage_buffer_binding(ShaderStages::RAYGEN)), // Metal materials.
                 (2, storage_buffer_binding(ShaderStages::RAYGEN)), // Dielectric materials.
                 (3, storage_buffer_binding(ShaderStages::RAYGEN)), // Diffuse light materials.
+                (4, storage_buffer_binding(ShaderStages::RAYGEN)), // Isotropic materials.
             ]
             .into_iter()
             .collect(),
